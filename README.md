@@ -57,14 +57,32 @@ Everything lives **on your device** in `localStorage` — your writing, streak,
 and settings never touch a server. The only thing that ever leaves your browser
 is text you *explicitly* send for AI feedback (see below).
 
-## Optional: AI-powered feedback
+## Optional: AI-powered feedback (bring your own key)
 
 The app works fully offline with on-device feedback. If you want warmer, more
-personal feedback, open **Settings → AI feedback**, turn it on, and paste your
-own [Anthropic API key](https://console.anthropic.com). The key is stored only
-in your browser and is sent only to Anthropic, only when you ask for feedback.
-It calls the Claude API directly from the browser using your own credentials
-(default model: `claude-opus-4-8`).
+personal feedback, open **Settings → AI feedback**, turn it on, and choose a
+provider:
+
+| Provider | Cost | Where to get a key |
+| --- | --- | --- |
+| **Anthropic (Claude)** | Pay-as-you-go, ~<1¢/session on Haiku | console.anthropic.com |
+| **Google Gemini** | Free tier | aistudio.google.com/apikey |
+| **Groq** | Free tier | console.groq.com/keys |
+| **OpenAI-compatible** (OpenRouter, local, …) | Free models available | openrouter.ai/keys |
+
+Each provider remembers its own key and model, so switching is friction-free.
+The key is stored **only in your browser** and sent only to the provider you
+choose, only when you ask for feedback. Calls go directly from the browser to
+the provider using your own credentials — there's no backend.
+
+> **Note on Claude Pro:** an Anthropic API key is **separate** from a Claude Pro
+> subscription. Pro unlocks the claude.ai apps; the API is its own pay-as-you-go
+> billing at console.anthropic.com. For a $0 option, use Gemini or Groq's free
+> tier — or just stay on the built-in offline feedback.
+>
+> Some providers (e.g. OpenAI, sometimes Groq) block direct browser requests via
+> CORS. Anthropic, Gemini, and OpenRouter work from the browser; if a request
+> fails, the app falls back to offline feedback and you can switch providers.
 
 ## Run it
 
@@ -81,7 +99,8 @@ Open the printed local URL and start writing.
 
 - **React + TypeScript + Vite**, local-first (no backend).
 - State persisted to `localStorage` via a small store context.
-- AI feedback via the official `@anthropic-ai/sdk` (browser, opt-in).
+- Pluggable AI feedback: Anthropic via the official `@anthropic-ai/sdk`, plus
+  Gemini / Groq / any OpenAI-compatible endpoint via `fetch` (browser, opt-in).
 - No tracking, no analytics, no account system.
 
 ### Project layout
@@ -96,7 +115,7 @@ src/
     stats.ts              # word/sentence counts + vocabulary growth
     streak.ts             # streak engine with forgiveness (freezes)
     feedback.ts           # offline, encouragement-first feedback
-    ai.ts                 # optional Claude-powered feedback
+    ai.ts                 # optional AI feedback (Anthropic / Gemini / Groq / OpenAI-compatible)
     storage.ts, date.ts, sound.ts
   components/
     Home, Write, Celebrate, Feedback, Progress, Settings, Confetti

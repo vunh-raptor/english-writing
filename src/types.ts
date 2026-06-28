@@ -30,11 +30,22 @@ export interface Settings {
   ai: AiSettings;
 }
 
-export interface AiSettings {
-  enabled: boolean;
-  /** Stored only in this browser's localStorage. Never sent anywhere but Anthropic. */
+/** Which service powers the optional AI feedback. */
+export type AiProvider = "anthropic" | "gemini" | "groq" | "openai";
+
+export interface AiProviderConfig {
+  /** Stored only in this browser's localStorage. Sent only to the chosen provider. */
   apiKey: string;
   model: string;
+  /** Only for the OpenAI-compatible provider (OpenRouter, a local server, …). */
+  baseUrl?: string;
+}
+
+export interface AiSettings {
+  enabled: boolean;
+  provider: AiProvider;
+  /** Each provider remembers its own key + model so switching is friction-free. */
+  providers: Record<AiProvider, AiProviderConfig>;
 }
 
 export interface Entry {

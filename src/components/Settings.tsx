@@ -1,5 +1,5 @@
 import { useStore } from "../store/StoreContext";
-import type { Difficulty, GoalType } from "../types";
+import type { AiProvider, Difficulty, GoalType } from "../types";
 
 const TIME_OPTIONS = [120, 180, 300, 600]; // seconds
 const WORD_OPTIONS = [50, 100, 150, 250];
@@ -10,10 +10,55 @@ const DIFFICULTY_LABELS: Record<Difficulty, string> = {
   3: "Stretch",
 };
 
-const MODEL_OPTIONS = [
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8 — most capable" },
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — balanced" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — fastest" },
+interface ProviderMeta {
+  id: AiProvider;
+  label: string;
+  keyUrl: string;
+  keyUrlLabel: string;
+  keyPlaceholder: string;
+  note: string;
+  models: string[];
+  needsBaseUrl?: boolean;
+}
+
+const PROVIDERS: ProviderMeta[] = [
+  {
+    id: "anthropic",
+    label: "Anthropic — Claude",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    keyUrlLabel: "console.anthropic.com",
+    keyPlaceholder: "sk-ant-…",
+    note: "Pay-as-you-go, but tiny — well under 1¢ per session on Haiku. New accounts often include free starter credit. (Separate from a Claude Pro subscription.)",
+    models: ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"],
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini — free tier",
+    keyUrl: "https://aistudio.google.com/apikey",
+    keyUrlLabel: "aistudio.google.com/apikey",
+    keyPlaceholder: "AIza…",
+    note: "Generous free tier. Get a key from Google AI Studio — works directly from the browser.",
+    models: ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"],
+  },
+  {
+    id: "groq",
+    label: "Groq — free tier",
+    keyUrl: "https://console.groq.com/keys",
+    keyUrlLabel: "console.groq.com/keys",
+    keyPlaceholder: "gsk_…",
+    note: "Free and very fast. If your browser blocks the request, switch to Gemini or an OpenAI-compatible endpoint.",
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"],
+  },
+  {
+    id: "openai",
+    label: "OpenAI-compatible (OpenRouter, local…)",
+    keyUrl: "https://openrouter.ai/keys",
+    keyUrlLabel: "openrouter.ai/keys",
+    keyPlaceholder: "sk-or-… / sk-…",
+    note: "Use any OpenAI-compatible endpoint. OpenRouter has free models and works from the browser. Set the base URL + model name.",
+    models: ["meta-llama/llama-3.3-70b-instruct:free", "gpt-4o-mini"],
+    needsBaseUrl: true,
+  },
 ];
 
 function timeLabel(sec: number): string {
@@ -36,6 +81,23 @@ export function Settings() {
       "Erase all your writing, streak, and settings from this browser? This can't be undone.",
     );
     if (ok) reset();
+  }
+
+  const ai = s.ai;
+  const meta = PROVIDERS.find((p) => p.id === ai.provider)!;
+  const cfg = ai.providers[ai.provider];
+
+  function setProvider(provider: AiProvider) {
+    updateSettings({ ai: { ...ai, provider } });
+  }
+  function setProviderField(field: "apiKey" | "model" | "baseUrl", value: string) {
+    const p = ai.provider;
+    updateSettings({
+      ai: {
+        ...ai,
+        providers: { ...ai.providers, [p]: { ...ai.providers[p], [field]: value } },
+      },
+    });
   }
 
   return (
@@ -155,55 +217,89 @@ export function Settings() {
         <div className="card">
           <div className="setting" style={{ paddingTop: 0 }}>
             <div>
-              <div className="setting-label">Use Claude for feedback</div>
+              <div className="setting-label">Use AI for feedback</div>
               <div className="setting-desc">
                 Optional. Warmer, more personal feedback after you write. The app
-                works fully without it.
+                works fully without it — bring your own key from any provider below.
               </div>
             </div>
             <button
-              className={`toggle${s.ai.enabled ? " on" : ""}`}
-              onClick={() => updateSettings({ ai: { ...s.ai, enabled: !s.ai.enabled } })}
-              aria-pressed={s.ai.enabled}
+              className={`toggle${ai.enabled ? " on" : ""}`}
+              onClick={() => updateSettings({ ai: { ...ai, enabled: !ai.enabled } })}
+              aria-pressed={ai.enabled}
               aria-label="Toggle AI feedback"
             />
           </div>
 
-          {s.ai.enabled && (
+          {ai.enabled && (
             <>
               <div className="field">
-                <label>Anthropic API key</label>
-                <input
-                  className="input"
-                  type="password"
-                  value={s.ai.apiKey}
-                  placeholder="sk-ant-…"
-                  autoComplete="off"
-                  onChange={(e) =>
-                    updateSettings({ ai: { ...s.ai, apiKey: e.target.value } })
-                  }
-                />
-              </div>
-              <div className="field">
-                <label>Model</label>
+                <label>Provider</label>
                 <select
                   className="select"
-                  value={s.ai.model}
-                  onChange={(e) =>
-                    updateSettings({ ai: { ...s.ai, model: e.target.value } })
-                  }
+                  value={ai.provider}
+                  onChange={(e) => setProvider(e.target.value as AiProvider)}
                 >
-                  {MODEL_OPTIONS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
+                  {PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
                     </option>
                   ))}
                 </select>
               </div>
+
+              <div className="field">
+                <label>API key</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={cfg.apiKey}
+                  placeholder={meta.keyPlaceholder}
+                  autoComplete="off"
+                  onChange={(e) => setProviderField("apiKey", e.target.value)}
+                />
+              </div>
+
+              {meta.needsBaseUrl && (
+                <div className="field">
+                  <label>Base URL</label>
+                  <input
+                    className="input"
+                    value={cfg.baseUrl ?? ""}
+                    placeholder="https://openrouter.ai/api/v1"
+                    autoComplete="off"
+                    onChange={(e) => setProviderField("baseUrl", e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="field">
+                <label>Model</label>
+                <input
+                  className="input"
+                  value={cfg.model}
+                  list={`models-${ai.provider}`}
+                  placeholder={meta.models[0]}
+                  autoComplete="off"
+                  onChange={(e) => setProviderField("model", e.target.value)}
+                />
+                <datalist id={`models-${ai.provider}`}>
+                  {meta.models.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </div>
+
               <p className="faint" style={{ fontSize: 13, marginTop: 14, marginBottom: 0 }}>
-                🔒 Your key is stored only in this browser and is sent only to
-                Anthropic, only when you ask for feedback. Get a key at
-                console.anthropic.com.
+                {meta.note} Get a key at{" "}
+                <a href={meta.keyUrl} target="_blank" rel="noreferrer">
+                  {meta.keyUrlLabel}
+                </a>
+                .
+              </p>
+              <p className="faint" style={{ fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+                🔒 Your key is stored only in this browser and is sent only to the
+                provider you choose, only when you ask for feedback.
               </p>
             </>
           )}

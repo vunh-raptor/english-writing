@@ -1,4 +1,4 @@
-import type { Store, Settings } from "../types";
+import type { Store, Settings, AiSettings, AiProvider } from "../types";
 import { STARTING_FREEZES } from "./streak";
 
 /**
@@ -18,10 +18,54 @@ export const defaultSettings: Settings = {
   sound: true,
   ai: {
     enabled: false,
-    apiKey: "",
-    model: "claude-opus-4-8",
+    provider: "anthropic",
+    providers: {
+      // Haiku is the cheap default — fractions of a cent per session.
+      anthropic: { apiKey: "", model: "claude-haiku-4-5" },
+      gemini: { apiKey: "", model: "gemini-2.0-flash" },
+      groq: { apiKey: "", model: "llama-3.3-70b-versatile" },
+      openai: { apiKey: "", model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1" },
+    },
   },
 };
+
+/**
+ * Merge a stored AI settings blob onto the current defaults, tolerating the
+ * older single-key shape (`{ enabled, apiKey, model }`) by folding it into the
+ * Anthropic provider slot.
+ */
+function migrateAi(stored: unknown): AiSettings {
+  const base = defaultSettings.ai;
+  if (!stored || typeof stored !== "object") return base;
+  const s = stored as Record<string, unknown>;
+
+  const providers = { ...base.providers };
+  if (s.providers && typeof s.providers === "object") {
+    for (const key of Object.keys(providers) as AiProvider[]) {
+      const p = (s.providers as Record<string, unknown>)[key];
+      if (p && typeof p === "object") {
+        providers[key] = { ...providers[key], ...(p as object) };
+      }
+    }
+  } else if (typeof s.apiKey === "string" || typeof s.model === "string") {
+    // Legacy shape → Anthropic slot.
+    providers.anthropic = {
+      apiKey: typeof s.apiKey === "string" ? s.apiKey : "",
+      model: typeof s.model === "string" ? s.model : base.providers.anthropic.model,
+    };
+  }
+
+  const provider =
+    typeof s.provider === "string" && s.provider in providers
+      ? (s.provider as AiProvider)
+      : base.provider;
+
+  return {
+    enabled: typeof s.enabled === "boolean" ? s.enabled : base.enabled,
+    provider,
+    providers,
+  };
+}
 
 export function defaultStore(): Store {
   return {
@@ -56,7 +100,7 @@ export function loadStore(): Store {
       settings: {
         ...base.settings,
         ...parsed.settings,
-        ai: { ...base.settings.ai, ...parsed.settings?.ai },
+        ai: migrateAi(parsed.settings?.ai),
       },
       entries: parsed.entries ?? [],
       vocab: parsed.vocab ?? {},

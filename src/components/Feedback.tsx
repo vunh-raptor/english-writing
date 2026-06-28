@@ -11,13 +11,16 @@ interface FeedbackProps {
 
 function humanError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
-  if (/401|authentication|api key|api_key/i.test(msg)) {
+  if (/failed to fetch|networkerror|load failed|cors/i.test(msg)) {
+    return "Couldn't reach that provider from the browser — it may block direct requests. Try a different provider in Settings. Here's your on-device feedback meanwhile.";
+  }
+  if (/401|403|authentication|api key|api_key|invalid/i.test(msg)) {
     return "That API key didn't work. Double-check it in Settings — meanwhile, here's your on-device feedback.";
   }
-  if (/429|rate/i.test(msg)) {
-    return "Claude is busy right now. Here's your on-device feedback instead.";
+  if (/429|rate|quota/i.test(msg)) {
+    return "The provider is busy or out of free quota right now. Here's your on-device feedback instead.";
   }
-  return "Couldn't reach Claude just now — here's your on-device feedback instead.";
+  return "Couldn't reach the AI provider just now — here's your on-device feedback instead.";
 }
 
 export function Feedback({ entry, onBack }: FeedbackProps) {
@@ -40,7 +43,8 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
   const [error, setError] = useState<string | null>(null);
   const ranRef = useRef(false);
 
-  const aiOn = settings.ai.enabled && settings.ai.apiKey.trim().length > 0;
+  const aiCfg = settings.ai.providers[settings.ai.provider];
+  const aiOn = settings.ai.enabled && aiCfg.apiKey.trim().length > 0;
 
   useEffect(() => {
     if (!aiOn || ranRef.current) return;
@@ -114,10 +118,10 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
 
         <p className="faint" style={{ fontSize: 13, marginTop: 16 }}>
           {feedback.source === "ai"
-            ? "Feedback from Claude, just for you."
+            ? "Feedback from your AI provider, just for you."
             : aiOn
               ? "On-device feedback."
-              : "On-device feedback. Want a closer, more personal read? Add your Claude API key in Settings."}
+              : "On-device feedback. Want a closer, more personal read? Add an API key in Settings — Anthropic or a free provider."}
         </p>
 
         <div className="fb-section">
