@@ -23,6 +23,8 @@ export interface Settings {
   /** Seconds when goalType is "time"; word count when "words". */
   goalValue: number;
   difficulty: Difficulty;
+  /** Real-life theme ids to draw prompts from. Empty = a bit of everything. */
+  focuses: string[];
   /** Gentle "keep going" pulse when the writer pauses mid-session. */
   gentleNudge: boolean;
   /** Juicy completion sound on the celebrate screen. */
@@ -83,17 +85,32 @@ export interface Store {
   profile: Profile;
   settings: Settings;
   vocab: Vocab;
+  /** A growing local library of AI-generated prompts (kept bounded). */
+  aiPrompts: Prompt[];
   /** Whether the learner has finished the first session (we defer "settings" nudges). */
   hasWritten: boolean;
+}
+
+/** A real-life domain the learner practices English for — the syllabus axis. */
+export interface Theme {
+  id: string;
+  label: string;
+  emoji: string;
+  /** What real-life skill this theme builds. */
+  blurb: string;
 }
 
 /** A leveled, personal writing prompt. Never a blank page. */
 export interface Prompt {
   id: string;
+  /** Which real-life theme this belongs to. */
+  themeId: string;
   level: Difficulty;
   text: string;
   /** An optional sentence-starter to break the ice. */
   starter?: string;
+  /** Where it came from — the curated syllabus or AI generation. */
+  source: "curated" | "ai";
 }
 
 /** Feedback is always opt-in and after writing — leading with what went well. */

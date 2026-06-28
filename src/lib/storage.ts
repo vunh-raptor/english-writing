@@ -14,6 +14,7 @@ export const defaultSettings: Settings = {
   goalType: "time",
   goalValue: 300, // 5 minutes — momentum, not marathon
   difficulty: 1,
+  focuses: [], // empty = a bit of everything
   gentleNudge: true,
   sound: true,
   ai: {
@@ -82,6 +83,7 @@ export function defaultStore(): Store {
     },
     settings: defaultSettings,
     vocab: {},
+    aiPrompts: [],
     hasWritten: false,
   };
 }
@@ -104,6 +106,7 @@ export function loadStore(): Store {
       },
       entries: parsed.entries ?? [],
       vocab: parsed.vocab ?? {},
+      aiPrompts: parsed.aiPrompts ?? [],
     };
   } catch {
     return defaultStore();

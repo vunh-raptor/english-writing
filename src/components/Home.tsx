@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/StoreContext";
 import type { Prompt, Settings } from "../types";
-import { dailyPrompt, randomPrompt } from "../lib/prompts";
+import { dailyPrompt, randomPrompt, themeById } from "../lib/prompts";
+import { aiGeneratePrompts } from "../lib/ai";
 import { greeting, todayKey } from "../lib/date";
 import { streakInfo, MAX_FREEZES, type StreakStatus } from "../lib/streak";
 
@@ -29,23 +30,67 @@ function statusCopy(status: StreakStatus, streak: number): { text: string; warn:
   }
 }
 
+function genErrorText(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/failed to fetch|networkerror|load failed|cors/i.test(msg))
+    return "Couldn't reach that provider from the browser. Try a different one in Settings.";
+  if (/401|403|api key|invalid|authentication/i.test(msg))
+    return "That API key didn't work — check it in Settings.";
+  if (/429|rate|quota/i.test(msg))
+    return "The provider is busy or out of free quota right now.";
+  return "Couldn't generate new prompts just now — the curated ones are still here.";
+}
+
 export function Home({ onStart }: HomeProps) {
-  const { store } = useStore();
-  const { settings, profile, hasWritten } = store;
+  const { store, addGeneratedPrompts } = useStore();
+  const { settings, profile, hasWritten, aiPrompts } = store;
   const today = todayKey();
   const info = streakInfo(profile, today);
 
   const [prompt, setPrompt] = useState<Prompt>(() =>
-    dailyPrompt(today, settings.difficulty),
+    dailyPrompt(today, settings.difficulty, settings.focuses, aiPrompts),
   );
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
 
-  // If the learner changes difficulty in settings, freshen the daily prompt.
+  // Freshen the daily prompt when the level or real-life focus changes.
   useEffect(() => {
-    setPrompt(dailyPrompt(today, settings.difficulty));
-  }, [settings.difficulty, today]);
+    setPrompt(dailyPrompt(today, settings.difficulty, settings.focuses, aiPrompts));
+    // aiPrompts intentionally excluded: generating shouldn't reset the shown prompt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.difficulty, settings.focuses, today]);
 
+  const theme = themeById(prompt.themeId);
   const status = statusCopy(info.status, info.streak);
   const hello = settings.name ? `${greeting()}, ${settings.name}.` : `${greeting()}.`;
+
+  const aiCfg = settings.ai.providers[settings.ai.provider];
+  const aiOn = settings.ai.enabled && aiCfg.apiKey.trim().length > 0;
+
+  async function generate() {
+    if (!theme) return;
+    setGenerating(true);
+    setGenError(null);
+    try {
+      const avoid = [
+        prompt.text,
+        ...aiPrompts.slice(-8).map((p) => p.text),
+      ];
+      const fresh = await aiGeneratePrompts(settings.ai, {
+        theme,
+        level: settings.difficulty,
+        count: 5,
+        name: settings.name || undefined,
+        avoid,
+      });
+      addGeneratedPrompts(fresh);
+      setPrompt(fresh[0]);
+    } catch (e) {
+      setGenError(genErrorText(e));
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   return (
     <div className="screen screen-pad">
@@ -60,7 +105,12 @@ export function Home({ onStart }: HomeProps) {
         </div>
 
         <div className="prompt-card">
-          <span className="eyebrow">Today's prompt</span>
+          <div className="prompt-eyebrow-row">
+            <span className="eyebrow">
+              {theme ? `${theme.emoji} ${theme.label}` : "Today's prompt"}
+            </span>
+            {prompt.source === "ai" && <span className="ai-tag">✨ fresh</span>}
+          </div>
           <p className="prompt-text">{prompt.text}</p>
           {prompt.starter && (
             <span className="prompt-starter">{prompt.starter}…</span>
@@ -71,12 +121,37 @@ export function Home({ onStart }: HomeProps) {
             </button>
             <button
               className="shuffle"
-              onClick={() => setPrompt(randomPrompt(settings.difficulty, prompt.id))}
+              onClick={() =>
+                setPrompt(
+                  randomPrompt(settings.difficulty, settings.focuses, aiPrompts, prompt.id),
+                )
+              }
             >
               ↻ Different prompt
             </button>
+            {aiOn && (
+              <button className="shuffle" onClick={generate} disabled={generating}>
+                {generating ? (
+                  <>
+                    <span className="spinner spinner-sm" /> Generating…
+                  </>
+                ) : (
+                  <>✨ Generate fresh</>
+                )}
+              </button>
+            )}
           </div>
+          {genError && <div className="status-note warn" style={{ marginTop: 14 }}>{genError}</div>}
         </div>
+
+        {!aiOn && theme && (
+          <p className="faint focus-hint">
+            {settings.focuses.length > 0
+              ? "Focused on your chosen real-life themes — "
+              : "Rotating across real-life themes — "}
+            tune what you practice in Settings.
+          </p>
+        )}
 
         <div className="home-row">
           <div className="chip-card">

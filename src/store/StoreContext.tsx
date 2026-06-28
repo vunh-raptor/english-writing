@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Entry, Settings, Store } from "../types";
+import type { Entry, Prompt, Settings, Store } from "../types";
 import { loadStore, saveStore, clearStore, defaultStore } from "../lib/storage";
 import { todayKey } from "../lib/date";
 import {
@@ -33,8 +33,13 @@ interface StoreContextValue {
   /** Commit a completed session. Returns the created entry for the celebrate screen. */
   finishSession(input: FinishInput): Entry;
   updateSettings(patch: Partial<Settings>): void;
+  /** Add freshly AI-generated prompts to the local library (deduped, bounded). */
+  addGeneratedPrompts(prompts: Prompt[]): void;
   reset(): void;
 }
+
+/** Keep the on-device AI prompt library from growing without bound. */
+const MAX_AI_PROMPTS = 120;
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
@@ -122,14 +127,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const addGeneratedPrompts = useCallback(
+    (prompts: Prompt[]) => {
+      if (prompts.length === 0) return;
+      const prev = storeRef.current;
+      const seen = new Set(prev.aiPrompts.map((p) => p.id));
+      const merged = [...prev.aiPrompts, ...prompts.filter((p) => !seen.has(p.id))];
+      commit({ ...prev, aiPrompts: merged.slice(-MAX_AI_PROMPTS) });
+    },
+    [commit],
+  );
+
   const reset = useCallback(() => {
     clearStore();
     commit(defaultStore());
   }, [commit]);
 
   const value = useMemo(
-    () => ({ store, finishSession, updateSettings, reset }),
-    [store, finishSession, updateSettings, reset],
+    () => ({ store, finishSession, updateSettings, addGeneratedPrompts, reset }),
+    [store, finishSession, updateSettings, addGeneratedPrompts, reset],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

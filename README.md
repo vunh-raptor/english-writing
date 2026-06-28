@@ -18,8 +18,9 @@ English without flinching, then feel good about it.
 ## The core loop
 
 1. **Never a blank page.** Every session opens with a leveled, *personal*
-   prompt and a sentence-starter. You write about your own life and opinions —
-   which is what makes writing feel meaningful (and meaning is what drives flow).
+   prompt and a sentence-starter, drawn from a **real-life syllabus** (see
+   below). You write about your own life and opinions — which is what makes
+   writing feel meaningful (and meaning is what drives flow).
 2. **Write phase.** A calm full-screen editor. **No spellcheck, no red
    squiggles, no correction mid-flow** — the generator and the editor are
    different mental modes, and switching on the editor is what kills fluency. A
@@ -34,6 +35,24 @@ English without flinching, then feel good about it.
    day so one bad day doesn't nuke months of progress), and rewards that show
    **real growth** — "+12 new words this week", vocabulary size, sentence-length
    trends — instead of hollow points.
+
+## Prompts: a managed, real-life syllabus
+
+Prompts aren't a flat hardcoded list — they're a small **syllabus** organized
+around the situations people actually need English for:
+
+🌤️ Everyday life · 💼 Work & email · 💬 Friends & social · ⚖️ Opinions & debate
+· ✈️ Travel & places · 📖 Stories & memories · 🌱 Goals & reflection
+
+- Every prompt is tagged by **theme** and **level**, and the daily prompt
+  **rotates across themes** so you get balanced real-life coverage instead of a
+  random pile.
+- In **Settings → "What are you practicing for?"** you pick the themes you care
+  about (e.g. just Work & email), and prompts are drawn from those.
+- With an AI key, **"✨ Generate fresh"** on the home screen creates new,
+  scenario-grounded prompts for your theme + level, personalized and saved into
+  a local library that keeps working offline. The curated syllabus is always the
+  fallback, so this never breaks the no-key experience.
 
 ## How the design maps to the science
 
@@ -111,11 +130,11 @@ src/
   types.ts                # the on-device data model
   store/StoreContext.tsx  # localStorage-backed state + "finish session" logic
   lib/
-    prompts.ts            # leveled, personal prompt bank
+    prompts.ts            # the syllabus: real-life themes + leveled prompts + selection
     stats.ts              # word/sentence counts + vocabulary growth
     streak.ts             # streak engine with forgiveness (freezes)
     feedback.ts           # offline, encouragement-first feedback
-    ai.ts                 # optional AI feedback (Anthropic / Gemini / Groq / OpenAI-compatible)
+    ai.ts                 # optional AI: feedback + prompt generation (Anthropic / Gemini / Groq / OpenAI-compatible)
     storage.ts, date.ts, sound.ts
   components/
     Home, Write, Celebrate, Feedback, Progress, Settings, Confetti

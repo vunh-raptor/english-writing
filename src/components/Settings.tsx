@@ -1,4 +1,5 @@
 import { useStore } from "../store/StoreContext";
+import { THEMES } from "../lib/prompts";
 import type { AiProvider, Difficulty, GoalType } from "../types";
 
 const TIME_OPTIONS = [120, 180, 300, 600]; // seconds
@@ -74,6 +75,13 @@ export function Settings() {
       goalType,
       goalValue: goalType === "time" ? 300 : 100,
     });
+  }
+
+  function toggleFocus(id: string) {
+    const set = new Set(s.focuses);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    updateSettings({ focuses: [...set] });
   }
 
   function handleReset() {
@@ -179,6 +187,31 @@ export function Settings() {
                   {DIFFICULTY_LABELS[d]}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="setting" style={{ display: "block" }}>
+            <div className="setting-label">What are you practicing for?</div>
+            <div className="setting-desc">
+              Pick the real-life areas you want prompts from — your prompts (and
+              any you generate with AI) come from these. Leave all off for a bit
+              of everything.
+            </div>
+            <div className="chips" style={{ marginTop: 12 }}>
+              {THEMES.map((t) => {
+                const on = s.focuses.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    className={`chip-toggle${on ? " on" : ""}`}
+                    onClick={() => toggleFocus(t.id)}
+                    aria-pressed={on}
+                    title={t.blurb}
+                  >
+                    {t.emoji} {t.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
