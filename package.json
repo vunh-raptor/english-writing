@@ -2,24 +2,25 @@
   "name": "flowrite",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "description": "Write English freely. Polish it later. A distraction-free freewriting app for language learners.",
+  "description": "Write English freely. Polish it later. A trend-driven, AI-assisted English writing app.",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.45.4",
+    "next": "^14.2.18",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^20.14.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "typescript": "^5.6.3"
   }
 }

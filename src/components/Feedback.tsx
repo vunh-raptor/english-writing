@@ -43,8 +43,7 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
   const [error, setError] = useState<string | null>(null);
   const ranRef = useRef(false);
 
-  const aiCfg = settings.ai.providers[settings.ai.provider];
-  const aiOn = settings.ai.enabled && aiCfg.apiKey.trim().length > 0;
+  const aiOn = settings.ai.enabled;
 
   useEffect(() => {
     if (!aiOn || ranRef.current) return;
@@ -52,14 +51,14 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    aiFeedback(entry, settings.ai)
+    aiFeedback(entry)
       .then((fb) => !cancelled && setFeedback(fb))
       .catch((err) => !cancelled && setError(humanError(err)))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [aiOn, entry, settings.ai]);
+  }, [aiOn, entry]);
 
   return (
     <div className="screen screen-pad">
@@ -118,10 +117,10 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
 
         <p className="faint" style={{ fontSize: 13, marginTop: 16 }}>
           {feedback.source === "ai"
-            ? "Feedback from your AI provider, just for you."
+            ? "Feedback from your AI coach, just for you."
             : aiOn
               ? "On-device feedback."
-              : "On-device feedback. Want a closer, more personal read? Add an API key in Settings — Anthropic or a free provider."}
+              : "On-device feedback. Want a closer, more personal read? Turn on AI feedback in Settings."}
         </p>
 
         <div className="fb-section">

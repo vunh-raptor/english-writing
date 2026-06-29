@@ -81,6 +81,12 @@ a {
   flex-direction: column;
 }
 
+/* Calm placeholder while the client app loads (Next dynamic import). */
+.app-boot {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
 .container {
   width: 100%;
   max-width: var(--maxw);

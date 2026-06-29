@@ -49,10 +49,10 @@ around the situations people actually need English for:
   random pile.
 - In **Settings → "What are you practicing for?"** you pick the themes you care
   about (e.g. just Work & email), and prompts are drawn from those.
-- With an AI key, **"✨ Generate fresh"** on the home screen creates new,
-  scenario-grounded prompts for your theme + level, personalized and saved into
-  a local library that keeps working offline. The curated syllabus is always the
-  fallback, so this never breaks the no-key experience.
+- With AI enabled, **"✨ Generate fresh"** on the home screen creates new,
+  scenario-grounded prompts for your theme + level (generated **server-side**),
+  saved into your prompt library. The curated syllabus is always the fallback,
+  so this never breaks when AI is off.
 
 ## How the design maps to the science
 
@@ -64,80 +64,101 @@ around the situations people actually need English for:
 | Never the blank page | Leveled prompt + sentence-starter on every session |
 | Goal = momentum, not quality | Timer / word goal, "I'm done" any time |
 | Flow conditions | Clear goal, instant feedback, difficulty calibrated to level |
-| Private by default | Local-first; no account, no audience |
-| Defer signup until after a win | No signup at all — just open and write |
+| Private by default | No public audience; your writing is yours |
+| Defer signup until after a win | Write as a guest first, then sign up to save your streak |
 | Streaks, but forgiving | Streak **freeze** tokens absorb missed days |
 | Reward growth, not grinding | New words, vocabulary, sentence-length trends |
 | Make the win feel great | Confetti + chime + count-up on completion |
 
-## Privacy
+## Stack & status
 
-Everything lives **on your device** in `localStorage` — your writing, streak,
-and settings never touch a server. The only thing that ever leaves your browser
-is text you *explicitly* send for AI feedback (see below).
+Migrating from a browser-only app to **online-first full-stack** (see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)):
 
-## Optional: AI-powered feedback (bring your own key)
+- **Next.js (App Router)** — UI + API route handlers, deployed on **Vercel**.
+- **Supabase** — Postgres + Auth (wired in the next phase).
+- **Server-side AI** — free-tier providers (Groq / Gemini), keys in env, never
+  the browser.
 
-The app works fully offline with on-device feedback. If you want warmer, more
-personal feedback, open **Settings → AI feedback**, turn it on, and choose a
-provider:
+**Done so far:** Next.js conversion; AI moved server-side (`/api/feedback`,
+`/api/prompts/generate`); trends endpoint scaffolding (`/api/trends`, Hacker
+News adapter + custom slot). **Next:** Supabase auth + DB (entries/progress),
+trends UI + sectioned scenarios, the in-context word-practice panel.
 
-| Provider | Cost | Where to get a key |
-| --- | --- | --- |
-| **Anthropic (Claude)** | Pay-as-you-go, ~<1¢/session on Haiku | console.anthropic.com |
-| **Google Gemini** | Free tier | aistudio.google.com/apikey |
-| **Groq** | Free tier | console.groq.com/keys |
-| **OpenAI-compatible** (OpenRouter, local, …) | Free models available | openrouter.ai/keys |
+> During the migration, writing/streak state still uses `localStorage` on the
+> client; Phase 1 moves it to Supabase with real accounts (guest-first, then
+> sign up to save).
 
-Each provider remembers its own key and model, so switching is friction-free.
-The key is stored **only in your browser** and sent only to the provider you
-choose, only when you ask for feedback. Calls go directly from the browser to
-the provider using your own credentials — there's no backend.
+## AI feedback (server-side, free tier)
 
-> **Note on Claude Pro:** an Anthropic API key is **separate** from a Claude Pro
-> subscription. Pro unlocks the claude.ai apps; the API is its own pay-as-you-go
-> billing at console.anthropic.com. For a $0 option, use Gemini or Groq's free
-> tier — or just stay on the built-in offline feedback.
->
-> Some providers (e.g. OpenAI, sometimes Groq) block direct browser requests via
-> CORS. Anthropic, Gemini, and OpenRouter work from the browser; if a request
-> fails, the app falls back to offline feedback and you can switch providers.
+The app works fully without AI (on-device feedback + the curated syllabus). When
+the operator configures a provider key, **Settings → "Use AI"** unlocks warmer
+feedback and "✨ generate fresh" prompts. Keys live in **server env vars**, never
+the browser:
+
+```
+GROQ_API_KEY=…       # free: https://console.groq.com/keys
+# or
+GEMINI_API_KEY=…     # free: https://aistudio.google.com/apikey
+# or ANTHROPIC_API_KEY=…  (optional, paid)
+```
+
+Any one provider is enough; the server picks the first configured (override with
+`AI_PROVIDER`). See `.env.example`.
 
 ## Run it
 
 ```bash
 npm install
-npm run dev      # start the dev server
-npm run build    # type-check + production build into dist/
-npm run preview  # serve the production build
+cp .env.example .env.local   # fill in keys you have (all optional for the core app)
+npm run dev                  # http://localhost:3000
+npm run build && npm start   # production build + serve
 ```
 
-Open the printed local URL and start writing.
+The core writing experience runs with no keys at all. AI features activate once
+a provider key is set; trends activate once deployed with network access (and/or
+a `CUSTOM_TRENDS_URL`).
+
+## Deploy (Vercel + Supabase)
+
+1. Create a **Supabase** project; copy the URL + anon/service keys.
+2. Import the repo into **Vercel**; set env vars from `.env.example` in the
+   Vercel dashboard.
+3. Deploy. (A Vercel Cron job warms `/api/trends` on the free tier.)
 
 ## Tech
 
-- **React + TypeScript + Vite**, local-first (no backend).
-- State persisted to `localStorage` via a small store context.
-- Pluggable AI feedback: Anthropic via the official `@anthropic-ai/sdk`, plus
-  Gemini / Groq / any OpenAI-compatible endpoint via `fetch` (browser, opt-in).
-- No tracking, no analytics, no account system.
+- **Next.js + TypeScript** (App Router). Client app under `app/`, API under
+  `app/api/`.
+- **Supabase** (Postgres + Auth) — server data layer.
+- **Server AI gateway** — Groq / Gemini / Anthropic via env keys.
+- Pluggable **trend adapters** (Hacker News today; `custom` slot for a compliant
+  social feed / paid trends API).
 
 ### Project layout
 
 ```
+app/
+  layout.tsx, page.tsx       # mounts the writing app (client)
+  api/
+    health/route.ts
+    trends/route.ts          # cached trends (HN + custom)
+    feedback/route.ts        # AI feedback (server-side keys)
+    prompts/generate/route.ts
 src/
-  App.tsx                 # view-state navigation + top bar
-  types.ts                # the on-device data model
-  store/StoreContext.tsx  # localStorage-backed state + "finish session" logic
+  App.tsx, Root.tsx          # the SPA (client) + provider root
+  types.ts                   # data model
+  store/StoreContext.tsx     # client state (localStorage today → API in Phase 1)
   lib/
-    prompts.ts            # the syllabus: real-life themes + leveled prompts + selection
-    stats.ts              # word/sentence counts + vocabulary growth
-    streak.ts             # streak engine with forgiveness (freezes)
-    feedback.ts           # offline, encouragement-first feedback
-    ai.ts                 # optional AI: feedback + prompt generation (Anthropic / Gemini / Groq / OpenAI-compatible)
+    prompts.ts               # the syllabus: real-life themes + leveled prompts
+    stats.ts, streak.ts      # stats + streak engine (move server-side in Phase 1)
+    feedback.ts              # offline, encouragement-first feedback
+    ai.ts                    # client → calls /api/* (no keys in the browser)
+    server/                  # server-only: ai gateway, aiTasks, trend adapters
     storage.ts, date.ts, sound.ts
   components/
     Home, Write, Celebrate, Feedback, Progress, Settings, Confetti
+docs/ARCHITECTURE.md
 ```
 
 ---

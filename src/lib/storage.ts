@@ -89,6 +89,8 @@ export function defaultStore(): Store {
 }
 
 export function loadStore(): Store {
+  // SSR-safe: there's no localStorage on the server.
+  if (typeof window === "undefined") return defaultStore();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultStore();

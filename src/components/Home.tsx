@@ -64,8 +64,7 @@ export function Home({ onStart }: HomeProps) {
   const status = statusCopy(info.status, info.streak);
   const hello = settings.name ? `${greeting()}, ${settings.name}.` : `${greeting()}.`;
 
-  const aiCfg = settings.ai.providers[settings.ai.provider];
-  const aiOn = settings.ai.enabled && aiCfg.apiKey.trim().length > 0;
+  const aiOn = settings.ai.enabled;
 
   async function generate() {
     if (!theme) return;
@@ -76,7 +75,7 @@ export function Home({ onStart }: HomeProps) {
         prompt.text,
         ...aiPrompts.slice(-8).map((p) => p.text),
       ];
-      const fresh = await aiGeneratePrompts(settings.ai, {
+      const fresh = await aiGeneratePrompts({
         theme,
         level: settings.difficulty,
         count: 5,

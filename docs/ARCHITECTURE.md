@@ -1,8 +1,50 @@
 # Flowrite — Full-Stack Architecture
 
-> Status: **proposal**. This documents the move from the current browser-only,
-> local-first app to an online-first full-stack app with a backend. It's written
-> to be executed in phases, each of which keeps the app shippable.
+> Status: **in progress**. Online-first full-stack app. The sections below
+> describe the general design; the **Decided stack** section is the chosen
+> implementation and overrides earlier "recommended"/"alternative" notes.
+
+## Decided stack (v1)
+
+| Concern | Decision |
+| --- | --- |
+| App framework | **Next.js (App Router)** — one app: UI + API route handlers + server actions. |
+| Hosting | **Vercel free (Hobby)** tier. |
+| Database + Auth | **Supabase** (managed Postgres + Supabase Auth), accessed via **`@supabase/supabase-js` + `@supabase/ssr`** with Row-Level Security. (No Prisma — avoids serverless connection-pool pain; SQL migrations instead.) |
+| AI | **Free-tier providers server-side** (Google Gemini, Groq) via the server AI gateway, keys in Vercel env vars. Anthropic optional. |
+| Scheduled crawls | **Vercel Cron** (Hobby allows a daily cron) writing trends into a Supabase `trends` table; client reads cached rows. No long-running worker / Redis on the free tier. |
+| Caching | **Supabase tables** (`trends`, `scenarios`) with `fetched_at`/TTL checks; optionally Vercel KV later. |
+
+Implications vs. the general design below: the `apps/worker` + Redis/BullMQ
+component is replaced by **Vercel Cron + Supabase-table caching**; Prisma is
+replaced by **`supabase-js` + SQL migrations + RLS**. The pluggable trend
+adapters, the guest→account "defer signup" flow, the API surface, and the
+feature mapping all carry over unchanged.
+
+### Project layout (Next.js)
+
+```
+flowrite/
+  app/
+    layout.tsx, page.tsx          # the writing app (client) mounts here
+    api/
+      health/route.ts
+      trends/route.ts             # GET cached trends; cron refresh
+      scenarios/route.ts          # POST { trendId|subject } -> scenario
+      entries/route.ts            # POST entry; GET history
+      feedback/route.ts           # POST -> AI feedback
+      words/help/route.ts, words/check/route.ts
+      cron/trends/route.ts        # Vercel Cron target
+  src/
+    components/ … (existing UI, client)
+    lib/
+      client/   # api client, query hooks
+      server/   # ai gateway, trend adapters, supabase server client
+      …existing pure logic (stats, streak, prompts) shared
+  supabase/
+    migrations/*.sql              # schema + RLS
+  docs/
+```
 
 ## Why switch
 
