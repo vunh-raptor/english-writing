@@ -81,9 +81,11 @@ Migrating from a browser-only app to **online-first full-stack** (see
   the browser.
 
 **Done so far:** Next.js conversion; AI moved server-side (`/api/feedback`,
-`/api/prompts/generate`); trends endpoint scaffolding (`/api/trends`, Hacker
-News adapter + custom slot). **Next:** Supabase auth + DB (entries/progress),
-trends UI + sectioned scenarios, the in-context word-practice panel.
+`/api/prompts/generate`); trends endpoint (`/api/trends`, Hacker News adapter +
+custom slot); **Trending mode → sectioned interactive scenarios**
+(`/api/scenarios` with a no-key local fallback, plus a multi-step write flow —
+react → take a side → reply → imagine, one small beat at a time). **Next:**
+Supabase auth + DB (entries/progress), then the in-context word-practice panel.
 
 > During the migration, writing/streak state still uses `localStorage` on the
 > client; Phase 1 moves it to Supabase with real accounts (guest-first, then

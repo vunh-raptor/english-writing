@@ -122,3 +122,55 @@ export interface Feedback {
   suggestions: { note: string; example?: string }[];
   oneThingToTry: string;
 }
+
+/** A trending subject surfaced from the web (fetched server-side). */
+export interface Trend {
+  id: string;
+  title: string;
+  source: string;
+  platform: string;
+  url?: string;
+  blurb?: string;
+}
+
+/** The flavor of a scenario step — used for light UI cues. */
+export type BeatKind = "react" | "opinion" | "reply" | "imagine" | "describe" | "open";
+
+/** One small, interactive step of a scenario. */
+export interface ScenarioStep {
+  id: string;
+  kind: BeatKind;
+  prompt: string;
+  starter?: string;
+  hint?: string;
+}
+
+/**
+ * A trending subject turned into a sectioned, interactive writing flow — small
+ * beats that build on each other instead of one big essay.
+ */
+export interface Scenario {
+  id: string;
+  subject: string;
+  source: "trend" | "ai" | "curated";
+  platform?: string;
+  intro: string;
+  steps: ScenarioStep[];
+}
+
+/** One beat of a writing session (a single prompt, or a scenario step). */
+export interface WriteBeat {
+  id: string;
+  prompt: string;
+  starter?: string;
+  hint?: string;
+}
+
+/** What the writing screen works on: a subject + one or more beats. */
+export interface WriteSession {
+  promptId: string;
+  subject: string;
+  /** Display label for the subject's source, e.g. a platform name. */
+  platform?: string;
+  beats: WriteBeat[];
+}

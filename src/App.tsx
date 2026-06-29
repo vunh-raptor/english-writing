@@ -1,31 +1,58 @@
 import { useState } from "react";
 import { useStore } from "./store/StoreContext";
-import type { Entry, Prompt } from "./types";
+import type { Entry, Prompt, Scenario, WriteSession } from "./types";
 import { Home } from "./components/Home";
 import { Write } from "./components/Write";
 import { Celebrate } from "./components/Celebrate";
 import { Feedback } from "./components/Feedback";
 import { Progress } from "./components/Progress";
 import { Settings } from "./components/Settings";
+import { Trending } from "./components/Trending";
 
-type View = "home" | "write" | "celebrate" | "feedback" | "progress" | "settings";
+type View =
+  | "home"
+  | "trending"
+  | "write"
+  | "celebrate"
+  | "feedback"
+  | "progress"
+  | "settings";
 
 export function App() {
   const { store, finishSession } = useStore();
   const [view, setView] = useState<View>("home");
-  const [writePrompt, setWritePrompt] = useState<Prompt | null>(null);
+  const [writeSession, setWriteSession] = useState<WriteSession | null>(null);
   const [activeEntry, setActiveEntry] = useState<Entry | null>(null);
 
   function startWriting(p: Prompt) {
-    setWritePrompt(p);
+    setWriteSession({
+      promptId: p.id,
+      subject: p.text,
+      beats: [{ id: p.id, prompt: p.text, starter: p.starter }],
+    });
+    setView("write");
+  }
+
+  function startScenario(s: Scenario) {
+    setWriteSession({
+      promptId: s.id,
+      subject: s.subject,
+      platform: s.platform,
+      beats: s.steps.map((step) => ({
+        id: step.id,
+        prompt: step.prompt,
+        starter: step.starter,
+        hint: step.hint,
+      })),
+    });
     setView("write");
   }
 
   function handleFinish(text: string, durationMs: number) {
-    if (!writePrompt) return;
+    if (!writeSession) return;
     const entry = finishSession({
-      promptId: writePrompt.id,
-      promptText: writePrompt.text,
+      promptId: writeSession.promptId,
+      promptText: writeSession.subject,
       text,
       durationMs,
     });
@@ -34,10 +61,10 @@ export function App() {
   }
 
   // The writing screen is its own full-screen, distraction-free surface.
-  if (view === "write" && writePrompt) {
+  if (view === "write" && writeSession) {
     return (
       <Write
-        prompt={writePrompt}
+        session={writeSession}
         goalType={store.settings.goalType}
         goalValue={store.settings.goalValue}
         gentleNudge={store.settings.gentleNudge}
@@ -47,7 +74,8 @@ export function App() {
     );
   }
 
-  const showNav = view === "home" || view === "progress" || view === "settings";
+  const showNav =
+    view === "home" || view === "trending" || view === "progress" || view === "settings";
 
   return (
     <div className="app">
@@ -64,6 +92,12 @@ export function App() {
                 onClick={() => setView("home")}
               >
                 Write
+              </button>
+              <button
+                className={view === "trending" ? "active" : ""}
+                onClick={() => setView("trending")}
+              >
+                Trending
               </button>
               <button
                 className={view === "progress" ? "active" : ""}
@@ -83,6 +117,7 @@ export function App() {
       </header>
 
       {view === "home" && <Home onStart={startWriting} />}
+      {view === "trending" && <Trending onStartScenario={startScenario} />}
       {view === "progress" && <Progress />}
       {view === "settings" && <Settings />}
       {view === "celebrate" && activeEntry && (
@@ -95,7 +130,6 @@ export function App() {
       {view === "feedback" && activeEntry && (
         <Feedback entry={activeEntry} onBack={() => setView("home")} />
       )}
-      {/* Fallbacks if we somehow land on a moment screen without an entry. */}
       {(view === "celebrate" || view === "feedback") && !activeEntry && (
         <Home onStart={startWriting} />
       )}
