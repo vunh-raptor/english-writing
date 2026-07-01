@@ -87,8 +87,8 @@ export interface Store {
   vocab: Vocab;
   /** A growing local library of AI-generated prompts (kept bounded). */
   aiPrompts: Prompt[];
-  /** Phrase ids the learner has produced independently in the coach. */
-  masteredPhrases: string[];
+  /** Spaced-repetition schedule per phrase id. */
+  phraseSrs: Record<string, SrsRecord>;
   /** Whether the learner has finished the first session (we defer "settings" nudges). */
   hasWritten: boolean;
 }
@@ -160,6 +160,13 @@ export interface Scenario {
   steps: ScenarioStep[];
 }
 
+/** A common alternative way natives express the same idea. */
+export interface PhraseAlternative {
+  text: string;
+  /** Optional nuance/register note, e.g. "more formal". */
+  note?: string;
+}
+
 /** A native phrase/idiom the learner practices producing in conversation. */
 export interface Phrase {
   id: string;
@@ -171,6 +178,20 @@ export interface Phrase {
   register?: string;
   /** The image/origin behind an idiom — aids deep encoding. */
   origin?: string;
+  /** 2+ popular "similar ways" to say the same thing, for real-world flexibility. */
+  alternatives?: PhraseAlternative[];
+}
+
+/** Spaced-repetition state for one phrase (Leitner boxes). */
+export interface SrsRecord {
+  /** Leitner box; higher = longer interval before it's due again. */
+  box: number;
+  /** Day it's next due for review (YYYY-MM-DD). */
+  due: DayKey;
+  /** How many times it's been successfully produced. */
+  reps: number;
+  /** Last review day. */
+  last: DayKey;
 }
 
 /** A message in the coaching chat. */

@@ -87,9 +87,12 @@ custom slot); **Trending mode → sectioned interactive scenarios**
 react → take a side → reply → imagine, one small beat at a time); **Phrase
 Coach** (`/api/coach`) — a real-time conversational chat that drills today's
 native phrases until the learner produces each one *independently* (scaffold
-then fade; phrase chips light up only on unprompted correct use; mastery
-persists). **Next:** Supabase auth + DB (entries/progress), then the in-context
-word-practice panel.
+then fade; chips light up only on unprompted correct use). It runs on a
+**Leitner spaced-repetition schedule** (which phrases are "due" today), and each
+phrase carries **2+ popular "similar ways"** the coach also teaches and accepts
+as production — so learners flex expressions in the real world instead of
+memorizing one brittle phrase. **Next:** Supabase auth + DB (entries/progress),
+then the in-context word-practice panel.
 
 > During the migration, writing/streak state still uses `localStorage` on the
 > client; Phase 1 moves it to Supabase with real accounts (guest-first, then

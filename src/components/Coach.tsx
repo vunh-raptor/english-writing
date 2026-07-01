@@ -10,9 +10,9 @@ import { coachTurn } from "../lib/clientApi";
  * light up only when a phrase is used correctly and unprompted.
  */
 export function Coach() {
-  const { store, recordMasteredPhrases } = useStore();
-  // Fixed for the session so it doesn't reshuffle as phrases get mastered.
-  const [phrases] = useState(() => todaysPhrases(store.masteredPhrases));
+  const { store, reviewPhrases } = useStore();
+  // Fixed for the session so it doesn't reshuffle mid-lesson.
+  const [phrases] = useState(() => todaysPhrases(store.phraseSrs));
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [progress, setProgress] = useState<Record<string, boolean>>({});
@@ -21,8 +21,10 @@ export function Coach() {
   const [done, setDone] = useState(false);
   const [needsAI, setNeedsAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showRef, setShowRef] = useState(false);
 
   const startedRef = useRef(false);
+  const scheduledRef = useRef<Set<string>>(new Set());
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,11 +37,17 @@ export function Coach() {
       const map: Record<string, boolean> = {};
       for (const p of turn.progress) map[p.id] = p.produced;
       setProgress(map);
-      const producedIds = turn.progress.filter((p) => p.produced).map((p) => p.id);
-      if (producedIds.length) recordMasteredPhrases(producedIds);
+      // Schedule each phrase forward once, the first time it's produced.
+      const newly = turn.progress
+        .filter((p) => p.produced && !scheduledRef.current.has(p.id))
+        .map((p) => p.id);
+      if (newly.length) {
+        newly.forEach((id) => scheduledRef.current.add(id));
+        reviewPhrases(newly, true);
+      }
       if (turn.done) setDone(true);
     },
-    [recordMasteredPhrases],
+    [reviewPhrases],
   );
 
   // Open the conversation.
@@ -95,6 +103,11 @@ export function Coach() {
               <div className="phrase-preview-text">{p.text}</div>
               <div className="muted" style={{ marginTop: 4 }}>{p.meaning}</div>
               <div className="fb-example" style={{ marginTop: 8 }}>{p.example}</div>
+              {p.alternatives && p.alternatives.length > 0 && (
+                <div className="phrase-alts" style={{ marginTop: 8 }}>
+                  Similar ways: {p.alternatives.map((a) => a.text).join(" · ")}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -118,9 +131,28 @@ export function Coach() {
               </span>
             ))}
           </div>
-          <div className="faint coach-count">
-            {producedCount} / {phrases.length} produced on your own
+          <div className="coach-count-row">
+            <span className="faint coach-count">
+              {producedCount} / {phrases.length} produced on your own
+            </span>
+            <button className="ref-toggle" onClick={() => setShowRef((v) => !v)}>
+              {showRef ? "Hide" : "Show"} similar ways
+            </button>
           </div>
+          {showRef && (
+            <div className="phrase-ref">
+              {phrases.map((p) => (
+                <div className="phrase-ref-item" key={p.id}>
+                  <b>{p.text}</b> <span className="muted">— {p.meaning}</span>
+                  {p.alternatives && p.alternatives.length > 0 && (
+                    <div className="phrase-alts">
+                      Similar ways: {p.alternatives.map((a) => a.text).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="chat">

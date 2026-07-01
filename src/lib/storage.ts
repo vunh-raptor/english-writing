@@ -84,7 +84,7 @@ export function defaultStore(): Store {
     settings: defaultSettings,
     vocab: {},
     aiPrompts: [],
-    masteredPhrases: [],
+    phraseSrs: {},
     hasWritten: false,
   };
 }
@@ -110,7 +110,7 @@ export function loadStore(): Store {
       entries: parsed.entries ?? [],
       vocab: parsed.vocab ?? {},
       aiPrompts: parsed.aiPrompts ?? [],
-      masteredPhrases: parsed.masteredPhrases ?? [],
+      phraseSrs: parsed.phraseSrs ?? {},
     };
   } catch {
     return defaultStore();

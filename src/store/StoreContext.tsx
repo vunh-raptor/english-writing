@@ -20,6 +20,7 @@ import {
   mergeVocab,
 } from "../lib/stats";
 import { applyWrite } from "../lib/streak";
+import { reviewCard } from "../lib/srs";
 
 interface FinishInput {
   promptId: string;
@@ -35,8 +36,8 @@ interface StoreContextValue {
   updateSettings(patch: Partial<Settings>): void;
   /** Add freshly AI-generated prompts to the local library (deduped, bounded). */
   addGeneratedPrompts(prompts: Prompt[]): void;
-  /** Record phrase ids the learner produced independently in the coach. */
-  recordMasteredPhrases(ids: string[]): void;
+  /** Update the spaced-repetition schedule for reviewed phrases. */
+  reviewPhrases(ids: string[], success: boolean): void;
   reset(): void;
 }
 
@@ -140,19 +141,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
-  const recordMasteredPhrases = useCallback(
-    (ids: string[]) => {
+  const reviewPhrases = useCallback(
+    (ids: string[], success: boolean) => {
       if (ids.length === 0) return;
       const prev = storeRef.current;
-      const set = new Set(prev.masteredPhrases);
-      let changed = false;
-      for (const id of ids) {
-        if (!set.has(id)) {
-          set.add(id);
-          changed = true;
-        }
-      }
-      if (changed) commit({ ...prev, masteredPhrases: [...set] });
+      const day = todayKey();
+      const next = { ...prev.phraseSrs };
+      for (const id of ids) next[id] = reviewCard(next[id], success, day);
+      commit({ ...prev, phraseSrs: next });
     },
     [commit],
   );
@@ -168,10 +164,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       finishSession,
       updateSettings,
       addGeneratedPrompts,
-      recordMasteredPhrases,
+      reviewPhrases,
       reset,
     }),
-    [store, finishSession, updateSettings, addGeneratedPrompts, recordMasteredPhrases, reset],
+    [store, finishSession, updateSettings, addGeneratedPrompts, reviewPhrases, reset],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useStore } from "../store/StoreContext";
 import { summarize } from "../lib/stats";
+import { srsSummary } from "../lib/srs";
+import { SEED_PHRASES } from "../lib/phrases";
 import { addDays, prettyDay, todayKey } from "../lib/date";
 import type { DayKey } from "../types";
 
@@ -15,8 +17,13 @@ function levelFor(words: number): string {
 
 export function Progress() {
   const { store } = useStore();
-  const { entries, vocab, profile } = store;
+  const { entries, vocab, profile, phraseSrs } = store;
   const today = todayKey();
+
+  const phraseStats = useMemo(
+    () => srsSummary(SEED_PHRASES.map((p) => p.id), phraseSrs, today),
+    [phraseSrs, today],
+  );
 
   const summary = useMemo(
     () => summarize(entries, vocab, today),
@@ -40,15 +47,16 @@ export function Progress() {
 
   const sparkMax = Math.max(1, ...summary.recentLengths);
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && Object.keys(phraseSrs).length === 0) {
     return (
       <div className="screen screen-pad">
         <div className="container center-narrow">
           <h1 style={{ fontSize: 26 }}>Your progress</h1>
           <div className="card" style={{ marginTop: 18 }}>
             <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-              Nothing here yet — write your first session and this fills with
-              real growth: words you've used, your vocabulary, and your streak.
+              Nothing here yet — write your first session (or chat with the
+              Coach) and this fills with real growth: words you've used, your
+              vocabulary, phrases you can produce, and your streak.
             </p>
           </div>
         </div>
@@ -82,6 +90,23 @@ export function Progress() {
           <div className="bigstat">
             <div className="n">{summary.avgSentenceLength}</div>
             <div className="l">avg words per sentence</div>
+          </div>
+        </div>
+
+        <div className="section-title">
+          <h2>Phrases</h2>
+          <span className="faint">spaced practice · due today: {phraseStats.dueToday}</span>
+        </div>
+        <div className="bigstat-grid">
+          <div className="bigstat">
+            <div className="n">{phraseStats.mastered}</div>
+            <div className="l">phrases mastered</div>
+          </div>
+          <div className="bigstat">
+            <div className="n" style={{ color: "var(--accent)" }}>
+              {phraseStats.learning}
+            </div>
+            <div className="l">learning now</div>
           </div>
         </div>
 

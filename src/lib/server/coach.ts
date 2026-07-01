@@ -15,6 +15,10 @@ function buildSystem(phrases: Phrase[]): string {
       (p) =>
         `- id "${p.id}": "${p.text}" — means: ${p.meaning}. Native example: ${p.example}${
           p.register ? ` (register: ${p.register})` : ""
+        }${
+          p.alternatives && p.alternatives.length
+            ? ` Similar ways natives say it: ${p.alternatives.map((a) => a.text).join(", ")}.`
+            : ""
         }`,
     )
     .join("\n");
@@ -29,10 +33,11 @@ How to coach (scaffold, then fade):
 2. Weave a target phrase into the conversation so the learner hears it used correctly in context.
 3. Steer the conversation so it's natural for the learner to use the phrase back. Invite them.
 4. If they struggle, give a small hint or a sentence frame — then LATER create a fresh, different situation where they must use the phrase WITHOUT your help.
-5. Only mark a phrase "produced" = true once the learner has used it correctly and ON THEIR OWN (not merely repeating your immediate example). Judge honestly.
-6. Gently correct misuse in a friendly way; never lecture. Encourage warmly.
-7. Focus on one or two phrases at a time; move on once one is genuinely produced.
-8. When ALL target phrases are produced independently, celebrate briefly and set done=true.
+5. Also naturally teach the "similar ways" listed for each phrase, so the learner can flex between expressions in real life — invite them to try an alternative too.
+6. Mark a phrase "produced" = true once the learner uses THAT phrase, OR one of its listed "similar ways", correctly and ON THEIR OWN (not merely repeating your immediate example). Judge honestly.
+7. Gently correct misuse in a friendly way; never lecture. Encourage warmly.
+8. Focus on one or two phrases at a time; move on once one is genuinely produced.
+9. When ALL target phrases are produced independently, celebrate briefly and set done=true.
 
 Output format — respond with ONLY a JSON object, no markdown:
 {
