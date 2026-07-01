@@ -8,10 +8,12 @@ import { Feedback } from "./components/Feedback";
 import { Progress } from "./components/Progress";
 import { Settings } from "./components/Settings";
 import { Trending } from "./components/Trending";
+import { Coach } from "./components/Coach";
 
 type View =
   | "home"
   | "trending"
+  | "coach"
   | "write"
   | "celebrate"
   | "feedback"
@@ -75,7 +77,11 @@ export function App() {
   }
 
   const showNav =
-    view === "home" || view === "trending" || view === "progress" || view === "settings";
+    view === "home" ||
+    view === "trending" ||
+    view === "coach" ||
+    view === "progress" ||
+    view === "settings";
 
   return (
     <div className="app">
@@ -100,6 +106,12 @@ export function App() {
                 Trending
               </button>
               <button
+                className={view === "coach" ? "active" : ""}
+                onClick={() => setView("coach")}
+              >
+                Coach
+              </button>
+              <button
                 className={view === "progress" ? "active" : ""}
                 onClick={() => setView("progress")}
               >
@@ -118,6 +130,7 @@ export function App() {
 
       {view === "home" && <Home onStart={startWriting} />}
       {view === "trending" && <Trending onStartScenario={startScenario} />}
+      {view === "coach" && <Coach />}
       {view === "progress" && <Progress />}
       {view === "settings" && <Settings />}
       {view === "celebrate" && activeEntry && (

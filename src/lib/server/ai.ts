@@ -3,8 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 /**
  * Server-side AI gateway. Keys live in environment variables (never the
  * browser). Defaults to free-tier providers (Groq, Google Gemini) and falls
- * back to Anthropic if configured. Used by the feedback / scenario / word-help
- * route handlers.
+ * back to Anthropic if configured.
  *
  * Configure with env vars (any one provider is enough):
  *   GROQ_API_KEY        (+ optional GROQ_MODEL)
@@ -19,6 +18,11 @@ interface Resolved {
   provider: Provider;
   apiKey: string;
   model: string;
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
 }
 
 function resolveProvider(): Resolved | null {
@@ -44,25 +48,21 @@ async function readError(res: Response): Promise<string> {
   return `${res.status} ${body}`.slice(0, 300);
 }
 
-async function groqOrOpenAI(
+async function openAIChat(
   baseUrl: string,
-  apiKey: string,
-  model: string,
+  cfg: Resolved,
   system: string,
-  user: string,
+  messages: ChatTurn[],
   maxTokens: number,
 ): Promise<string> {
   const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({
-      model,
+      model: cfg.model,
       temperature: 0.8,
       max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      messages: [{ role: "system", content: system }, ...messages],
     }),
   });
   if (!res.ok) throw new Error(await readError(res));
@@ -70,22 +70,24 @@ async function groqOrOpenAI(
   return data?.choices?.[0]?.message?.content ?? "";
 }
 
-async function gemini(
-  apiKey: string,
-  model: string,
+async function geminiChat(
+  cfg: Resolved,
   system: string,
-  user: string,
+  messages: ChatTurn[],
   maxTokens: number,
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model,
-  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    cfg.model,
+  )}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
+      contents: messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
       generationConfig: { temperature: 0.9, maxOutputTokens: maxTokens },
     }),
   });
@@ -98,19 +100,18 @@ async function gemini(
   );
 }
 
-async function anthropic(
-  apiKey: string,
-  model: string,
+async function anthropicChat(
+  cfg: Resolved,
   system: string,
-  user: string,
+  messages: ChatTurn[],
   maxTokens: number,
 ): Promise<string> {
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey: cfg.apiKey });
   const res = await client.messages.create({
-    model,
+    model: cfg.model,
     max_tokens: maxTokens,
     system,
-    messages: [{ role: "user", content: user }],
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
   });
   return res.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -118,16 +119,25 @@ async function anthropic(
     .join("");
 }
 
-/** One raw "system + user -> text" completion via the configured provider. */
-export async function rawComplete(system: string, user: string, maxTokens = 900): Promise<string> {
+/** Multi-turn completion via the configured provider. */
+export async function chatComplete(
+  system: string,
+  messages: ChatTurn[],
+  maxTokens = 700,
+): Promise<string> {
   const cfg = resolveProvider();
   if (!cfg) throw new Error("No AI provider configured on the server.");
   switch (cfg.provider) {
     case "groq":
-      return groqOrOpenAI("https://api.groq.com/openai/v1", cfg.apiKey, cfg.model, system, user, maxTokens);
+      return openAIChat("https://api.groq.com/openai/v1", cfg, system, messages, maxTokens);
     case "gemini":
-      return gemini(cfg.apiKey, cfg.model, system, user, maxTokens);
+      return geminiChat(cfg, system, messages, maxTokens);
     case "anthropic":
-      return anthropic(cfg.apiKey, cfg.model, system, user, maxTokens);
+      return anthropicChat(cfg, system, messages, maxTokens);
   }
+}
+
+/** Single-shot "system + one user message -> text". */
+export async function rawComplete(system: string, user: string, maxTokens = 900): Promise<string> {
+  return chatComplete(system, [{ role: "user", content: user }], maxTokens);
 }

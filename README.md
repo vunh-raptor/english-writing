@@ -84,8 +84,12 @@ Migrating from a browser-only app to **online-first full-stack** (see
 `/api/prompts/generate`); trends endpoint (`/api/trends`, Hacker News adapter +
 custom slot); **Trending mode → sectioned interactive scenarios**
 (`/api/scenarios` with a no-key local fallback, plus a multi-step write flow —
-react → take a side → reply → imagine, one small beat at a time). **Next:**
-Supabase auth + DB (entries/progress), then the in-context word-practice panel.
+react → take a side → reply → imagine, one small beat at a time); **Phrase
+Coach** (`/api/coach`) — a real-time conversational chat that drills today's
+native phrases until the learner produces each one *independently* (scaffold
+then fade; phrase chips light up only on unprompted correct use; mastery
+persists). **Next:** Supabase auth + DB (entries/progress), then the in-context
+word-practice panel.
 
 > During the migration, writing/streak state still uses `localStorage` on the
 > client; Phase 1 moves it to Supabase with real accounts (guest-first, then

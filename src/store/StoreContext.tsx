@@ -35,6 +35,8 @@ interface StoreContextValue {
   updateSettings(patch: Partial<Settings>): void;
   /** Add freshly AI-generated prompts to the local library (deduped, bounded). */
   addGeneratedPrompts(prompts: Prompt[]): void;
+  /** Record phrase ids the learner produced independently in the coach. */
+  recordMasteredPhrases(ids: string[]): void;
   reset(): void;
 }
 
@@ -138,14 +140,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const recordMasteredPhrases = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) return;
+      const prev = storeRef.current;
+      const set = new Set(prev.masteredPhrases);
+      let changed = false;
+      for (const id of ids) {
+        if (!set.has(id)) {
+          set.add(id);
+          changed = true;
+        }
+      }
+      if (changed) commit({ ...prev, masteredPhrases: [...set] });
+    },
+    [commit],
+  );
+
   const reset = useCallback(() => {
     clearStore();
     commit(defaultStore());
   }, [commit]);
 
   const value = useMemo(
-    () => ({ store, finishSession, updateSettings, addGeneratedPrompts, reset }),
-    [store, finishSession, updateSettings, addGeneratedPrompts, reset],
+    () => ({
+      store,
+      finishSession,
+      updateSettings,
+      addGeneratedPrompts,
+      recordMasteredPhrases,
+      reset,
+    }),
+    [store, finishSession, updateSettings, addGeneratedPrompts, recordMasteredPhrases, reset],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -87,6 +87,8 @@ export interface Store {
   vocab: Vocab;
   /** A growing local library of AI-generated prompts (kept bounded). */
   aiPrompts: Prompt[];
+  /** Phrase ids the learner has produced independently in the coach. */
+  masteredPhrases: string[];
   /** Whether the learner has finished the first session (we defer "settings" nudges). */
   hasWritten: boolean;
 }
@@ -156,6 +158,39 @@ export interface Scenario {
   platform?: string;
   intro: string;
   steps: ScenarioStep[];
+}
+
+/** A native phrase/idiom the learner practices producing in conversation. */
+export interface Phrase {
+  id: string;
+  text: string;
+  meaning: string;
+  /** A natural, native-sounding usage example. */
+  example: string;
+  /** e.g. "casual", "at work". */
+  register?: string;
+  /** The image/origin behind an idiom — aids deep encoding. */
+  origin?: string;
+}
+
+/** A message in the coaching chat. */
+export interface ChatMessage {
+  role: "coach" | "user";
+  content: string;
+}
+
+/** Per-phrase production status the coach reports each turn. */
+export interface CoachProgress {
+  id: string;
+  /** True once the learner has produced it correctly and unprompted. */
+  produced: boolean;
+}
+
+/** One coach response: what to say, phrase progress, and whether the lesson is done. */
+export interface CoachTurn {
+  reply: string;
+  progress: CoachProgress[];
+  done: boolean;
 }
 
 /** One beat of a writing session (a single prompt, or a scenario step). */
