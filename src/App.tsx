@@ -70,6 +70,8 @@ export function App() {
         goalType={store.settings.goalType}
         goalValue={store.settings.goalValue}
         gentleNudge={store.settings.gentleNudge}
+        aiOn={store.settings.ai.enabled}
+        level={store.settings.difficulty}
         onFinish={handleFinish}
         onExit={() => setView("home")}
       />

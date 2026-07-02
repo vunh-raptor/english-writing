@@ -47,3 +47,20 @@ export async function aiGeneratePrompts(opts: GenerateOptions): Promise<Prompt[]
   );
   return data.prompts;
 }
+
+/** Contextual anti-stuck sparks from the learner's own text. Fails soft. */
+export async function aiSparks(
+  subject: string,
+  text: string,
+  level: Difficulty,
+): Promise<{ question: string; starter: string }[]> {
+  try {
+    const data = await postJson<
+      { subject: string; text: string; level: Difficulty },
+      { sparks: { question: string; starter: string }[] }
+    >("/api/sparks", { subject, text, level });
+    return Array.isArray(data.sparks) ? data.sparks : [];
+  } catch {
+    return [];
+  }
+}

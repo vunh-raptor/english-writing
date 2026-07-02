@@ -562,6 +562,129 @@ a {
   pointer-events: none;
 }
 
+/* ---------- sparks (anti-stuck) ---------- */
+
+.spark-card {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 40px));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 14px 16px;
+  animation: spark-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+  z-index: 60;
+}
+
+.spark-q {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.spark-ai {
+  margin-right: 6px;
+}
+
+.spark-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.spark-starter {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px dashed var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  text-align: left;
+  transition: transform 0.08s, box-shadow 0.15s;
+}
+
+.spark-starter:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.spark-tap {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.spark-again {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 17px;
+}
+
+.spark-again:hover {
+  background: var(--bg-soft);
+  color: var(--ink);
+}
+
+.stuck-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  font-size: 17px;
+  box-shadow: var(--shadow-sm);
+}
+
+.stuck-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* ---------- milestone pops ---------- */
+
+.milestone-layer {
+  position: fixed;
+  left: 50%;
+  bottom: 150px;
+  transform: translateX(-50%);
+  z-index: 55;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.milestone-pop {
+  background: linear-gradient(180deg, var(--gold), #c98f2e);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14.5px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  animation: milestone-rise 1.8s ease-out both;
+}
+
 /* ---------- celebrate ---------- */
 
 .celebrate {
@@ -1354,6 +1477,38 @@ a {
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes spark-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes milestone-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.85);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+  25% {
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px);
   }
 }
 
