@@ -1,4 +1,5 @@
-import type { Scenario, ScenarioStep, BeatKind } from "../../types";
+import "server-only";
+import type { Scenario, ScenarioStep, BeatKind } from "@/types";
 import { rawComplete, aiConfigured } from "./ai";
 
 /**

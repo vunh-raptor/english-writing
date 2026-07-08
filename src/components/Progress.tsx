@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useStore } from "../store/StoreContext";
-import { summarize } from "../lib/stats";
-import { srsSummary } from "../lib/srs";
-import { SEED_PHRASES } from "../lib/phrases";
-import { addDays, prettyDay, todayKey } from "../lib/date";
-import type { DayKey } from "../types";
+import { useStore } from "@/store/StoreContext";
+import { summarize } from "@/lib/shared/stats";
+import { srsSummary } from "@/lib/shared/srs";
+import { SEED_PHRASES } from "@/lib/shared/phrases";
+import { addDays, prettyDay, todayKey } from "@/lib/shared/date";
+import type { DayKey } from "@/types";
 
 const CAL_DAYS = 84; // ~12 weeks
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Difficulty, GoalType, WriteSession } from "../types";
-import { countWords } from "../lib/stats";
-import { createSparkEngine, MILESTONES, type Spark } from "../lib/sparks";
-import { aiSparks } from "../lib/ai";
+import type { Difficulty, GoalType, WriteSession } from "@/types";
+import { countWords } from "@/lib/shared/stats";
+import { createSparkEngine, MILESTONES, type Spark } from "@/lib/shared/sparks";
+import { aiSparks } from "@/lib/client/ai";
 
 interface WriteProps {
   session: WriteSession;
@@ -188,7 +188,7 @@ export function Write({
   }
 
   /** One tap and you're writing again: the starter lands in the text. */
-  function useStarter(starter: string) {
+  function insertStarter(starter: string) {
     const cur = textRef.current;
     let base = cur.trimEnd();
     if (base.length > 0 && !/[.!?…"')\]]$/.test(base)) base += ".";
@@ -297,7 +297,7 @@ export function Write({
             {spark.question}
           </div>
           <div className="spark-actions">
-            <button className="spark-starter" onClick={() => useStarter(spark.starter)}>
+            <button className="spark-starter" onClick={() => insertStarter(spark.starter)}>
               “{spark.starter}…”
               <span className="spark-tap">tap to use</span>
             </button>

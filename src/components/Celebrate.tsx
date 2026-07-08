@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useStore } from "../store/StoreContext";
-import type { Entry } from "../types";
+import { useStore } from "@/store/StoreContext";
+import type { Entry } from "@/types";
 import { Confetti } from "./Confetti";
-import { playChime } from "../lib/sound";
-import { todayKey } from "../lib/date";
-import { streakInfo } from "../lib/streak";
+import { playChime } from "@/lib/client/sound";
+import { todayKey } from "@/lib/shared/date";
+import { streakInfo } from "@/lib/shared/streak";
 
 interface CelebrateProps {
   entry: Entry;

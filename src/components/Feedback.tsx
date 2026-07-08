@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "../store/StoreContext";
-import type { Entry, Feedback as FeedbackData } from "../types";
-import { localFeedback } from "../lib/feedback";
-import { aiFeedback } from "../lib/ai";
+import { useStore } from "@/store/StoreContext";
+import type { Entry, Feedback as FeedbackData } from "@/types";
+import { localFeedback } from "@/lib/shared/feedback";
+import { aiFeedback } from "@/lib/client/ai";
 
 interface FeedbackProps {
   entry: Entry;

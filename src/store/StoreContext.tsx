@@ -1,3 +1,5 @@
+"use client";
+
 import {
   createContext,
   useCallback,
@@ -8,9 +10,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Entry, Prompt, Settings, Store } from "../types";
-import { loadStore, saveStore, clearStore, defaultStore } from "../lib/storage";
-import { todayKey } from "../lib/date";
+import type { Entry, Prompt, Settings, Store } from "@/types";
+import { loadStore, saveStore, clearStore, defaultStore } from "@/lib/client/storage";
+import { todayKey } from "@/lib/shared/date";
 import {
   countWords,
   countChars,
@@ -18,9 +20,9 @@ import {
   tokenize,
   newWordCount,
   mergeVocab,
-} from "../lib/stats";
-import { applyWrite } from "../lib/streak";
-import { reviewCard } from "../lib/srs";
+} from "@/lib/shared/stats";
+import { applyWrite } from "@/lib/shared/streak";
+import { reviewCard } from "@/lib/shared/srs";
 
 interface FinishInput {
   promptId: string;
@@ -51,7 +53,10 @@ function makeId(): string {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [store, setStore] = useState<Store>(() => loadStore());
+  // Start from a deterministic default so the server and the first client paint
+  // agree (no hydration mismatch); the real persisted store loads on mount.
+  const [store, setStore] = useState<Store>(defaultStore);
+  const [hydrated, setHydrated] = useState(false);
 
   // The ref always holds the freshest committed store, so callbacks can read
   // and derive next-state synchronously without relying on setState timing or
@@ -59,15 +64,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const storeRef = useRef(store);
   storeRef.current = store;
 
-  // Persist on every change. Skip the very first run (nothing changed yet).
-  const first = useRef(true);
+  // Load persisted state on the client only (localStorage is unavailable on the
+  // server). This replaces the old `dynamic(ssr:false)` wrapper.
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    const loaded = loadStore();
+    storeRef.current = loaded;
+    setStore(loaded);
+    setHydrated(true);
+  }, []);
+
+  // Persist on every change — but only after we've hydrated, so we never
+  // overwrite storage with the placeholder default.
+  useEffect(() => {
+    if (!hydrated) return;
     saveStore(store);
-  }, [store]);
+  }, [store, hydrated]);
 
   const commit = useCallback((next: Store) => {
     storeRef.current = next;
@@ -169,6 +180,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }),
     [store, finishSession, updateSettings, addGeneratedPrompts, reviewPhrases, reset],
   );
+
+  // Until the persisted store is loaded, render the calm boot placeholder. The
+  // server emits the same markup, so hydration stays clean.
+  if (!hydrated) return <div className="app-boot" aria-hidden="true" />;
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

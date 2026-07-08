@@ -1,4 +1,5 @@
-import type { Phrase, CoachTurn, CoachProgress } from "../../types";
+import "server-only";
+import type { Phrase, CoachTurn, CoachProgress } from "@/types";
 import { chatComplete, type ChatTurn } from "./ai";
 
 /**

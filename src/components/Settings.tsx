@@ -1,6 +1,6 @@
-import { useStore } from "../store/StoreContext";
-import { THEMES } from "../lib/prompts";
-import type { Difficulty, GoalType } from "../types";
+import { useStore } from "@/store/StoreContext";
+import { THEMES } from "@/lib/shared/prompts";
+import type { Difficulty, GoalType } from "@/types";
 
 const TIME_OPTIONS = [120, 180, 300, 600]; // seconds
 const WORD_OPTIONS = [50, 100, 150, 250];

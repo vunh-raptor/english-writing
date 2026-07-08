@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Scenario, Trend } from "../types";
-import { fetchTrends, createScenario } from "../lib/clientApi";
+import type { Scenario, Trend } from "@/types";
+import { fetchTrends, createScenario } from "@/lib/client/clientApi";
 
 interface TrendingProps {
   onStartScenario: (scenario: Scenario) => void;

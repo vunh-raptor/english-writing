@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-side trend ingestion. Runs only in route handlers / cron (never the
  * browser), so there is no CORS problem and source API keys stay in env.

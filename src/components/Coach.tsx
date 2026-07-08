@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useStore } from "../store/StoreContext";
-import type { ChatMessage, CoachTurn } from "../types";
-import { todaysPhrases } from "../lib/phrases";
-import { coachTurn } from "../lib/clientApi";
+import { useStore } from "@/store/StoreContext";
+import type { ChatMessage, CoachTurn } from "@/types";
+import { todaysPhrases } from "@/lib/shared/phrases";
+import { coachTurn } from "@/lib/client/clientApi";
 
 /**
  * The conversational Phrase Coach. It chats with the learner and keeps going

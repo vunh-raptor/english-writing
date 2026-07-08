@@ -1,4 +1,5 @@
-import type { Entry, Feedback, Prompt, Theme, Difficulty } from "../../types";
+import "server-only";
+import type { Entry, Feedback, Prompt, Theme, Difficulty } from "@/types";
 import { rawComplete } from "./ai";
 
 /**

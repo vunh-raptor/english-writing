@@ -23,28 +23,48 @@ feature mapping all carry over unchanged.
 
 ### Project layout (Next.js)
 
+Everything lives under `src/` (App Router with `src/app`). Screens are real
+routes grouped by their chrome; ephemeral write-session state is threaded through
+a client context (`SessionFlowContext`), not the URL.
+
 ```
 flowrite/
-  app/
-    layout.tsx, page.tsx          # the writing app (client) mounts here
-    api/
-      health/route.ts
-      trends/route.ts             # GET cached trends; cron refresh
-      scenarios/route.ts          # POST { trendId|subject } -> scenario
-      entries/route.ts            # POST entry; GET history
-      feedback/route.ts           # POST -> AI feedback
-      words/help/route.ts, words/check/route.ts
-      cron/trends/route.ts        # Vercel Cron target
   src/
-    components/ … (existing UI, client)
+    app/
+      layout.tsx                  # root: <html><body> + <AppProviders> (client hydration gate)
+      globals.css
+      write/page.tsx              # full-screen writing surface (no chrome)
+      (main)/                     # topbar + tab nav
+        layout.tsx
+        page.tsx                  # "/"  -> Home (write picker)
+        trending/ coach/ progress/ settings/  (page.tsx each)
+      (session)/                  # brand-only chrome
+        layout.tsx
+        celebrate/page.tsx
+        feedback/page.tsx
+      api/
+        health/route.ts
+        trends/route.ts           # GET cached trends; cron refresh
+        scenarios/route.ts        # POST { trendId|subject } -> scenario
+        feedback/route.ts         # POST -> AI feedback
+        prompts/generate/route.ts, sparks/route.ts, coach/route.ts
+    components/ …                 # presentational UI (client)
     lib/
-      client/   # api client, query hooks
-      server/   # ai gateway, trend adapters, supabase server client
-      …existing pure logic (stats, streak, prompts) shared
+      shared/   # pure, isomorphic: date, stats, streak, srs, prompts, phrases, sparks, feedback
+      client/   # browser-only: storage, sound, clientApi, ai (fetches our API)
+      server/   # server-only (import "server-only"): ai gateway, trends, scenario, coach
+    store/
+      StoreContext.tsx            # persisted on-device state (localStorage)
+      SessionFlowContext.tsx      # ephemeral write-session flow
+      AppProviders.tsx            # composes the providers
+    types.ts
   supabase/
     migrations/*.sql              # schema + RLS
   docs/
 ```
+
+Imports use the `@/*` alias (mapped to `src/*`), e.g. `@/lib/shared/stats`,
+`@/components/Write`, `@/store/StoreContext`.
 
 ## Why switch
 

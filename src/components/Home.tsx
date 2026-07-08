@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useStore } from "../store/StoreContext";
-import type { Prompt, Settings } from "../types";
-import { dailyPrompt, randomPrompt, themeById } from "../lib/prompts";
-import { aiGeneratePrompts } from "../lib/ai";
-import { greeting, todayKey } from "../lib/date";
-import { streakInfo, MAX_FREEZES, type StreakStatus } from "../lib/streak";
+import { useStore } from "@/store/StoreContext";
+import type { Prompt, Settings } from "@/types";
+import { dailyPrompt, randomPrompt, themeById } from "@/lib/shared/prompts";
+import { aiGeneratePrompts } from "@/lib/client/ai";
+import { greeting, todayKey } from "@/lib/shared/date";
+import { streakInfo, MAX_FREEZES, type StreakStatus } from "@/lib/shared/streak";
 
 interface HomeProps {
   onStart: (prompt: Prompt) => void;
