@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Lightbulb, RefreshCw, X } from "lucide-react";
 import type { Difficulty, GoalType, WriteSession } from "@/types";
 import { countWords } from "@/lib/shared/stats";
 import { createSparkEngine, MILESTONES, type Spark } from "@/lib/shared/sparks";
 import { aiSparks } from "@/lib/client/ai";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 interface WriteProps {
   session: WriteSession;
@@ -228,48 +233,70 @@ export function Write({
     : "Start writing — and don't stop.";
 
   return (
-    <div className="write">
-      <div className="write-head">
-        <div className="write-prompt">
+    <div className="fixed inset-0 z-50 flex animate-fade-in flex-col bg-background">
+      <div className="mx-auto flex w-full max-w-3xl items-start justify-between gap-4 px-5 pb-1.5 pt-5 sm:px-6">
+        <div className="max-w-[80%] text-sm text-muted-foreground">
           {multi ? (
             <>
-              {session.platform && <span className="trend-tag-sm">{session.platform}</span>}
-              <div className="write-subject">{session.subject}</div>
+              {session.platform && (
+                <Badge variant="sage" className="mb-1.5">
+                  {session.platform}
+                </Badge>
+              )}
+              <div className="font-serif text-[17px] font-semibold leading-snug text-foreground">
+                {session.subject}
+              </div>
             </>
           ) : (
             <>
-              <span className="faint">Writing about: </span>
-              <b>{beat.prompt}</b>
+              <span>Writing about: </span>
+              <b className="font-semibold text-foreground">{beat.prompt}</b>
             </>
           )}
         </div>
-        <button className="write-exit" onClick={handleExit} aria-label="Leave session">
-          &times;
-        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleExit}
+          aria-label="Leave session"
+        >
+          <X />
+        </Button>
       </div>
 
       {multi && (
-        <div className="beat-bar">
-          <div className="beat-dots">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-5 pt-1 sm:px-6">
+          <div className="flex gap-1.5">
             {beats.map((b, i) => (
               <span
                 key={b.id}
-                className={`beat-dot${i === stepIndex ? " on" : ""}${i < stepIndex ? " done" : ""}`}
+                className={cn(
+                  "h-[5px] w-5 rounded-full transition-colors",
+                  i === stepIndex
+                    ? "bg-primary"
+                    : i < stepIndex
+                      ? "bg-sage"
+                      : "bg-input",
+                )}
               />
             ))}
           </div>
-          <span className="beat-count">
+          <span className="text-xs tabular-nums text-muted-foreground">
             Step {stepIndex + 1} of {beats.length}
           </span>
         </div>
       )}
 
-      {multi && <div className="beat-prompt-line">{beat.prompt}</div>}
+      {multi && (
+        <div className="mx-auto mt-2.5 w-full max-w-3xl px-5 font-serif text-lg leading-snug sm:px-6">
+          {beat.prompt}
+        </div>
+      )}
 
-      <div className="write-body">
+      <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 px-5 sm:px-6">
         <textarea
           ref={taRef}
-          className="editor"
+          className="app-editor"
           value={current}
           onChange={handleChange}
           placeholder={placeholder}
@@ -280,60 +307,81 @@ export function Write({
         />
       </div>
 
-      <div className="milestone-layer" aria-hidden="true">
+      <div
+        className="pointer-events-none fixed bottom-[150px] left-1/2 z-[55] flex -translate-x-1/2 flex-col items-center gap-1.5"
+        aria-hidden="true"
+      >
         {toasts.map((t) => (
-          <div key={t.id} className="milestone-pop">
+          <div
+            key={t.id}
+            className="animate-milestone rounded-full bg-gradient-to-b from-gold to-[hsl(var(--gold)/0.82)] px-4 py-1.5 text-sm font-bold text-gold-foreground shadow-md"
+          >
             {t.label}
           </div>
         ))}
       </div>
 
-      {showNudge && !spark && <div className="nudge">keep going — don't stop ✍️</div>}
+      {showNudge && !spark && (
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-[52] -translate-x-1/2 animate-nudge rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-md">
+          keep going — don&apos;t stop ✍️
+        </div>
+      )}
 
       {spark && (
-        <div className="spark-card" role="status">
-          <div className="spark-q">
-            {spark.source === "ai" && <span className="spark-ai">✨</span>}
+        <div
+          className="fixed bottom-24 left-1/2 z-[60] w-[min(560px,calc(100vw-40px))] -translate-x-1/2 animate-spark-in rounded-lg border border-border bg-card p-4 shadow-lg"
+          role="status"
+        >
+          <div className="font-serif text-[17px] leading-snug">
+            {spark.source === "ai" && <span className="mr-1.5">✨</span>}
             {spark.question}
           </div>
-          <div className="spark-actions">
-            <button className="spark-starter" onClick={() => insertStarter(spark.starter)}>
-              “{spark.starter}…”
-              <span className="spark-tap">tap to use</span>
-            </button>
+          <div className="mt-2.5 flex items-center gap-2">
             <button
-              className="spark-again"
+              className="flex flex-1 items-center justify-between gap-2.5 rounded-full border border-dashed border-primary bg-primary/10 px-3.5 py-2.5 text-left text-[15px] font-semibold text-primary transition hover:-translate-y-px hover:shadow-soft"
+              onClick={() => insertStarter(spark.starter)}
+            >
+              “{spark.starter}…”
+              <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider opacity-65">
+                tap to use
+              </span>
+            </button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
               onClick={revealSpark}
               aria-label="Another idea"
               title="Another idea"
             >
-              ↻
-            </button>
+              <RefreshCw />
+            </Button>
           </div>
         </div>
       )}
 
-      <div className="write-foot">
-        <div className="write-foot-inner">
+      <div className="border-t border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-5 py-3 sm:gap-4 sm:px-6">
           {multi && stepIndex > 0 && (
-            <button
-              className="btn btn-ghost"
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
               aria-label="Previous step"
             >
-              ←
-            </button>
+              <ArrowLeft />
+            </Button>
           )}
-          <button
-            className="stuck-btn"
+          <Button
+            variant="secondary"
+            size="icon"
             onClick={revealSpark}
             aria-label="I'm stuck — give me an idea"
             title="Stuck? Get an idea"
           >
-            💡
-          </button>
-          <div className="progress-wrap">
-            <div className="progress-meta">
+            <Lightbulb />
+          </Button>
+          <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex justify-between text-[13px] tabular-nums text-muted-foreground">
               <span>
                 {goalType === "words"
                   ? `${totalWords} / ${goalValue} words`
@@ -346,25 +394,28 @@ export function Write({
                   : mmss(elapsed)}
               </span>
             </div>
-            <div className="progress-track">
-              <div
-                className={`progress-fill${goalReached ? " done" : ""}`}
-                style={{ width: `${pct * 100}%` }}
-              />
-            </div>
+            <Progress
+              value={pct * 100}
+              indicatorClassName={
+                goalReached
+                  ? "bg-gradient-to-r from-sage to-[hsl(var(--sage)/0.75)]"
+                  : undefined
+              }
+            />
           </div>
           {isLast ? (
-            <button className="btn btn-primary" onClick={handleFinish} disabled={totalWords === 0}>
-              I'm done
-            </button>
+            <Button onClick={handleFinish} disabled={totalWords === 0}>
+              I&apos;m done
+            </Button>
           ) : (
-            <button
-              className="btn btn-primary"
-              onClick={() => setStepIndex((i) => Math.min(beats.length - 1, i + 1))}
+            <Button
+              onClick={() =>
+                setStepIndex((i) => Math.min(beats.length - 1, i + 1))
+              }
               disabled={currentWords === 0}
             >
-              Next →
-            </button>
+              Next <ArrowRight />
+            </Button>
           )}
         </div>
       </div>

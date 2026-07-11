@@ -1,47 +1,23 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-
-/** The primary tabs and the routes they map to. */
-const TABS = [
-  { href: "/", label: "Write" },
-  { href: "/trending", label: "Trending" },
-  { href: "/coach", label: "Coach" },
-  { href: "/progress", label: "Progress" },
-  { href: "/settings", label: "Settings" },
-] as const;
+import { AppSidebar, MobileTabBar, MobileTopBar } from "@/components/app-nav";
 
 /**
- * Chrome for the main tabbed screens: brand + nav. The writing surface and the
- * celebrate/feedback screens live outside this layout so they render without it.
+ * Desktop-first shell for the main tabbed screens. A persistent left sidebar
+ * (brand + icon nav + theme toggle) replaces the old top bar on large screens;
+ * on mobile the nav collapses to a slim top bar plus a fixed bottom tab bar.
+ * The writing surface and post-session screens render outside this layout.
  */
 export default function MainLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="container topbar-inner">
-          <Link className="brand" href="/">
-            <span className="brand-dot" />
-            Flowrite
-          </Link>
-          <nav className="nav">
-            {TABS.map((tab) => (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={pathname === tab.href ? "active" : ""}
-              >
-                {tab.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
-      {children}
+    <div className="min-h-screen bg-background lg:grid lg:h-screen lg:grid-cols-[264px_1fr] lg:overflow-hidden">
+      <AppSidebar />
+      <div className="flex min-h-screen flex-col lg:h-full lg:min-h-0">
+        <MobileTopBar />
+        <main className="flex-1 pb-20 lg:min-h-0 lg:overflow-y-auto lg:pb-0">
+          {children}
+        </main>
+        <MobileTabBar />
+      </div>
     </div>
   );
 }

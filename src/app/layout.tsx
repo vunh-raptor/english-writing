@@ -1,6 +1,27 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/store/AppProviders";
+import { ThemeProvider } from "@/components/theme-provider";
+
+/**
+ * One standardized type system for every page:
+ *   --font-sans  — Inter, all UI chrome and body text
+ *   --font-serif — Source Serif 4, the editorial writing/reading surfaces
+ * Both are self-hosted by next/font, so they render identically on every device
+ * (no more Apple-only "Iowan Old Style" falling back to Palatino/Georgia).
+ */
+const fontSans = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const fontSerif = Source_Serif_4({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Flowrite — write English freely",
@@ -10,7 +31,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fbf8f3",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbf8f3" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1815" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -22,9 +46,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${fontSans.variable} ${fontSerif.variable}`}
+    >
       <body>
-        <AppProviders>{children}</AppProviders>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AppProviders>{children}</AppProviders>
+        </ThemeProvider>
       </body>
     </html>
   );

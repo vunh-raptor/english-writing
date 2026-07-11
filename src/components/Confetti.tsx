@@ -19,10 +19,14 @@ export function Confetti({ pieces = 90 }: { pieces?: number }) {
   );
 
   return (
-    <div className="confetti" aria-hidden="true">
+    <div
+      className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+      aria-hidden="true"
+    >
       {bits.map((b) => (
         <i
           key={b.i}
+          className="confetti-piece"
           style={{
             left: `${b.left}%`,
             background: b.color,
