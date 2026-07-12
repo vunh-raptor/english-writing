@@ -213,8 +213,8 @@ export function Settings() {
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm transition-colors",
                     on
-                      ? "border-primary bg-primary/10 font-semibold text-primary"
-                      : "border-input bg-card text-muted-foreground hover:border-primary/60 hover:text-foreground",
+                      ? "border-brand bg-brand/10 font-semibold text-brand"
+                      : "border-input bg-card text-muted-foreground hover:border-brand/60 hover:text-foreground",
                   )}
                 >
                   {t.emoji} {t.label}

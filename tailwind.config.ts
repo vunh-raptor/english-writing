@@ -66,6 +66,12 @@ const config: Config = {
           DEFAULT: "hsl(var(--gold) / <alpha-value>)",
           foreground: "hsl(var(--gold-foreground) / <alpha-value>)",
         },
+        brand: {
+          DEFAULT: "hsl(var(--brand) / <alpha-value>)",
+          foreground: "hsl(var(--brand-foreground) / <alpha-value>)",
+          muted: "hsl(var(--brand-muted) / <alpha-value>)",
+          ink: "hsl(var(--brand-ink) / <alpha-value>)",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background) / <alpha-value>)",
           foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",

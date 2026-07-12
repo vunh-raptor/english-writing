@@ -10,9 +10,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-gradient-to-b from-primary to-[hsl(var(--primary)/0.85)] text-primary-foreground shadow-glow hover:-translate-y-px hover:shadow-[0_12px_26px_hsl(var(--primary)/0.34)]",
+          "bg-primary text-primary-foreground shadow-soft hover:bg-primary/90",
+        brand: "bg-brand text-brand-foreground shadow-soft hover:bg-brand/90",
         secondary:
-          "border border-input bg-card text-foreground shadow-soft hover:-translate-y-px hover:shadow-md",
+          "border border-input bg-card text-foreground shadow-soft hover:bg-secondary",
         outline:
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
         sage: "bg-sage text-sage-foreground hover:bg-[hsl(var(--sage)/0.9)]",
@@ -31,7 +32,7 @@ const buttonVariants = cva(
       },
     },
     defaultVariants: {
-      variant: "secondary",
+      variant: "default",
       size: "default",
     },
   },

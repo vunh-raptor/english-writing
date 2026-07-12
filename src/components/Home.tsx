@@ -110,10 +110,10 @@ export function Home({ onStart }: HomeProps) {
 
       <Card className="prompt-surface overflow-hidden p-6 shadow-md sm:p-7">
         <div className="flex items-center justify-between gap-2.5">
-          <Badge variant="eyebrow" className="text-primary">
+          <Badge variant="eyebrow" className="text-brand">
             {theme ? `${theme.emoji} ${theme.label}` : "Today's prompt"}
           </Badge>
-          {prompt.source === "ai" && <Badge>✨ fresh</Badge>}
+          {prompt.source === "ai" && <Badge variant="brand">✨ fresh</Badge>}
         </div>
         <p className="mt-3 font-serif text-[1.6rem] leading-tight tracking-tight">
           {prompt.text}

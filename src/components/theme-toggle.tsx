@@ -42,7 +42,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           <DropdownMenuItem key={value} onClick={() => setTheme(value)}>
             <Icon className="text-muted-foreground" />
             {label}
-            {theme === value && <Check className="ml-auto text-primary" />}
+            {theme === value && <Check className="ml-auto text-brand" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

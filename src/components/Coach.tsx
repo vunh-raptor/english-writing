@@ -151,7 +151,7 @@ export function Coach() {
               {producedCount} / {phrases.length} produced on your own
             </span>
             <button
-              className="text-xs text-primary hover:underline"
+              className="text-xs font-medium text-brand hover:underline"
               onClick={() => setShowRef((v) => !v)}
             >
               {showRef ? "Hide" : "Show"} similar ways
@@ -183,7 +183,7 @@ export function Coach() {
                 "max-w-[80%] whitespace-pre-wrap px-3.5 py-2.5 text-[15px] leading-relaxed",
                 m.role === "coach"
                   ? "self-start rounded-2xl rounded-bl-md border border-border bg-card text-card-foreground shadow-soft"
-                  : "self-end rounded-2xl rounded-br-md bg-gradient-to-b from-primary to-[hsl(var(--primary)/0.85)] text-primary-foreground",
+                  : "self-end rounded-2xl rounded-br-md bg-brand text-brand-foreground",
               )}
             >
               {m.content}

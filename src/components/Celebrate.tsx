@@ -46,7 +46,7 @@ function Stat({
       <div
         className={cn(
           "font-serif text-3xl font-semibold",
-          accent && "text-primary",
+          accent && "text-brand",
         )}
       >
         {value}

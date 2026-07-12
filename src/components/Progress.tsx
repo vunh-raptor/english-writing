@@ -14,9 +14,9 @@ const CAL_DAYS = 84; // ~12 weeks
 
 function levelClass(words: number): string {
   if (words <= 0) return "bg-muted border-border";
-  if (words <= 50) return "bg-primary/20 border-primary/20";
-  if (words <= 150) return "bg-primary/50 border-primary/50";
-  return "bg-primary border-primary";
+  if (words <= 50) return "bg-brand/25 border-brand/25";
+  if (words <= 150) return "bg-brand/55 border-brand/55";
+  return "bg-brand border-brand";
 }
 
 function BigStat({
@@ -33,7 +33,7 @@ function BigStat({
       <div
         className={cn(
           "font-serif text-3xl font-semibold",
-          accent && "text-primary",
+          accent && "text-brand",
         )}
       >
         {value}
@@ -158,7 +158,7 @@ export function Progress() {
           {summary.recentLengths.map((w, i) => (
             <div
               key={i}
-              className="min-w-[6px] flex-1 rounded-t bg-gradient-to-b from-primary to-[hsl(var(--primary)/0.7)]"
+              className="min-w-[6px] flex-1 rounded-t bg-gradient-to-b from-brand to-[hsl(var(--brand)/0.65)]"
               style={{ height: `${Math.max(6, (w / sparkMax) * 100)}%` }}
               title={`${w} words`}
             />

@@ -273,9 +273,9 @@ export function Write({
                 className={cn(
                   "h-[5px] w-5 rounded-full transition-colors",
                   i === stepIndex
-                    ? "bg-primary"
+                    ? "bg-foreground"
                     : i < stepIndex
-                      ? "bg-sage"
+                      ? "bg-brand"
                       : "bg-input",
                 )}
               />
@@ -338,7 +338,7 @@ export function Write({
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <button
-              className="flex flex-1 items-center justify-between gap-2.5 rounded-full border border-dashed border-primary bg-primary/10 px-3.5 py-2.5 text-left text-[15px] font-semibold text-primary transition hover:-translate-y-px hover:shadow-soft"
+              className="flex flex-1 items-center justify-between gap-2.5 rounded-full border border-dashed border-brand bg-brand/10 px-3.5 py-2.5 text-left text-[15px] font-semibold text-brand transition hover:-translate-y-px hover:shadow-soft"
               onClick={() => insertStarter(spark.starter)}
             >
               “{spark.starter}…”
@@ -394,14 +394,7 @@ export function Write({
                   : mmss(elapsed)}
               </span>
             </div>
-            <Progress
-              value={pct * 100}
-              indicatorClassName={
-                goalReached
-                  ? "bg-gradient-to-r from-sage to-[hsl(var(--sage)/0.75)]"
-                  : undefined
-              }
-            />
+            <Progress value={pct * 100} />
           </div>
           {isLast ? (
             <Button onClick={handleFinish} disabled={totalWords === 0}>
