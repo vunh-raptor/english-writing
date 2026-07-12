@@ -18,23 +18,34 @@ English without flinching, then feel good about it.
 ## The core loop
 
 1. **Never a blank page.** Every session opens with a leveled, *personal*
-   prompt and a sentence-starter, drawn from a **real-life syllabus** (see
-   below). You write about your own life and opinions — which is what makes
-   writing feel meaningful (and meaning is what drives flow).
+   prompt and a sentence-starter, drawn from a **real-life syllabus** (below).
+   You write about your own life and opinions — which is what makes writing feel
+   meaningful (and meaning is what drives flow).
 2. **Write phase.** A calm full-screen editor. **No spellcheck, no red
    squiggles, no correction mid-flow** — the generator and the editor are
    different mental modes, and switching on the editor is what kills fluency. A
-   timer or word goal reframes success as *don't stop*, not *be good*. If you
-   pause, a gentle "keep going" pulse nudges you (it never deletes anything).
+   timer or word goal reframes success as *don't stop*, not *be good*.
 3. **Celebrate.** The moment you finish, a juicy micro-win: confetti, a soft
    chime, count-up stats, and your streak.
 4. **Feedback phase.** On-demand, opt-in, and *after* writing — it always leads
    with what went well and offers at most a couple of gentle suggestions framed
    as ideas to play with, never as errors.
 5. **Habit engine.** Streaks **with forgiveness** (freeze tokens cover a missed
-   day so one bad day doesn't nuke months of progress), and rewards that show
-   **real growth** — "+12 new words this week", vocabulary size, sentence-length
-   trends — instead of hollow points.
+   day) and rewards that show **real growth** — "+12 new words this week",
+   vocabulary size, sentence-length trends — instead of hollow points.
+
+## The modes
+
+Flowrite is one writing loop with several ways in:
+
+| Mode | Route | What it is |
+| --- | --- | --- |
+| **Freewrite** | `/` → `/write` | The core loop: a leveled prompt + sentence-starter, calm editor, celebrate, optional feedback. Works fully offline. |
+| **Trending** | `/trending` | Pick a current subject (Hacker News + operator feed) → an AI **sectioned scenario**: react → take a side → reply → imagine, one small beat at a time. |
+| **Phrase Coach** | `/coach` | A real-time chat that drills today's due native phrases (Leitner **spaced repetition**) until you produce each one *independently* — scaffold, then fade. Each phrase carries "similar ways" the coach also accepts. |
+| **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
+| **Progress** | `/progress` | Streak, vocabulary growth, sentence-length trends. |
+| **Settings** | `/settings` | Goal type, difficulty, practice themes, AI on/off, theme (light/dark). |
 
 ## Prompts: a managed, real-life syllabus
 
@@ -45,14 +56,12 @@ around the situations people actually need English for:
 · ✈️ Travel & places · 📖 Stories & memories · 🌱 Goals & reflection
 
 - Every prompt is tagged by **theme** and **level**, and the daily prompt
-  **rotates across themes** so you get balanced real-life coverage instead of a
-  random pile.
+  **rotates across themes** for balanced coverage.
 - In **Settings → "What are you practicing for?"** you pick the themes you care
-  about (e.g. just Work & email), and prompts are drawn from those.
-- With AI enabled, **"✨ Generate fresh"** on the home screen creates new,
-  scenario-grounded prompts for your theme + level (generated **server-side**),
-  saved into your prompt library. The curated syllabus is always the fallback,
-  so this never breaks when AI is off.
+  about; prompts are drawn from those.
+- With AI enabled, **"✨ Generate fresh"** creates new, scenario-grounded prompts
+  for your theme + level (**server-side**). The curated syllabus is always the
+  fallback, so nothing breaks when AI is off.
 
 ## How the design maps to the science
 
@@ -61,114 +70,140 @@ around the situations people actually need English for:
 | Output builds competence | The entire app is a writing-output loop |
 | Freewriting → fluency | Continuous writing, zero mid-flow correction |
 | Kill the inner critic | `spellCheck` off; no grammar UI while writing |
-| Never the blank page | Leveled prompt + sentence-starter on every session |
+| Never the blank page | Leveled prompt + sentence-starter every session |
 | Goal = momentum, not quality | Timer / word goal, "I'm done" any time |
 | Flow conditions | Clear goal, instant feedback, difficulty calibrated to level |
-| Private by default | No public audience; your writing is yours |
-| Defer signup until after a win | Write as a guest first, then sign up to save your streak |
+| Defer signup until after a win | Write as a guest first, then sign up to save |
 | Streaks, but forgiving | Streak **freeze** tokens absorb missed days |
 | Reward growth, not grinding | New words, vocabulary, sentence-length trends |
 | Make the win feel great | Confetti + chime + count-up on completion |
 
-## Stack & status
+---
 
-Migrating from a browser-only app to **online-first full-stack** (see
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)):
+## Tech stack
 
-- **Next.js (App Router)** — UI + API route handlers, deployed on **Vercel**.
-- **Supabase** — Postgres + Auth (wired in the next phase).
-- **Server-side AI** — free-tier providers (Groq / Gemini), keys in env, never
-  the browser.
+A single **Next.js App Router** application — UI, API, and server-side AI in one
+codebase, deployed on **Vercel**.
 
-**Done so far:** Next.js conversion; AI moved server-side (`/api/feedback`,
-`/api/prompts/generate`); trends endpoint (`/api/trends`, Hacker News adapter +
-custom slot); **Trending mode → sectioned interactive scenarios**
-(`/api/scenarios` with a no-key local fallback, plus a multi-step write flow —
-react → take a side → reply → imagine, one small beat at a time); **Phrase
-Coach** (`/api/coach`) — a real-time conversational chat that drills today's
-native phrases until the learner produces each one *independently* (scaffold
-then fade; chips light up only on unprompted correct use). It runs on a
-**Leitner spaced-repetition schedule** (which phrases are "due" today), and each
-phrase carries **2+ popular "similar ways"** the coach also teaches and accepts
-as production — so learners flex expressions in the real world instead of
-memorizing one brittle phrase. **Next:** Supabase auth + DB (entries/progress),
-then the in-context word-practice panel.
+| Layer | Choice |
+| --- | --- |
+| Framework | **Next.js 14 (App Router)** + **React 18** + **TypeScript** |
+| UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives, **lucide-react** icons, **next-themes** for light/dark |
+| Server AI | **Server-only AI gateway** — Groq · Google Gemini · Anthropic, selected by env key (`src/lib/server/ai.ts`). Keys never reach the browser. |
+| Content sources | Pluggable **trend adapters** (Hacker News + operator `custom` feed) and **news adapters** (Google News RSS, GDELT, Reddit) — all keyless. |
+| State (today) | Client `localStorage`, guest-first. See *Status*. |
+| Auth + DB (next) | **Supabase** (Postgres + Auth). Dependencies are installed; wiring is the next phase. |
+| Hosting | **Vercel** (Hobby tier); a Vercel Cron warms trend/news caches. |
 
-> During the migration, writing/streak state still uses `localStorage` on the
-> client; Phase 1 moves it to Supabase with real accounts (guest-first, then
-> sign up to save).
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture, and
+[`docs/PATTERNS.md`](docs/PATTERNS.md) for how this app's Next.js fullstack
+pattern compares to module-driven and feature-driven architectures.
 
-## AI feedback (server-side, free tier)
+### Status
 
-The app works fully without AI (on-device feedback + the curated syllabus). When
-the operator configures a provider key, **Settings → "Use AI"** unlocks warmer
-feedback and "✨ generate fresh" prompts. Keys live in **server env vars**, never
-the browser:
+The **freewriting, trending, coach, and news** flows are built and run today.
+All AI is server-side. **Writing, streak, and progress state currently live in
+`localStorage`** (write as a guest, no account needed). **Supabase auth + a
+Postgres data layer is the next phase** — the packages are installed but not yet
+wired, so there is no `supabase/` schema in the repo yet.
+
+## AI (server-side, free tier)
+
+The app works fully without AI — on-device feedback plus the curated syllabus.
+When the operator sets a provider key, **Settings → "Use AI"** unlocks warmer
+feedback, fresh prompts, and the trending/coach/news modes. Keys live in
+**server env vars**, never the browser:
 
 ```
 GROQ_API_KEY=…       # free: https://console.groq.com/keys
-# or
 GEMINI_API_KEY=…     # free: https://aistudio.google.com/apikey
-# or ANTHROPIC_API_KEY=…  (optional, paid)
+ANTHROPIC_API_KEY=…  # optional, paid
 ```
 
 Any one provider is enough; the server picks the first configured (override with
-`AI_PROVIDER`). See `.env.example`.
+`AI_PROVIDER`). Models are configurable via `GROQ_MODEL` / `GEMINI_MODEL` /
+`ANTHROPIC_MODEL`. See [`.env.example`](.env.example).
+
+> **News Chat is inherently online** and has no offline fallback subject — if the
+> news can't be fetched or no AI is configured, it says so honestly rather than
+> faking content.
 
 ## Run it
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in keys you have (all optional for the core app)
+cp .env.example .env.local   # fill in the keys you have (all optional for the core app)
 npm run dev                  # http://localhost:3000
+```
+
+Other scripts:
+
+```bash
 npm run build && npm start   # production build + serve
+npm run lint                 # next lint
+npm run typecheck            # tsc --noEmit
 ```
 
-The core writing experience runs with no keys at all. AI features activate once
-a provider key is set; trends activate once deployed with network access (and/or
-a `CUSTOM_TRENDS_URL`).
+The core freewriting experience runs with **no keys at all**. AI features
+activate once a provider key is set; trending/news activate with network access
+(and optionally `CUSTOM_TRENDS_URL`).
 
-## Deploy (Vercel + Supabase)
+## Deploy (Vercel)
 
-1. Create a **Supabase** project; copy the URL + anon/service keys.
-2. Import the repo into **Vercel**; set env vars from `.env.example` in the
-   Vercel dashboard.
-3. Deploy. (A Vercel Cron job warms `/api/trends` on the free tier.)
+1. Import the repo into **Vercel**.
+2. Set env vars from `.env.example` in the Vercel dashboard (at least one AI key
+   for the AI modes).
+3. Deploy. A Vercel Cron job can warm `/api/trends` and `/api/news/subject` so
+   the first load is instant.
 
-## Tech
+Supabase (auth + DB) plugs in during the next phase; see
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-- **Next.js + TypeScript** (App Router). Client app under `app/`, API under
-  `app/api/`.
-- **Supabase** (Postgres + Auth) — server data layer.
-- **Server AI gateway** — Groq / Gemini / Anthropic via env keys.
-- Pluggable **trend adapters** (Hacker News today; `custom` slot for a compliant
-  social feed / paid trends API).
-
-### Project layout
+## Project layout
 
 ```
-app/
-  layout.tsx, page.tsx       # mounts the writing app (client)
-  api/
-    health/route.ts
-    trends/route.ts          # cached trends (HN + custom)
-    feedback/route.ts        # AI feedback (server-side keys)
-    prompts/generate/route.ts
 src/
-  App.tsx, Root.tsx          # the SPA (client) + provider root
-  types.ts                   # data model
-  store/StoreContext.tsx     # client state (localStorage today → API in Phase 1)
-  lib/
-    prompts.ts               # the syllabus: real-life themes + leveled prompts
-    stats.ts, streak.ts      # stats + streak engine (move server-side in Phase 1)
-    feedback.ts              # offline, encouragement-first feedback
-    ai.ts                    # client → calls /api/* (no keys in the browser)
-    server/                  # server-only: ai gateway, aiTasks, trend adapters
-    storage.ts, date.ts, sound.ts
+  app/
+    layout.tsx                 # root: <html><body> + providers, theme
+    globals.css
+    write/page.tsx             # full-screen writing surface (no chrome)
+    (main)/                    # topbar + tab nav
+      layout.tsx
+      page.tsx                 #  "/"  → Home (mode + prompt picker)
+      trending/  coach/  news/  progress/  settings/   (page.tsx each)
+    (session)/                 # brand-only chrome
+      layout.tsx
+      celebrate/page.tsx
+      feedback/page.tsx
+    api/
+      health/route.ts
+      trends/route.ts          # GET cached trends (HN + custom)
+      scenarios/route.ts       # POST { trendId | subject } → sectioned scenario
+      feedback/route.ts        # POST → AI feedback
+      prompts/generate/route.ts, sparks/route.ts, coach/route.ts
+      news/subject/route.ts    # GET curated live news subject
+      converse/route.ts        # POST → News Chat turn (the production engine)
+      converse/assist/route.ts, converse/recap/route.ts
   components/
-    Home, Write, Celebrate, Feedback, Progress, Settings, Confetti
-docs/ARCHITECTURE.md
+    Home, Write, Celebrate, Feedback, Progress, Settings, Trending,
+    Coach, NewsChat, Confetti, app-nav, page-container, theme-*
+    ui/                        # shadcn/ui primitives
+  lib/
+    shared/   # pure, isomorphic: date, stats, streak, srs, prompts, phrases, sparks, feedback
+    client/   # browser-only: storage, sound, ai/clientApi (fetch our API)
+    server/   # server-only ("server-only"): ai gateway, aiTasks, trends, news, scenario, coach, newsChat
+    utils.ts
+  store/
+    StoreContext.tsx           # persisted on-device state (localStorage today)
+    SessionFlowContext.tsx     # ephemeral write-session flow
+    AppProviders.tsx           # composes the providers
+  types.ts
+docs/
+  ARCHITECTURE.md   NEWS_CHAT.md   PATTERNS.md
 ```
+
+Imports use the `@/*` alias (mapped to `src/*`), e.g. `@/lib/shared/stats`,
+`@/components/Write`, `@/store/StoreContext`.
 
 ---
 

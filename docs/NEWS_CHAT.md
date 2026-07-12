@@ -33,8 +33,8 @@ production engine. That is most of this document.
 ## 2. System flow
 
 ```
-Vercel Cron (hourly)
-  └─ Trend ingestion (news adapters) ──▶ Supabase `trends` (ranked, fresh, deduped)
+News ingestion (adapters) ──▶ ranked, fresh, deduped headlines
+  cached at the edge (revalidate); a Vercel Cron can warm it in production.
 
 Learner opens News Chat
   1. GET /api/news/subject      → curate ONE subject from top headlines (AI picks + rewrites)
@@ -55,18 +55,19 @@ Three AI jobs, three prompt contracts: **curate**, **converse** (the engine),
 
 ## 3. Trend ingestion (online, no key needed)
 
-Server-side adapters behind one interface (`fetchNewsTrends()`), tolerant of
-individual failures, results cached in Supabase with a freshness window:
+Server-side adapters behind one interface (`fetchNewsHeadlines()` in
+`src/lib/server/news.ts`), tolerant of individual failures, deduped, and edge-
+cached with a freshness window (`revalidate`):
 
-| Source | How | Key? |
-|---|---|---|
-| **Google News RSS** | `https://news.google.com/rss` (top) + topic feeds; parse XML | none |
-| **GDELT** | free API, global news + trending themes | none |
-| **Reddit** | `r/worldnews`, `r/news`, `r/todayilearned` top `.json` | none |
-| NewsAPI / SerpApi | higher quality | env key (optional) |
-| `custom` | operator feed | env URL |
+| Source | How | Key? | Built |
+|---|---|---|---|
+| **Google News RSS** | `https://news.google.com/rss` (top); parse XML | none | ✅ |
+| **GDELT** | free API, global English news | none | ✅ |
+| **Reddit** | `r/worldnews` top `.json` (real UA) | none | ✅ |
+| NewsAPI / SerpApi | higher quality | env key | future |
+| `custom` | operator feed | env URL | future |
 
-A Vercel Cron warms the cache hourly so `GET /api/news/subject` is instant.
+A Vercel Cron can warm `GET /api/news/subject` so the first load is instant.
 Selection is **not** "top headline" — it goes through curation (next), which is
 where appropriateness + discussability are enforced.
 

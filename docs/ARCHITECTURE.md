@@ -1,403 +1,199 @@
-# Flowrite — Full-Stack Architecture
+# Flowrite — Architecture
 
-> Status: **in progress**. Online-first full-stack app. The sections below
-> describe the general design; the **Decided stack** section is the chosen
-> implementation and overrides earlier "recommended"/"alternative" notes.
+Flowrite is a **single Next.js App Router application**: the writing UI, the
+JSON API, and all server-side AI live in one codebase and deploy as one unit to
+Vercel. There is no separate backend, no monorepo, and no message queue. This
+document describes what is actually built; for *why* this shape (vs. a
+module-driven backend), see [`PATTERNS.md`](PATTERNS.md).
 
-## Decided stack (v1)
+## The stack
 
-| Concern | Decision |
+| Concern | Choice |
 | --- | --- |
-| App framework | **Next.js (App Router)** — one app: UI + API route handlers + server actions. |
-| Hosting | **Vercel free (Hobby)** tier. |
-| Database + Auth | **Supabase** (managed Postgres + Supabase Auth), accessed via **`@supabase/supabase-js` + `@supabase/ssr`** with Row-Level Security. (No Prisma — avoids serverless connection-pool pain; SQL migrations instead.) |
-| AI | **Free-tier providers server-side** (Google Gemini, Groq) via the server AI gateway, keys in Vercel env vars. Anthropic optional. |
-| Scheduled crawls | **Vercel Cron** (Hobby allows a daily cron) writing trends into a Supabase `trends` table; client reads cached rows. No long-running worker / Redis on the free tier. |
-| Caching | **Supabase tables** (`trends`, `scenarios`) with `fetched_at`/TTL checks; optionally Vercel KV later. |
+| App framework | **Next.js 14 (App Router)** — one app: React UI + API route handlers. |
+| Language | **TypeScript** throughout (`@/*` → `src/*`). |
+| UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives; **lucide-react** icons; **next-themes** for light/dark. |
+| Server AI | A **server-only gateway** (`src/lib/server/ai.ts`) fronting Groq · Google Gemini · Anthropic, chosen by which env key is present. Keys never leave the server. |
+| Content sources | Keyless server **adapters**: trends (Hacker News + operator `custom` feed) and news (Google News RSS, GDELT, Reddit). |
+| Client state (today) | Browser **`localStorage`**, guest-first (`src/lib/client/storage.ts`, `src/store/StoreContext.tsx`). |
+| Auth + DB (planned) | **Supabase** (Postgres + Auth). `@supabase/ssr` + `@supabase/supabase-js` are installed but **not yet wired** — no `supabase/` schema exists in the repo yet. |
+| Hosting | **Vercel** (Hobby). A Vercel Cron can warm the trend/news caches. |
 
-Implications vs. the general design below: the `apps/worker` + Redis/BullMQ
-component is replaced by **Vercel Cron + Supabase-table caching**; Prisma is
-replaced by **`supabase-js` + SQL migrations + RLS**. The pluggable trend
-adapters, the guest→account "defer signup" flow, the API surface, and the
-feature mapping all carry over unchanged.
+---
 
-### Project layout (Next.js)
+## Layers
 
-Everything lives under `src/` (App Router with `src/app`). Screens are real
-routes grouped by their chrome; ephemeral write-session state is threaded through
-a client context (`SessionFlowContext`), not the URL.
+The whole system is three layers inside one Next.js app.
 
 ```
-flowrite/
-  src/
-    app/
-      layout.tsx                  # root: <html><body> + <AppProviders> (client hydration gate)
-      globals.css
-      write/page.tsx              # full-screen writing surface (no chrome)
-      (main)/                     # topbar + tab nav
-        layout.tsx
-        page.tsx                  # "/"  -> Home (write picker)
-        trending/ coach/ progress/ settings/  (page.tsx each)
-      (session)/                  # brand-only chrome
-        layout.tsx
-        celebrate/page.tsx
-        feedback/page.tsx
-      api/
-        health/route.ts
-        trends/route.ts           # GET cached trends; cron refresh
-        scenarios/route.ts        # POST { trendId|subject } -> scenario
-        feedback/route.ts         # POST -> AI feedback
-        prompts/generate/route.ts, sparks/route.ts, coach/route.ts
-    components/ …                 # presentational UI (client)
-    lib/
-      shared/   # pure, isomorphic: date, stats, streak, srs, prompts, phrases, sparks, feedback
-      client/   # browser-only: storage, sound, clientApi, ai (fetches our API)
-      server/   # server-only (import "server-only"): ai gateway, trends, scenario, coach
-    store/
-      StoreContext.tsx            # persisted on-device state (localStorage)
-      SessionFlowContext.tsx      # ephemeral write-session flow
-      AppProviders.tsx            # composes the providers
-    types.ts
-  supabase/
-    migrations/*.sql              # schema + RLS
-  docs/
+┌──────────────────────────────────────────────────────────────┐
+│  Browser (React, "use client")                               │
+│  Home · Write · Celebrate · Feedback · Progress · Settings   │
+│  Trending · Coach · NewsChat        state: localStorage       │
+└───────────────┬──────────────────────────────────────────────┘
+                │  fetch() JSON  (src/lib/client/{clientApi,ai}.ts)
+┌───────────────▼──────────────────────────────────────────────┐
+│  Next.js Route Handlers  (src/app/api/**/route.ts)           │
+│  thin: validate input → call a server module → return JSON    │
+└───────────────┬──────────────────────────────────────────────┘
+                │  import "server-only"
+┌───────────────▼──────────────────────────────────────────────┐
+│  Server modules  (src/lib/server/*)                          │
+│  ai gateway · aiTasks · trends · news · scenario · coach ·    │
+│  newsChat                                                     │
+│      │                         │                              │
+│      ▼                         ▼                              │
+│  AI providers            Content adapters                     │
+│  Groq/Gemini/Anthropic   HN · custom · Google News · GDELT ·  │
+│  (env keys)              Reddit  (keyless)                    │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Imports use the `@/*` alias (mapped to `src/*`), e.g. `@/lib/shared/stats`,
-`@/components/Write`, `@/store/StoreContext`.
+The **`import "server-only"`** marker on the server modules and the AI gateway
+is the hard boundary: anything that touches a provider key or a secret can only
+be reached from a route handler, never bundled into the client.
 
-## Why switch
+### The `lib` split
 
-The new product vision breaks the browser-only model on every axis:
+`src/lib` is deliberately partitioned so the same tree can't leak server code to
+the browser:
 
-| New requirement | Why a backend is required |
+| Folder | Runs where | Contents |
+| --- | --- | --- |
+| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `prompts` (the syllabus), `phrases`, `sparks`, `feedback` (offline). No I/O, no keys. |
+| `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` + `ai` (fetch our own API). |
+| `lib/server` | server only (`"server-only"`) | `ai` gateway, `aiTasks` (prompt builders), `trends`, `news`, `scenario`, `coach`, `newsChat`. |
+
+Because the stats/streak/SRS logic lives in `lib/shared`, it runs on the client
+today and can move behind the API unchanged when Supabase lands.
+
+### Routing & UI shells
+
+Screens are real routes grouped by their chrome using App Router route groups:
+
+- `app/(main)` — the tab-navigated shell (Home, Trending, Coach, News,
+  Progress, Settings).
+- `app/(session)` — brand-only chrome for the post-write flow (Celebrate,
+  Feedback).
+- `app/write` — the full-screen, chrome-less writing surface.
+
+Ephemeral write-session flow (which prompt, the draft, timing) is threaded
+through **`SessionFlowContext`**, not the URL. Durable on-device state (entries,
+vocab, streak, settings) lives in **`StoreContext`**, persisted to
+`localStorage`. `AppProviders` composes the providers plus the theme provider.
+
+---
+
+## The AI gateway
+
+`src/lib/server/ai.ts` is a small provider-agnostic gateway:
+
+- `resolveProvider()` picks the first configured provider in order Groq →
+  Gemini → Anthropic, overridable with `AI_PROVIDER`. Models default sensibly
+  and are overridable (`GROQ_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`).
+- `chatComplete(system, messages, maxTokens)` — multi-turn completion. Groq uses
+  the OpenAI-compatible endpoint, Gemini its `generateContent` API, Anthropic
+  the SDK. `rawComplete(system, user)` is the single-shot helper.
+- `aiConfigured()` lets the UI degrade gracefully: with no key, the app falls
+  back to on-device feedback and the curated syllabus; AI modes announce
+  themselves as unavailable.
+
+Higher-level prompt construction lives in `lib/server/aiTasks.ts` and the
+feature modules (`coach.ts`, `scenario.ts`, `newsChat.ts`).
+
+## Content adapters
+
+Fetching third-party content server-side is what a backend is *for* here (CORS,
+keys, caching, ToS isolation). Two adapter families, both keyless by default:
+
+- **Trends** (`lib/server/trends.ts`): `fetchTrends()` fans out to Hacker News
+  (Algolia front-page API) and an optional operator **`custom`** feed
+  (`CUSTOM_TRENDS_URL`) — one interface, tolerant of individual failures. The
+  `custom` slot is deliberately the single place a compliant social feed or paid
+  trends API plugs in, isolating the ToS surface.
+- **News** (`lib/server/news.ts`): `fetchNewsHeadlines()` fans out to Google
+  News RSS, GDELT, and Reddit (`r/worldnews` et al.), dedupes, and returns a
+  ranked list for News Chat's curation step. No keys required.
+
+Route handlers cache these responses at the edge (`revalidate`), and a Vercel
+Cron can warm them so the first user load is instant.
+
+---
+
+## API surface
+
+All handlers are thin: validate → call a `lib/server` module → return JSON.
+
+| Method & path | Purpose |
 | --- | --- |
-| Trending subjects from the web / social platforms | Crawling/fetching needs server-side requests (no CORS), API keys kept secret, caching, and scheduled jobs. Browsers can't do this safely or legally. |
-| AI scenario generation, feedback, word help | The provider key must live server-side, not in the browser. Enables caching (share generated scenarios across users), rate limits, and cost control. |
-| Real personalization & multi-device | Progress, vocabulary, and streaks become server state in a database, synced across devices. |
-| "Interesting, current" content | A worker pre-fetches trends on a schedule so the client gets fresh subjects instantly. |
+| `GET /api/health` | Liveness. |
+| `GET /api/trends` | Cached trends (HN + custom), edge-cached. |
+| `POST /api/scenarios` | `{ trendId \| subject }` → a sectioned interactive scenario. |
+| `POST /api/feedback` | Encouragement-first AI feedback for a finished entry. |
+| `POST /api/prompts/generate` | Fresh, theme+level-grounded writing prompts. |
+| `POST /api/sparks` | Tap-to-insert sentence starters for the writing surface. |
+| `POST /api/coach` | Phrase Coach turn (SRS-scheduled phrase drilling). |
+| `GET /api/news/subject` | Curate ONE live news subject + opening hook. |
+| `POST /api/converse` | News Chat turn — the "forced production" engine. |
+| `POST /api/converse/assist` | Stall help: a simpler question + tappable starters. |
+| `POST /api/converse/recap` | Closing celebration + mined phrases → Coach/SRS. |
 
-So: **online-first**, with a thin offline grace path (see *Offline posture*).
+The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
+the director prompt, stall assist, recap — are documented in detail in
+[`NEWS_CHAT.md`](NEWS_CHAT.md).
 
----
+## Prompt-injection posture
 
-## System overview
-
-```
-                       ┌─────────────────────────────┐
-   Browser (React SPA) │  apps/web                   │
-   - calm writing UX   │  - React + TS + Vite        │
-   - scenario flow     │  - TanStack Query (server   │
-   - word panel        │    state) + auth session    │
-                       └──────────────┬──────────────┘
-                                      │ HTTPS / JSON (REST)
-                       ┌──────────────▼──────────────┐
-                       │  apps/api  (Node + TS)       │
-                       │  - auth, settings            │
-                       │  - entries, progress, vocab  │
-                       │  - trends, scenarios         │
-                       │  - feedback, word help       │
-                       │  - AI gateway (keys here)    │
-                       └───┬───────────┬───────────┬──┘
-                           │           │           │
-                 ┌─────────▼──┐  ┌─────▼─────┐  ┌──▼─────────────┐
-                 │ PostgreSQL │  │  Redis    │  │ apps/worker    │
-                 │ (Prisma)   │  │ cache +   │  │ - cron crawls  │
-                 │ users,     │  │ job queue │  │ - pre-generate │
-                 │ entries,   │  │ (BullMQ)  │  │   scenarios    │
-                 │ trends, …  │  └───────────┘  └───┬────────────┘
-                 └────────────┘                     │
-                                        ┌───────────▼────────────┐
-                                        │ Trend adapters         │
-                                        │ HN · Reddit · GTrends  │
-                                        │ YouTube · CUSTOM slot  │
-                                        └────────────────────────┘
-                                        ┌────────────────────────┐
-                                        │ AI providers           │
-                                        │ Anthropic/Gemini/Groq/ │
-                                        │ OpenAI-compatible      │
-                                        └────────────────────────┘
-```
-
-### Components
-
-1. **`apps/web`** — the existing Vite React client, refactored to read/write
-   through the API instead of `localStorage`. The calm writing UX, the
-   sectioned scenario flow, and the word panel all stay.
-2. **`apps/api`** — REST/JSON server. Owns auth, persistence, and **all AI and
-   crawling** (keys live here, never in the browser).
-3. **PostgreSQL** (via **Prisma**) — durable state: users, entries, vocabulary,
-   streaks, trends, scenarios.
-4. **Redis** — caches trends and generated scenarios; backs the **BullMQ** job
-   queue; per-user rate limiting.
-5. **`apps/worker`** — scheduled jobs: fetch trends on a cron, pre-generate
-   scenarios for hot trends, nightly cleanup.
-6. **Trend adapters** — pluggable, legitimate sources (Hacker News, Reddit,
-   Google Trends, YouTube) **plus a `custom` adapter** — the slot where a
-   compliant TikTok/IG/FB/Threads feed (your own crawler or a paid trends API)
-   plugs in. Keeping social crawling behind an adapter the operator supplies is
-   deliberate: it isolates the ToS/compliance surface to one place.
-7. **AI gateway** — the server-side version of the provider layer already built
-   in `src/lib/ai.ts`, with keys from env, response caching, retries, and
-   prompt-injection-safe handling of crawled text.
+Crawled titles, snippets, and everything the learner types are treated as
+**untrusted data, never instructions**. The system prompts state this
+explicitly, we pass third-party text as clearly-delimited content to write
+about, and nothing from it is ever executed. Structured JSON contracts are kept
+tiny (a handful of fields) for reliability on fast free-tier models; parsing
+fails soft so a bad response never breaks the writing flow.
 
 ---
 
-## Recommended stack
+## State today, and the Supabase phase
 
-**Primary recommendation: a TypeScript monorepo that keeps the current client.**
-The client we've built is polished; this preserves it and adds a backend cleanly.
+**Today:** all durable state is client-side in `localStorage`, guest-first —
+you can write, build a streak, and see progress with no account. This is the
+"defer signup until after a win" retention insight, and it means the core app
+has zero backend dependencies.
 
-| Concern | Choice | Why |
-| --- | --- | --- |
-| Monorepo | **pnpm workspaces + Turborepo** | One repo, shared types, fast CI. |
-| Frontend | **Existing Vite + React + TS** | Keep the work; add TanStack Query for server state. |
-| API | **Fastify + TS** (or NestJS if you want batteries/structure) | Fast, typed, simple; great with Zod. |
-| Validation / shared types | **Zod** in `packages/shared` | One source of truth for request/response shapes, shared by client and server. |
-| DB | **PostgreSQL + Prisma** | Typed schema + migrations. |
-| Cache / queue | **Redis + BullMQ** | Trend caching + scheduled crawls. |
-| Auth | **Lucia** or **Auth.js** (email magic-link + Google OAuth) | Sessions/JWT; see *Auth*. |
-| AI | Reuse provider layer, server-side | Keys in env; add caching + limits. |
-| Deploy | **Web → Vercel/CDN**; **API + worker → Fly.io / Render / Railway**; **Postgres → Neon**; **Redis → Upstash** | Managed, cheap to start. |
+**Next phase — Supabase:** real accounts and multi-device sync. Because the
+stats/streak/SRS logic already lives in `lib/shared`, the migration is mostly
+additive rather than a rewrite:
 
-**Alternative: consolidate into Next.js (App Router).** One framework, route
-handlers + server actions, simplest single deploy (Vercel). Trade-off: more
-rework of the current Vite client (routing, data fetching, file layout), and you
-still want a separate long-running **worker** for cron crawls (serverless cron
-is fine for light schedules). Choose this if you'd rather have one app than a
-client+API split.
+1. Add Supabase Auth (email magic-link + Google OAuth) with `@supabase/ssr`;
+   keep the guest-first flow — a new visitor writes one session as a guest, then
+   the celebrate screen invites sign-up to *save your streak*, and the guest's
+   entry/vocab are claimed on signup.
+2. Add a Postgres schema (SQL migrations under `supabase/`, Row-Level Security)
+   for `entries`, `vocab`, streak/profile, and cached `trends`/`scenarios`.
+   `supabase-js` from the server — no ORM, to avoid serverless
+   connection-pool pain.
+3. Move the currently-client stats/streak/vocab merge behind the API so they're
+   consistent across devices and can't be tampered with. The client keeps light
+   display helpers and swaps `localStorage` reads for API calls.
 
-> Recommendation: **monorepo + Fastify API** to preserve the client and keep the
-> crawling/worker concerns cleanly separated. Pick Next.js only if a single
-> unified app matters more than reusing the current frontend as-is.
+Caching stays table- and edge-based (`fetched_at`/TTL + `revalidate`), and
+scheduled work stays on **Vercel Cron** — no long-running worker or Redis on the
+free tier. Sharing generated scenarios/subjects across users (keyed by
+trend/subject) is the main cost lever.
 
-### Proposed monorepo layout
+## Offline posture
 
-```
-flowrite/
-  apps/
-    web/        # current Vite React app (moved here)
-    api/        # Fastify server: routes, services, AI gateway
-    worker/     # BullMQ workers + cron (trend ingestion, pre-gen)
-  packages/
-    shared/     # Zod schemas + shared TS types (Entry, Trend, Scenario, …)
-    db/         # Prisma schema, client, migrations
-    ai/         # provider layer (Anthropic/Gemini/Groq/OpenAI) used by api+worker
-    trends/     # trend adapters (hn, reddit, gtrends, youtube, custom)
-  docs/
-```
+Online-first, with a thin grace path. The **freewriting** loop works fully
+offline (on-device feedback + curated syllabus). **Trending, Coach, and News
+Chat require the network** — News Chat deliberately has no offline fallback
+subject and fails honestly rather than faking content. Drafts live in
+`localStorage` so a dropped connection mid-session never loses writing.
 
----
+## Ops notes
 
-## Data model (Prisma sketch)
-
-```prisma
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  createdAt    DateTime @default(now())
-  settings     Json     // goalType, goalValue, difficulty, focuses, trendSources…
-  // streak / profile (1:1 fields kept inline for simplicity)
-  streak       Int      @default(0)
-  longestStreak Int     @default(0)
-  lastWriteDay String?  // 'YYYY-MM-DD' local-day key
-  freezes      Int      @default(2)
-  totalWords   Int      @default(0)
-  totalEntries Int      @default(0)
-  totalMs      Int      @default(0)
-  entries      Entry[]
-  vocab        VocabWord[]
-}
-
-model Entry {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  day         String   // local-day key
-  createdAt   DateTime @default(now())
-  subject     String   // prompt text or trend subject
-  source      String   // 'curated' | 'ai' | 'trend'
-  scenarioId  String?
-  text        String
-  words       Int
-  chars       Int
-  sentences   Int
-  newWords    Int
-  durationMs  Int
-  @@index([userId, day])
-}
-
-model VocabWord {
-  id        String @id @default(cuid())
-  userId    String
-  word      String
-  firstSeen String // local-day key
-  count     Int    @default(1)
-  @@unique([userId, word])
-}
-
-model Trend {
-  id        String   @id @default(cuid())
-  source    String   // 'hn' | 'reddit' | 'gtrends' | 'youtube' | 'custom'
-  platform  String   // display label
-  title     String
-  url       String?
-  blurb     String?
-  score     Float    @default(0)
-  fetchedAt DateTime @default(now())
-  @@index([source, fetchedAt])
-}
-
-model Scenario {
-  id        String   @id @default(cuid())
-  trendId   String?
-  subject   String
-  source    String
-  intro     String
-  steps     Json     // ScenarioStep[]
-  createdAt DateTime @default(now())
-  @@index([subject])
-}
-
-// + auth tables (Session/Account) per the chosen auth library
-```
-
-Generated **scenarios are cached and shared** across users (keyed by trend/
-subject) — repeated picks are instant and cheap.
-
----
-
-## API surface (REST, all JSON, Zod-validated)
-
-```
-POST   /auth/magic-link            # request login email
-GET    /auth/callback              # verify, set session cookie
-POST   /auth/logout
-GET    /me                         # current user + profile
-GET    /me/settings    PUT /me/settings
-GET    /me/progress                # summary, calendar, vocab growth
-
-GET    /prompts?level=&focus=      # curated syllabus (+ optional AI personalization)
-
-GET    /trends?sources=            # cached trends (from worker)
-POST   /scenarios                  # body: { trendId } | { subject } -> Scenario (cached)
-GET    /scenarios/:id
-
-POST   /entries                    # save a finished session; server updates streak/vocab/totals
-GET    /entries     GET /entries/:id
-POST   /entries/:id/feedback       # AI feedback (server-side key)
-
-POST   /words/help                 # { word, subject } -> meaning + in-context examples
-POST   /words/check                # { word, subject, sentence } -> quick encouraging note
-```
-
-Server owns the logic that currently lives in the client: `stats`, `streak`
-(`applyWrite`), and vocabulary merging move into `apps/api` services so they
-can't be tampered with and are consistent across devices.
-
----
-
-## Feature mapping
-
-### Trending → sectioned interactive scenarios
-- **Worker** runs trend adapters on a cron (e.g. hourly), normalizes + dedupes,
-  writes to `Trend` + Redis. Adapters: HN (Algolia), Reddit (OAuth app),
-  Google Trends (daily RSS), YouTube (Data API), and the **`custom`** adapter
-  (operator-supplied endpoint = where compliant TikTok/IG/FB/Threads data plugs
-  in).
-- Client `GET /trends` → instant from cache. Pick one → `POST /scenarios` →
-  server generates (AI) a **sectioned, interactive** scenario — a small ordered
-  set of beats (react in one line → take a side → reply to a comment → imagine
-  your post…), each a tiny freewrite that builds engagement in the subject.
-  Cached so it's reusable.
-- **Prompt-injection hygiene:** crawled titles/snippets are passed to the model
-  as clearly-delimited *untrusted content to write about*, never as instructions.
-
-### In-context word practice
-- While writing, selecting a word opens a calm **slide-in panel** (bottom sheet
-  on mobile). `POST /words/help { word, subject }` returns a plain-language
-  meaning + 1–2 example sentences **in the scenario's subject**, then a micro
-  "use it in a sentence about {subject}" exercise checked via `POST /words/check`.
-- A free dictionary API gives a baseline meaning even before AI; AI adds the
-  in-context examples. Opt-in, dismissible — never interrupts the writing flow.
-
-### Feedback
-- Moves server-side (`POST /entries/:id/feedback`). No browser key. Same
-  encouragement-first contract; cached per entry.
-
----
-
-## Auth & the "defer signup" insight
-
-The retention research says: let users get a first win **before** asking them to
-sign up. We keep that:
-
-1. A new visitor can write one session as a **guest** (server issues an anonymous
-   session id; the entry is stored against it).
-2. On the celebrate screen, prompt to create an account to **save your streak**.
-3. On signup, the guest's entry/vocab are claimed into the new user.
-
-Auth: email magic-link (low friction) + Google OAuth. Session cookie (HTTP-only,
-SameSite) or JWT.
-
----
-
-## Offline posture (no longer offline-first, but graceful)
-
-- The app **assumes connectivity**. Trends, scenarios, feedback, and word help
-  require the API.
-- Grace, not full offline: cache the last fetched trends/scenario and the
-  in-progress draft in `localStorage` so a dropped connection mid-session
-  doesn't lose writing; sync the entry when back online. This is a safety net,
-  not a feature.
-
----
-
-## Cost & ops
-
-- **Caching is the cost lever:** scenarios are generated once per trend and
-  shared; feedback cached per entry; trends fetched on a schedule, not per
-  request. Add per-user rate limits (Redis).
-- **Secrets** in env/secret manager. **Observability:** structured logs with
-  request IDs, error tracking (Sentry), basic metrics.
-- **Model choice** server-side: a cheaper model (e.g. Haiku) for high-volume
-  word help / feedback; a stronger model for scenario generation. Configurable.
-
----
-
-## Migration plan (incremental; each phase ships)
-
-| Phase | Work | Outcome |
-| --- | --- | --- |
-| **0. Monorepo** | Move app → `apps/web`; create `packages/shared` (Zod types), `packages/db` (Prisma); Turborepo + pnpm. | Same app, new structure, still builds. |
-| **1. API + persistence** | Fastify API; Postgres; auth + `/me` + settings + `/entries` + `/me/progress`. Move `stats`/`streak`/`vocab` to server. Client swaps `localStorage` for an API client (TanStack Query). Guest→account flow. | Real accounts, multi-device, server-side progress. |
-| **2. Server-side AI** | Move `lib/ai.ts` to `packages/ai`; `/entries/:id/feedback` + `/words/help` + `/words/check`. Remove browser keys. | Feedback + word practice without browser keys. |
-| **3. Trends + scenarios** | `packages/trends` adapters; `apps/worker` cron; `/trends` + `/scenarios`. Trending UI + sectioned scenario write flow. | Trend-driven, interactive scenarios. |
-| **4. Word panel UX** | Slide-in/bottom-sheet panel wired to `/words/*`. | In-context word practice. |
-| **5. Hardening** | Rate limits, caching, Sentry, deploy pipelines, seed data. | Production-ready. |
-
-### What changes in today's client code
-- `src/lib/storage.ts` → an `apiClient` + TanStack Query hooks.
-- `src/store/StoreContext.tsx` → auth/session context; server state via queries.
-- `src/lib/ai.ts` → moves to `packages/ai` (server). Client calls endpoints.
-- `src/lib/{stats,streak}.ts` → logic moves server-side (client keeps light
-  display helpers). Curated syllabus (`prompts.ts`) can stay client-side or move
-  behind `/prompts`.
-- Settings: provider keys leave the browser. Either operator-configured
-  server-side, or per-user keys stored **encrypted** server-side (a product
-  choice).
-
----
-
-## Open decisions
-
-1. **Stack:** monorepo + Fastify API (recommended) **vs** consolidate into
-   Next.js.
-2. **Auth provider:** roll-your-own (Lucia/Auth.js) **vs** managed (Clerk,
-   Supabase Auth) for speed.
-3. **AI keys:** operator-funded server keys (simplest UX, you pay) **vs**
-   per-user encrypted keys (users pay, more plumbing).
-4. **Hosting target:** Fly/Render/Railway **vs** Vercel + managed services.
-5. **Social trends source:** which compliant feed backs the `custom` adapter
-   (your own crawler vs a paid trends API).
+- **Secrets** in Vercel env vars only; the `"server-only"` boundary keeps them
+  out of the bundle.
+- **Model choice** is per-task and configurable: a cheap fast model (e.g. Groq
+  llama-3.3-70b) for real-time turns, a stronger one where adherence matters.
+- **Cost control** is caching + short, per-user conversations + rate limits
+  (added with the Supabase phase).
