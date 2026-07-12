@@ -1,7 +1,6 @@
-"use client";
-
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { Brand } from "@/components/app-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 /**
  * Post-session screens (celebrate, feedback): the brand is shown but the tab nav
@@ -9,16 +8,12 @@ import type { ReactNode } from "react";
  */
 export default function SessionLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="container topbar-inner">
-          <Link className="brand" href="/">
-            <span className="brand-dot" />
-            Flowrite
-          </Link>
-        </div>
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="flex h-14 items-center justify-between border-b border-border px-5 sm:px-6">
+        <Brand />
+        <ThemeToggle />
       </header>
-      {children}
+      <main className="flex-1">{children}</main>
     </div>
   );
 }

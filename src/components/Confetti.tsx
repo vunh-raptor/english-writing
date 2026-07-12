@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-const COLORS = ["#c8643c", "#d9a441", "#4f7a6f", "#e0894f", "#6fae9c", "#eab891"];
+const COLORS = ["#33a06c", "#111418", "#e0a52e", "#6b7280", "#4ec08a", "#1f2937"];
 
 /** Lightweight CSS confetti for the celebrate moment. Decorative only. */
 export function Confetti({ pieces = 90 }: { pieces?: number }) {
@@ -19,10 +19,14 @@ export function Confetti({ pieces = 90 }: { pieces?: number }) {
   );
 
   return (
-    <div className="confetti" aria-hidden="true">
+    <div
+      className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+      aria-hidden="true"
+    >
       {bits.map((b) => (
         <i
           key={b.i}
+          className="confetti-piece"
           style={{
             left: `${b.left}%`,
             background: b.color,

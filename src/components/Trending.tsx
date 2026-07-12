@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import type { Scenario, Trend } from "@/types";
 import { fetchTrends, createScenario } from "@/lib/client/clientApi";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/page-container";
 
 interface TrendingProps {
   onStartScenario: (scenario: Scenario) => void;
@@ -68,65 +73,74 @@ export function Trending({ onStartScenario }: TrendingProps) {
   }, [trends]);
 
   return (
-    <div className="screen screen-pad">
-      <div className="container">
-        <div className="section-title" style={{ marginTop: 6 }}>
-          <h1 style={{ fontSize: 26 }}>🔥 Trending</h1>
-          <button className="shuffle" onClick={load} disabled={loading}>
-            ↻ Refresh
-          </button>
-        </div>
-        <p className="muted" style={{ marginTop: -4 }}>
-          Write about what the world's talking about — pick a subject and it
-          becomes a short, interactive flow.
-        </p>
-
-        {error && <div className="status-note warn" style={{ marginTop: 12 }}>{error}</div>}
-
-        {loading ? (
-          <div className="loading-row">
-            <span className="spinner" />
-            <span>Finding what's trending…</span>
-          </div>
-        ) : (
-          <>
-            {usingFallback && (
-              <div className="status-note" style={{ marginTop: 12 }}>
-                Live trends aren't available here yet — here are some evergreen
-                subjects to write about. (They go live once deployed.)
-              </div>
-            )}
-            {groups.map(([platform, items]) => (
-              <div key={platform} style={{ marginTop: 22 }}>
-                <span className="eyebrow">{platform}</span>
-                <div className="trend-list">
-                  {items.map((t) => (
-                    <div className="trend-card" key={t.id}>
-                      <div className="trend-main">
-                        <div className="trend-title">{t.title}</div>
-                        {t.blurb && <div className="trend-blurb">{t.blurb}</div>}
-                      </div>
-                      <button
-                        className="btn btn-sage trend-go"
-                        onClick={() => pick(t)}
-                        disabled={genId !== null}
-                      >
-                        {genId === t.id ? (
-                          <>
-                            <span className="spinner spinner-sm" /> Building…
-                          </>
-                        ) : (
-                          <>Write about this →</>
-                        )}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </>
-        )}
+    <PageContainer width="wide">
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl sm:text-3xl">🔥 Trending</h1>
+        <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
+          <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
+        </Button>
       </div>
-    </div>
+      <p className="mt-1 max-w-2xl text-muted-foreground">
+        Write about what the world&apos;s talking about — pick a subject and it
+        becomes a short, interactive flow.
+      </p>
+
+      {error && <div className="note note-warning mt-3">{error}</div>}
+
+      {loading ? (
+        <div className="flex items-center gap-3 py-5 text-muted-foreground">
+          <span className="spinner" />
+          <span>Finding what&apos;s trending…</span>
+        </div>
+      ) : (
+        <>
+          {usingFallback && (
+            <div className="note note-positive mt-3">
+              Live trends aren&apos;t available here yet — here are some evergreen
+              subjects to write about. (They go live once deployed.)
+            </div>
+          )}
+          {groups.map(([platform, items]) => (
+            <section key={platform} className="mt-7">
+              <Badge variant="eyebrow">{platform}</Badge>
+              <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+                {items.map((t) => (
+                  <Card
+                    key={t.id}
+                    className="flex items-center justify-between gap-4 p-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium leading-snug">{t.title}</div>
+                      {t.blurb && (
+                        <div className="mt-0.5 text-sm text-muted-foreground">
+                          {t.blurb}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      variant="sage"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => pick(t)}
+                      disabled={genId !== null}
+                    >
+                      {genId === t.id ? (
+                        <>
+                          <span className="spinner spinner-sm" /> Building…
+                        </>
+                      ) : (
+                        <>
+                          Write <ArrowRight />
+                        </>
+                      )}
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          ))}
+        </>
+      )}
+    </PageContainer>
   );
 }

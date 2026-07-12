@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
 import type { Entry, Feedback as FeedbackData } from "@/types";
 import { localFeedback } from "@/lib/shared/feedback";
 import { aiFeedback } from "@/lib/client/ai";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/page-container";
 
 interface FeedbackProps {
   entry: Entry;
@@ -61,81 +65,90 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
   }, [aiOn, entry]);
 
   return (
-    <div className="screen screen-pad">
-      <div className="container center-narrow">
-        <button className="back-link" onClick={onBack}>
-          ← Back home
-        </button>
+    <PageContainer width="narrow">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onBack}
+        className="-ml-2 mb-2 px-2"
+      >
+        <ArrowLeft /> Back home
+      </Button>
 
-        {loading && (
-          <div className="loading-row">
-            <span className="spinner" />
-            <span>Asking Claude for a closer look…</span>
-          </div>
-        )}
-        {error && (
-          <div className="status-note warn" style={{ marginBottom: 12 }}>
-            {error}
-          </div>
-        )}
+      {loading && (
+        <div className="flex items-center gap-3 py-4 text-muted-foreground">
+          <span className="spinner" />
+          <span>Asking Claude for a closer look…</span>
+        </div>
+      )}
+      {error && <div className="note note-warning mb-3">{error}</div>}
 
-        <div className="fb-lead">{feedback.encouragement}</div>
+      <div className="rounded-lg bg-sage-muted px-6 py-5 font-serif text-xl leading-relaxed text-sage-ink">
+        {feedback.encouragement}
+      </div>
 
-        <div className="fb-section">
-          <span className="eyebrow">What went well</span>
-          <ul className="fb-list">
-            {feedback.strengths.map((s, i) => (
-              <li className="fb-item" key={i}>
-                <span className="fb-mark">✅</span>
-                <span>{s}</span>
+      <section className="mt-5">
+        <Badge variant="eyebrow">What went well</Badge>
+        <ul className="mt-2.5 flex flex-col gap-2.5">
+          {feedback.strengths.map((s, i) => (
+            <li
+              key={i}
+              className="flex items-start gap-3 rounded-md border border-border bg-card p-4 shadow-soft"
+            >
+              <span className="mt-0.5 shrink-0">✅</span>
+              <span>{s}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {feedback.suggestions.length > 0 && (
+        <section className="mt-5">
+          <Badge variant="eyebrow">Gentle ideas to play with</Badge>
+          <ul className="mt-2.5 flex flex-col gap-2.5">
+            {feedback.suggestions.map((s, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-3 rounded-md border border-border bg-card p-4 shadow-soft"
+              >
+                <span className="mt-0.5 shrink-0">💡</span>
+                <div>
+                  <span>{s.note}</span>
+                  {s.example && (
+                    <span className="mt-1.5 block w-fit rounded bg-muted px-2 py-0.5 text-sm text-muted-foreground">
+                      {s.example}
+                    </span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
-        </div>
+        </section>
+      )}
 
-        {feedback.suggestions.length > 0 && (
-          <div className="fb-section">
-            <span className="eyebrow">Gentle ideas to play with</span>
-            <ul className="fb-list">
-              {feedback.suggestions.map((s, i) => (
-                <li className="fb-item" key={i}>
-                  <span className="fb-mark">💡</span>
-                  <span>
-                    {s.note}
-                    {s.example && <span className="fb-example">{s.example}</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="fb-try">
-          <span className="eyebrow">One thing to try next time</span>
-          <p style={{ margin: "8px 0 0" }}>{feedback.oneThingToTry}</p>
-        </div>
-
-        <p className="faint" style={{ fontSize: 13, marginTop: 16 }}>
-          {feedback.source === "ai"
-            ? "Feedback from your AI coach, just for you."
-            : aiOn
-              ? "On-device feedback."
-              : "On-device feedback. Want a closer, more personal read? Turn on AI feedback in Settings."}
-        </p>
-
-        <div className="fb-section">
-          <span className="eyebrow">What you wrote</span>
-          <div className="entry-read" style={{ marginTop: 8 }}>
-            {entry.text}
-          </div>
-        </div>
-
-        <div style={{ marginTop: 22 }}>
-          <button className="btn btn-block" onClick={onBack}>
-            Done
-          </button>
-        </div>
+      <div className="mt-5 rounded-lg border border-dashed border-input bg-card p-5">
+        <Badge variant="eyebrow">One thing to try next time</Badge>
+        <p className="mt-2">{feedback.oneThingToTry}</p>
       </div>
-    </div>
+
+      <p className="mt-4 text-[13px] text-muted-foreground">
+        {feedback.source === "ai"
+          ? "Feedback from your AI coach, just for you."
+          : aiOn
+            ? "On-device feedback."
+            : "On-device feedback. Want a closer, more personal read? Turn on AI feedback in Settings."}
+      </p>
+
+      <section className="mt-5">
+        <Badge variant="eyebrow">What you wrote</Badge>
+        <div className="entry-read mt-2">{entry.text}</div>
+      </section>
+
+      <div className="mt-6">
+        <Button variant="secondary" className="w-full" onClick={onBack}>
+          Done
+        </Button>
+      </div>
+    </PageContainer>
   );
 }

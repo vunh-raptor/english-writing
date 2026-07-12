@@ -5,14 +5,51 @@ import { srsSummary } from "@/lib/shared/srs";
 import { SEED_PHRASES } from "@/lib/shared/phrases";
 import { addDays, prettyDay, todayKey } from "@/lib/shared/date";
 import type { DayKey } from "@/types";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/page-container";
 
 const CAL_DAYS = 84; // ~12 weeks
 
-function levelFor(words: number): string {
-  if (words <= 0) return "";
-  if (words <= 50) return "lv1";
-  if (words <= 150) return "lv2";
-  return "lv3";
+function levelClass(words: number): string {
+  if (words <= 0) return "bg-muted border-border";
+  if (words <= 50) return "bg-brand/25 border-brand/25";
+  if (words <= 150) return "bg-brand/55 border-brand/55";
+  return "bg-brand border-brand";
+}
+
+function BigStat({
+  value,
+  label,
+  accent,
+}: {
+  value: React.ReactNode;
+  label: string;
+  accent?: boolean;
+}) {
+  return (
+    <Card className="p-5">
+      <div
+        className={cn(
+          "font-serif text-3xl font-semibold",
+          accent && "text-brand",
+        )}
+      >
+        {value}
+      </div>
+      <div className="mt-0.5 text-sm text-muted-foreground">{label}</div>
+    </Card>
+  );
+}
+
+function SectionTitle({ title, meta }: { title: string; meta?: string }) {
+  return (
+    <div className="mb-3 mt-8 flex items-baseline justify-between gap-3">
+      <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
+      {meta && <span className="text-sm text-muted-foreground">{meta}</span>}
+    </div>
+  );
 }
 
 export function Progress() {
@@ -49,116 +86,85 @@ export function Progress() {
 
   if (entries.length === 0 && Object.keys(phraseSrs).length === 0) {
     return (
-      <div className="screen screen-pad">
-        <div className="container center-narrow">
-          <h1 style={{ fontSize: 26 }}>Your progress</h1>
-          <div className="card" style={{ marginTop: 18 }}>
-            <p style={{ margin: 0, color: "var(--ink-soft)" }}>
-              Nothing here yet — write your first session (or chat with the
-              Coach) and this fills with real growth: words you've used, your
-              vocabulary, phrases you can produce, and your streak.
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageContainer width="narrow">
+        <h1 className="text-2xl sm:text-3xl">Your progress</h1>
+        <Card className="mt-5 p-6">
+          <p className="text-muted-foreground">
+            Nothing here yet — write your first session (or chat with the Coach)
+            and this fills with real growth: words you&apos;ve used, your
+            vocabulary, phrases you can produce, and your streak.
+          </p>
+        </Card>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="screen screen-pad">
-      <div className="container">
-        <h1 style={{ fontSize: 26 }}>Your progress</h1>
+    <PageContainer width="wide">
+      <h1 className="text-2xl sm:text-3xl">Your progress</h1>
 
-        <div className="section-title">
-          <h2>Growth that's real</h2>
-        </div>
-        <div className="bigstat-grid">
-          <div className="bigstat">
-            <div className="n">{summary.vocabulary}</div>
-            <div className="l">words in your vocabulary</div>
-          </div>
-          <div className="bigstat">
-            <div className="n" style={{ color: "var(--accent)" }}>
-              +{summary.newWordsThisWeek}
-            </div>
-            <div className="l">new words this week</div>
-          </div>
-          <div className="bigstat">
-            <div className="n">{summary.totalWords.toLocaleString()}</div>
-            <div className="l">words written, all time</div>
-          </div>
-          <div className="bigstat">
-            <div className="n">{summary.avgSentenceLength}</div>
-            <div className="l">avg words per sentence</div>
-          </div>
-        </div>
-
-        <div className="section-title">
-          <h2>Phrases</h2>
-          <span className="faint">spaced practice · due today: {phraseStats.dueToday}</span>
-        </div>
-        <div className="bigstat-grid">
-          <div className="bigstat">
-            <div className="n">{phraseStats.mastered}</div>
-            <div className="l">phrases mastered</div>
-          </div>
-          <div className="bigstat">
-            <div className="n" style={{ color: "var(--accent)" }}>
-              {phraseStats.learning}
-            </div>
-            <div className="l">learning now</div>
-          </div>
-        </div>
-
-        <div className="section-title">
-          <h2>Streak</h2>
-          <span className="faint">
-            longest: {profile.longestStreak} · freezes: {profile.freezes}
-          </span>
-        </div>
-        <div className="card">
-          <div style={{ display: "flex", gap: 22, alignItems: "baseline", marginBottom: 14 }}>
-            <div>
-              <span style={{ fontFamily: "var(--serif)", fontSize: 30, fontWeight: 600 }}>
-                {profile.streak}
-              </span>{" "}
-              <span className="muted">day current streak 🔥</span>
-            </div>
-          </div>
-          <div className="cal">
-            {calendar.map((c) => (
-              <div
-                key={c.day}
-                className={`cal-cell ${levelFor(c.words)}`}
-                title={`${prettyDay(c.day)} — ${c.words} word${c.words === 1 ? "" : "s"}`}
-              />
-            ))}
-          </div>
-          <p className="faint" style={{ fontSize: 12.5, marginTop: 10, marginBottom: 0 }}>
-            last 12 weeks · darker = more words
-          </p>
-        </div>
-
-        <div className="section-title">
-          <h2>Sessions</h2>
-          <span className="faint">
-            {summary.totalEntries} total · {summary.totalMinutes} min written
-          </span>
-        </div>
-        <div className="card">
-          <span className="eyebrow">Recent session length (words)</span>
-          <div className="spark" style={{ marginTop: 12 }}>
-            {summary.recentLengths.map((w, i) => (
-              <div
-                key={i}
-                className="spark-bar"
-                style={{ height: `${Math.max(6, (w / sparkMax) * 100)}%` }}
-                title={`${w} words`}
-              />
-            ))}
-          </div>
-        </div>
+      <SectionTitle title="Growth that's real" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <BigStat value={summary.vocabulary} label="words in your vocabulary" />
+        <BigStat value={`+${summary.newWordsThisWeek}`} label="new words this week" accent />
+        <BigStat value={summary.totalWords.toLocaleString()} label="words written, all time" />
+        <BigStat value={summary.avgSentenceLength} label="avg words per sentence" />
       </div>
-    </div>
+
+      <SectionTitle
+        title="Phrases"
+        meta={`spaced practice · due today: ${phraseStats.dueToday}`}
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <BigStat value={phraseStats.mastered} label="phrases mastered" />
+        <BigStat value={phraseStats.learning} label="learning now" accent />
+      </div>
+
+      <SectionTitle
+        title="Streak"
+        meta={`longest: ${profile.longestStreak} · freezes: ${profile.freezes}`}
+      />
+      <Card className="p-6">
+        <div className="mb-4 flex items-baseline gap-2">
+          <span className="font-serif text-3xl font-semibold">
+            {profile.streak}
+          </span>
+          <span className="text-muted-foreground">day current streak 🔥</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {calendar.map((c) => (
+            <div
+              key={c.day}
+              className={cn(
+                "h-4 w-4 rounded-[4px] border",
+                levelClass(c.words),
+              )}
+              title={`${prettyDay(c.day)} — ${c.words} word${c.words === 1 ? "" : "s"}`}
+            />
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          last 12 weeks · darker = more words
+        </p>
+      </Card>
+
+      <SectionTitle
+        title="Sessions"
+        meta={`${summary.totalEntries} total · ${summary.totalMinutes} min written`}
+      />
+      <Card className="p-6">
+        <Badge variant="eyebrow">Recent session length (words)</Badge>
+        <div className="mt-3 flex h-[70px] items-end gap-1">
+          {summary.recentLengths.map((w, i) => (
+            <div
+              key={i}
+              className="min-w-[6px] flex-1 rounded-t bg-gradient-to-b from-brand to-[hsl(var(--brand)/0.65)]"
+              style={{ height: `${Math.max(6, (w / sparkMax) * 100)}%` }}
+              title={`${w} words`}
+            />
+          ))}
+        </div>
+      </Card>
+    </PageContainer>
   );
 }

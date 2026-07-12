@@ -5,6 +5,10 @@ import { Confetti } from "./Confetti";
 import { playChime } from "@/lib/client/sound";
 import { todayKey } from "@/lib/shared/date";
 import { streakInfo } from "@/lib/shared/streak";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/page-container";
 
 interface CelebrateProps {
   entry: Entry;
@@ -28,6 +32,30 @@ function useCountUp(target: number, duration = 750): number {
   return v;
 }
 
+function Stat({
+  value,
+  label,
+  accent,
+}: {
+  value: React.ReactNode;
+  label: string;
+  accent?: boolean;
+}) {
+  return (
+    <Card className="p-4">
+      <div
+        className={cn(
+          "font-serif text-3xl font-semibold",
+          accent && "text-brand",
+        )}
+      >
+        {value}
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+    </Card>
+  );
+}
+
 export function Celebrate({ entry, onFeedback, onDone }: CelebrateProps) {
   const { store } = useStore();
   const info = streakInfo(store.profile, todayKey());
@@ -49,43 +77,32 @@ export function Celebrate({ entry, onFeedback, onDone }: CelebrateProps) {
       : "That's done. You kept the pen moving.";
 
   return (
-    <div className="screen screen-pad">
+    <div className="relative">
       <Confetti />
-      <div className="container celebrate center-narrow">
-        <div className="burst">🎉</div>
-        <h1>{title}</h1>
-        <p className="sub">
+      <PageContainer width="narrow" className="text-center">
+        <div className="animate-pop text-6xl leading-none">🎉</div>
+        <h1 className="mt-4 text-3xl">{title}</h1>
+        <p className="mt-2 text-muted-foreground">
           {entry.newWords > 0
             ? "You stretched your English a little further today."
             : "Showing up is the skill. You just practiced it."}
         </p>
 
-        <div className="stat-grid">
-          <div className="stat">
-            <div className="stat-num">{words}</div>
-            <div className="stat-label">words written</div>
-          </div>
-          <div className="stat">
-            <div className="stat-num">
-              <span className="accent">{newWords}</span>
-            </div>
-            <div className="stat-label">new words used</div>
-          </div>
-          <div className="stat">
-            <div className="stat-num">{streak} 🔥</div>
-            <div className="stat-label">day streak</div>
-          </div>
+        <div className="my-7 grid grid-cols-3 gap-3">
+          <Stat value={words} label="words written" />
+          <Stat value={newWords} label="new words used" accent />
+          <Stat value={`${streak} 🔥`} label="day streak" />
         </div>
 
-        <div className="celebrate-actions">
-          <button className="btn btn-primary btn-lg" onClick={onFeedback}>
+        <div className="mx-auto flex max-w-sm flex-col gap-2.5">
+          <Button size="lg" onClick={onFeedback}>
             Get gentle feedback
-          </button>
-          <button className="btn btn-ghost" onClick={onDone}>
+          </Button>
+          <Button variant="ghost" onClick={onDone}>
             Not now — back home
-          </button>
+          </Button>
         </div>
-      </div>
+      </PageContainer>
     </div>
   );
 }
