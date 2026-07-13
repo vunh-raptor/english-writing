@@ -82,11 +82,18 @@ export function phraseById(id: string): Phrase | undefined {
 /**
  * "Today's phrases": the ones due for practice (new + review-due), newest first,
  * then soonest due. Deterministic per day so the session is stable on reload.
+ * `extra` folds in phrases mined from other modes (e.g. News Chat) so they enter
+ * the same spaced-repetition rotation as the seed set.
  */
-export function todaysPhrases(srs: Record<string, SrsRecord>, count = 3): Phrase[] {
+export function todaysPhrases(
+  srs: Record<string, SrsRecord>,
+  extra: Phrase[] = [],
+  count = 3,
+): Phrase[] {
   const today = todayKey();
-  const due = SEED_PHRASES.filter((p) => isDue(srs[p.id], today));
-  const pool = due.length > 0 ? due : SEED_PHRASES;
+  const all = [...SEED_PHRASES, ...extra];
+  const due = all.filter((p) => isDue(srs[p.id], today));
+  const pool = due.length > 0 ? due : all;
   const sorted = [...pool].sort((a, b) => {
     const ra = srs[a.id];
     const rb = srs[b.id];

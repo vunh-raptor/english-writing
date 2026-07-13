@@ -18,7 +18,7 @@ import { PageContainer } from "@/components/page-container";
 export function Coach() {
   const { store, reviewPhrases } = useStore();
   // Fixed for the session so it doesn't reshuffle mid-lesson.
-  const [phrases] = useState(() => todaysPhrases(store.phraseSrs));
+  const [phrases] = useState(() => todaysPhrases(store.phraseSrs, store.minedPhrases));
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [progress, setProgress] = useState<Record<string, boolean>>({});

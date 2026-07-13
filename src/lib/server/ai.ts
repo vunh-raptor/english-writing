@@ -55,13 +55,14 @@ async function openAIChat(
   system: string,
   messages: ChatTurn[],
   maxTokens: number,
+  temperature: number,
 ): Promise<string> {
   const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({
       model: cfg.model,
-      temperature: 0.8,
+      temperature,
       max_tokens: maxTokens,
       messages: [{ role: "system", content: system }, ...messages],
     }),
@@ -76,6 +77,7 @@ async function geminiChat(
   system: string,
   messages: ChatTurn[],
   maxTokens: number,
+  temperature: number,
 ): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
     cfg.model,
@@ -89,7 +91,7 @@ async function geminiChat(
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
       })),
-      generationConfig: { temperature: 0.9, maxOutputTokens: maxTokens },
+      generationConfig: { temperature, maxOutputTokens: maxTokens },
     }),
   });
   if (!res.ok) throw new Error(await readError(res));
@@ -106,11 +108,13 @@ async function anthropicChat(
   system: string,
   messages: ChatTurn[],
   maxTokens: number,
+  temperature: number,
 ): Promise<string> {
   const client = new Anthropic({ apiKey: cfg.apiKey });
   const res = await client.messages.create({
     model: cfg.model,
     max_tokens: maxTokens,
+    temperature,
     system,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   });
@@ -125,20 +129,33 @@ export async function chatComplete(
   system: string,
   messages: ChatTurn[],
   maxTokens = 700,
+  temperature = 0.8,
 ): Promise<string> {
   const cfg = resolveProvider();
   if (!cfg) throw new Error("No AI provider configured on the server.");
   switch (cfg.provider) {
     case "groq":
-      return openAIChat("https://api.groq.com/openai/v1", cfg, system, messages, maxTokens);
+      return openAIChat(
+        "https://api.groq.com/openai/v1",
+        cfg,
+        system,
+        messages,
+        maxTokens,
+        temperature,
+      );
     case "gemini":
-      return geminiChat(cfg, system, messages, maxTokens);
+      return geminiChat(cfg, system, messages, maxTokens, temperature);
     case "anthropic":
-      return anthropicChat(cfg, system, messages, maxTokens);
+      return anthropicChat(cfg, system, messages, maxTokens, temperature);
   }
 }
 
 /** Single-shot "system + one user message -> text". */
-export async function rawComplete(system: string, user: string, maxTokens = 900): Promise<string> {
-  return chatComplete(system, [{ role: "user", content: user }], maxTokens);
+export async function rawComplete(
+  system: string,
+  user: string,
+  maxTokens = 900,
+  temperature = 0.8,
+): Promise<string> {
+  return chatComplete(system, [{ role: "user", content: user }], maxTokens, temperature);
 }
