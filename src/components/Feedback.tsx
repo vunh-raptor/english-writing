@@ -83,7 +83,8 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
       )}
       {error && <div className="note note-warning mb-3">{error}</div>}
 
-      <div className="rounded-lg bg-sage-muted px-6 py-5 font-serif text-xl leading-relaxed text-sage-ink">
+      {/* Encouragement — a calm, scholarly affirmation on an Oxford-tinted sheet */}
+      <div className="border-l-2 border-oxford bg-oxford-tint px-6 py-5 font-serif text-xl leading-relaxed text-brand-ink">
         {feedback.encouragement}
       </div>
 
@@ -93,10 +94,9 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
           {feedback.strengths.map((s, i) => (
             <li
               key={i}
-              className="flex items-start gap-3 rounded-md border border-border bg-card p-4 shadow-soft"
+              className="border border-border bg-card p-4 text-[15px] leading-relaxed"
             >
-              <span className="mt-0.5 shrink-0">✅</span>
-              <span>{s}</span>
+              {s}
             </li>
           ))}
         </ul>
@@ -105,28 +105,25 @@ export function Feedback({ entry, onBack }: FeedbackProps) {
       {feedback.suggestions.length > 0 && (
         <section className="mt-5">
           <Badge variant="eyebrow">Gentle ideas to play with</Badge>
+          {/* Style suggestions carry Oxford — the interactive/annotation accent */}
           <ul className="mt-2.5 flex flex-col gap-2.5">
             {feedback.suggestions.map((s, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-3 rounded-md border border-border bg-card p-4 shadow-soft"
-              >
-                <span className="mt-0.5 shrink-0">💡</span>
-                <div>
-                  <span>{s.note}</span>
-                  {s.example && (
-                    <span className="mt-1.5 block w-fit rounded bg-muted px-2 py-0.5 text-sm text-muted-foreground">
-                      {s.example}
-                    </span>
-                  )}
-                </div>
+              <li key={i} className="bg-oxford-tint p-4">
+                <p className="text-[15px] leading-relaxed text-foreground">
+                  {s.note}
+                </p>
+                {s.example && (
+                  <p className="mt-2 w-fit bg-oxford-hl px-2 py-0.5 font-mono text-[12.5px] text-brand-ink">
+                    {s.example}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      <div className="mt-5 rounded-lg border border-dashed border-input bg-card p-5">
+      <div className="mt-5 border border-dashed border-input bg-card p-5">
         <Badge variant="eyebrow">One thing to try next time</Badge>
         <p className="mt-2">{feedback.oneThingToTry}</p>
       </div>

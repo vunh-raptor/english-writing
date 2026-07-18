@@ -1,10 +1,11 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Flowrite design system, expressed as shadcn/ui tokens.
+ * Scriptorium design system, expressed as shadcn/ui tokens.
  * Colors are driven by HSL CSS variables (see globals.css) so a single `.dark`
- * class on <html> repaints the whole app. The palette keeps the app's warm
- * terracotta-on-cream identity in light mode and a warm charcoal in dark.
+ * class on <html> repaints the whole app between "paper" (light) and
+ * "lamplight" (dark). Oxford blue carries every interactive affordance; ochre
+ * is reserved for grammar annotations; corners are square and surfaces flat.
  */
 const config: Config = {
   darkMode: ["class"],
@@ -17,8 +18,12 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
+        // Source Sans 3 — writing surface + every UI control
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Newsreader — headings, wordmark, document titles, empty-state prose
         serif: ["var(--font-serif)", "Georgia", "serif"],
+        // IBM Plex Mono — metadata only (counts, save state, kickers, codes)
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border) / <alpha-value>)",
@@ -54,8 +59,9 @@ const config: Config = {
           DEFAULT: "hsl(var(--card) / <alpha-value>)",
           foreground: "hsl(var(--card-foreground) / <alpha-value>)",
         },
-        // App-specific accents (warm sage + gold) exposed as tokens so both
-        // themes stay coherent.
+        // App-specific accents (sage + gold) exposed as tokens so both
+        // themes stay coherent. Under Scriptorium, sage resolves to Oxford
+        // and gold to Ochre.
         sage: {
           DEFAULT: "hsl(var(--sage) / <alpha-value>)",
           foreground: "hsl(var(--sage-foreground) / <alpha-value>)",
@@ -72,6 +78,21 @@ const config: Config = {
           muted: "hsl(var(--brand-muted) / <alpha-value>)",
           ink: "hsl(var(--brand-ink) / <alpha-value>)",
         },
+        // Scriptorium signature accents for the annotation + feedback motif.
+        // Oxford = interactive UI / style suggestions; Ochre = grammar issues.
+        oxford: {
+          DEFAULT: "hsl(var(--oxford) / <alpha-value>)",
+          deep: "hsl(var(--oxford-deep) / <alpha-value>)",
+          tint: "hsl(var(--oxford-tint) / <alpha-value>)",
+          line: "hsl(var(--oxford-line) / <alpha-value>)",
+          hl: "hsl(var(--oxford-hl) / <alpha-value>)",
+        },
+        ochre: {
+          DEFAULT: "hsl(var(--ochre) / <alpha-value>)",
+          tint: "hsl(var(--ochre-tint) / <alpha-value>)",
+          line: "hsl(var(--ochre-line) / <alpha-value>)",
+          hl: "hsl(var(--ochre-hl) / <alpha-value>)",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background) / <alpha-value>)",
           foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
@@ -83,17 +104,29 @@ const config: Config = {
           ring: "hsl(var(--sidebar-ring) / <alpha-value>)",
         },
       },
+      // Square everywhere — Scriptorium is flat and minimal. `full` stays for
+      // genuine circles (spinners, dots, avatars, switch thumb, progress track).
       borderRadius: {
-        xl: "calc(var(--radius) + 4px)",
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 4px)",
-        sm: "calc(var(--radius) - 8px)",
+        none: "0px",
+        sm: "0px",
+        DEFAULT: "0px",
+        md: "0px",
+        lg: "0px",
+        xl: "0px",
+        "2xl": "0px",
+        "3xl": "0px",
+        full: "9999px",
       },
       boxShadow: {
-        soft: "0 1px 2px hsl(var(--shadow-color) / 0.06), 0 2px 8px hsl(var(--shadow-color) / 0.05)",
+        // Flat surfaces: separation comes from background contrast + hairlines,
+        // so `soft` (cards, buttons) is neutralized. `frame` is the one shadow
+        // Scriptorium sanctions — the full app frame; `md`/`lg` remain for
+        // genuinely floating overlays (menus, tooltips, toasts).
+        soft: "none",
         md: "0 6px 24px hsl(var(--shadow-color) / 0.10)",
         lg: "0 18px 50px hsl(var(--shadow-color) / 0.18)",
-        glow: "0 8px 24px hsl(var(--primary) / 0.28)",
+        frame: "0 12px 32px hsl(var(--shadow-color) / 0.10)",
+        glow: "none",
       },
       keyframes: {
         "accordion-down": {

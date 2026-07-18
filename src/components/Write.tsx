@@ -168,7 +168,7 @@ export function Write({
     const top = Math.max(...crossed);
     milestoneRef.current = top;
     const id = ++toastIdRef.current;
-    setToasts((t) => [...t, { id, label: `${top} words 🔥` }]);
+    setToasts((t) => [...t, { id, label: `${top} words` }]);
     window.setTimeout(() => {
       setToasts((t) => t.filter((x) => x.id !== id));
     }, 1800);
@@ -271,7 +271,7 @@ export function Write({
               <span
                 key={b.id}
                 className={cn(
-                  "h-[5px] w-5 rounded-full transition-colors",
+                  "h-[5px] w-5 rounded-none transition-colors",
                   i === stepIndex
                     ? "bg-foreground"
                     : i < stepIndex
@@ -314,7 +314,7 @@ export function Write({
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="animate-milestone rounded-full bg-gradient-to-b from-gold to-[hsl(var(--gold)/0.82)] px-4 py-1.5 text-sm font-bold text-gold-foreground shadow-md"
+            className="animate-milestone rounded-none bg-gold px-4 py-1.5 text-sm font-semibold text-gold-foreground shadow-md"
           >
             {t.label}
           </div>
@@ -322,8 +322,8 @@ export function Write({
       </div>
 
       {showNudge && !spark && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 z-[52] -translate-x-1/2 animate-nudge rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-md">
-          keep going — don&apos;t stop ✍️
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-[52] -translate-x-1/2 animate-nudge rounded-none bg-foreground px-4 py-2 text-sm text-background shadow-md">
+          keep going — don&apos;t stop
         </div>
       )}
 
@@ -333,12 +333,14 @@ export function Write({
           role="status"
         >
           <div className="font-serif text-[17px] leading-snug">
-            {spark.source === "ai" && <span className="mr-1.5">✨</span>}
+            {spark.source === "ai" && (
+              <span className="kicker mr-2 align-middle">AI</span>
+            )}
             {spark.question}
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <button
-              className="flex flex-1 items-center justify-between gap-2.5 rounded-full border border-dashed border-brand bg-brand/10 px-3.5 py-2.5 text-left text-[15px] font-semibold text-brand transition hover:-translate-y-px hover:shadow-soft"
+              className="flex flex-1 items-center justify-between gap-2.5 rounded-none border border-dashed border-brand bg-brand/10 px-3.5 py-2.5 text-left text-[15px] font-semibold text-brand transition-colors hover:bg-brand/15"
               onClick={() => insertStarter(spark.starter)}
             >
               “{spark.starter}…”
@@ -386,7 +388,7 @@ export function Write({
                 {goalType === "words"
                   ? `${totalWords} / ${goalValue} words`
                   : `${totalWords} word${totalWords === 1 ? "" : "s"}`}
-                {goalReached && " · goal reached 🎉"}
+                {goalReached && " · goal reached"}
               </span>
               <span>
                 {goalType === "time"

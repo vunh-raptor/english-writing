@@ -97,7 +97,7 @@ export function Coach() {
   if (needsAI) {
     return (
       <PageContainer width="narrow">
-        <h1 className="text-2xl">💬 Phrase Coach</h1>
+        <h1 className="text-2xl">Phrase Coach</h1>
         <div className="note note-warning mt-3.5">
           This mode chats with you using AI, so it needs a server AI key
           (free-tier Groq or Gemini works). Set one in the environment and it&apos;ll
@@ -125,7 +125,7 @@ export function Coach() {
     <div className="flex h-full flex-col">
       <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-5 sm:px-6">
         <div className="border-b border-border py-4">
-          <h1 className="text-xl">💬 Phrase Coach</h1>
+          <h1 className="text-xl">Phrase Coach</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Chat until you can use today&apos;s phrases yourself.
           </p>
@@ -135,7 +135,7 @@ export function Coach() {
                 key={p.id}
                 title={p.meaning}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-[13px] transition-colors",
+                  "rounded-none border px-3 py-1 text-[13px] transition-colors",
                   progress[p.id]
                     ? "border-sage bg-sage-muted font-semibold text-sage-ink"
                     : "border-input bg-muted text-muted-foreground",
@@ -197,8 +197,8 @@ export function Coach() {
             </div>
           )}
           {done && (
-            <div className="mx-auto max-w-[90%] self-center rounded-2xl bg-sage-muted px-4 py-3 text-center text-[15px] text-sage-ink">
-              🎉 You used all of today&apos;s phrases yourself — that&apos;s how they
+            <div className="mx-auto max-w-[90%] self-center bg-sage-muted px-4 py-3 text-center text-[15px] text-sage-ink">
+              You used all of today&apos;s phrases yourself — that&apos;s how they
               actually stick. Come back tomorrow for more.
             </div>
           )}
@@ -218,7 +218,7 @@ export function Coach() {
             className="flex-1"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={done ? "Lesson complete 🎉" : "Type your reply…"}
+            placeholder={done ? "Lesson complete" : "Type your reply…"}
             disabled={loading || done}
             autoComplete="off"
           />

@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none",
+  "inline-flex items-center gap-1 rounded-none border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none",
   {
     variants: {
       variant: {
@@ -13,8 +13,9 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         sage: "border-transparent bg-sage-muted text-sage-ink",
         outline: "border-border text-muted-foreground",
+        // mono uppercase kicker — the Scriptorium section label
         eyebrow:
-          "border-transparent bg-transparent px-0 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground",
+          "border-transparent bg-transparent px-0 font-mono text-[11.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground",
       },
     },
     defaultVariants: {

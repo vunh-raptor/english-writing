@@ -38,15 +38,15 @@ function Seg({
   onChange: (value: string | number) => void;
 }) {
   return (
-    <div className="inline-flex gap-0.5 rounded-full bg-muted p-0.5">
+    <div className="inline-flex gap-0.5 rounded-none border border-border bg-muted p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors",
+            "whitespace-nowrap rounded-none px-3.5 py-1.5 text-sm transition-colors",
             value === o.value
-              ? "bg-card text-foreground shadow-soft"
+              ? "bg-card font-medium text-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -211,13 +211,13 @@ export function Settings() {
                   aria-pressed={on}
                   title={t.blurb}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-none border px-3 py-2 text-sm transition-colors",
                     on
                       ? "border-brand bg-brand/10 font-semibold text-brand"
                       : "border-input bg-card text-muted-foreground hover:border-brand/60 hover:text-foreground",
                   )}
                 >
-                  {t.emoji} {t.label}
+                  {t.label}
                 </button>
               );
             })}
@@ -251,7 +251,7 @@ export function Settings() {
       <Card className="px-5 py-1 sm:px-6">
         <Row
           label="Use AI for feedback & fresh prompts"
-          desc="Optional. Warmer, more personal feedback after you write, plus “✨ generate fresh” prompts. Runs on our server using free-tier AI — no key needed here. The app works fully without it."
+          desc="Optional. Warmer, more personal feedback after you write, plus “generate fresh” prompts. Runs on our server using free-tier AI — no key needed here. The app works fully without it."
         >
           <Switch
             checked={ai.enabled}

@@ -129,16 +129,13 @@ export function Progress() {
           <span className="font-serif text-3xl font-semibold">
             {profile.streak}
           </span>
-          <span className="text-muted-foreground">day current streak 🔥</span>
+          <span className="text-muted-foreground">day current streak</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {calendar.map((c) => (
             <div
               key={c.day}
-              className={cn(
-                "h-4 w-4 rounded-[4px] border",
-                levelClass(c.words),
-              )}
+              className={cn("h-4 w-4 rounded-none border", levelClass(c.words))}
               title={`${prettyDay(c.day)} — ${c.words} word${c.words === 1 ? "" : "s"}`}
             />
           ))}
@@ -158,7 +155,7 @@ export function Progress() {
           {summary.recentLengths.map((w, i) => (
             <div
               key={i}
-              className="min-w-[6px] flex-1 rounded-t bg-gradient-to-b from-brand to-[hsl(var(--brand)/0.65)]"
+              className="min-w-[6px] flex-1 rounded-none bg-brand"
               style={{ height: `${Math.max(6, (w / sparkMax) * 100)}%` }}
               title={`${w} words`}
             />

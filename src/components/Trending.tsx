@@ -75,7 +75,7 @@ export function Trending({ onStartScenario }: TrendingProps) {
   return (
     <PageContainer width="wide">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl sm:text-3xl">🔥 Trending</h1>
+        <h1 className="text-2xl sm:text-3xl">Trending</h1>
         <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
         </Button>

@@ -3,131 +3,170 @@
 @tailwind utilities;
 
 /* ============================================================
-   Flowrite design system — shadcn tokens
-   A calm, professional writing workspace: near-white surfaces,
-   a black primary action, and a fresh green accent. Light by day,
-   a cool near-black by night.
+   Scriptorium design system — shadcn token layer
+   A scholarly journal, not a classroom app: Oxford-blue authority,
+   ochre pencil annotations, cool paper neutrals, serif gravitas
+   (Newsreader) over a crisp sans writing surface (Source Sans 3).
+   Light by day ("paper"), a cool near-black by night ("lamplight").
+
+   Every Scriptorium hex is expressed here as an HSL tri:
+     paper #F7F8FA · sheet #FFFFFF · ink #232936 · slate #5A6272
+     Oxford #2E4E7E (interactive UI only) · Ochre #8A6A24 (annotations only)
+   Two accents share oklch lightness + chroma, differing only in hue —
+   never swap their roles, and red is never used.
    ============================================================ */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 13% 13%;
+    /* base — light ("paper") */
+    --background: 220 24% 97%; /* paper  #F7F8FA */
+    --foreground: 221 21% 17%; /* ink    #232936 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 13% 13%;
+    --card: 0 0% 100%; /* sheet #FFFFFF */
+    --card-foreground: 221 21% 17%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 13%;
+    --popover-foreground: 221 21% 17%;
 
-    /* primary = near-black (the "New Story" action) */
-    --primary: 220 13% 12%;
+    /* primary = Oxford blue — carries every interactive affordance */
+    --primary: 216 47% 34%; /* oxford #2E4E7E */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 13% 20%;
+    --secondary: 216 19% 95%; /* hover-wash #F0F2F5 */
+    --secondary-foreground: 221 21% 17%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 216 16% 94%; /* line-faint #EEF0F3 */
+    --muted-foreground: 220 12% 40%; /* slate #5A6272 */
 
-    --accent: 220 14% 94%;
-    --accent-foreground: 220 13% 15%;
+    --accent: 216 19% 95%; /* hover-wash */
+    --accent-foreground: 221 21% 17%;
 
-    --destructive: 0 72% 51%;
+    /* Scriptorium never uses red for feedback; kept muted + restrained
+       purely as the last-resort semantic for destructive data actions. */
+    --destructive: 6 54% 44%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 87%;
-    --ring: 152 52% 42%;
+    --border: 218 16% 91%; /* line #E3E6EB */
+    --input: 218 15% 86%; /* line-strong #D6DAE1 */
+    --ring: 216 47% 34%; /* oxford focus ring */
 
-    --radius: 0.75rem;
-    --shadow-color: 220 24% 22%;
+    --radius: 0px; /* square everywhere — flat, minimal */
+    --shadow-color: 221 21% 17%;
 
-    /* brand green — the accent for links, marks, active state */
-    --brand: 152 52% 40%;
+    /* Scriptorium accents (raw), exposed for the annotation + feedback motif */
+    --oxford: 216 47% 34%;
+    --oxford-deep: 214 52% 25%; /* #1F3A61 — hover/active */
+    --oxford-tint: 217 45% 96%; /* #F2F5FA — style-suggestion fill */
+    --oxford-line: 216 35% 89%; /* #D8E0EC */
+    --oxford-hl: 215 50% 91%; /* #DCE6F4 — highlight annotation */
+    --ochre: 41 59% 34%; /* #8A6A24 — grammar annotations only */
+    --ochre-tint: 41 60% 96%; /* #FBF7EE — grammar-issue fill */
+    --ochre-line: 42 43% 85%; /* #E9DFC8 */
+    --ochre-hl: 43 60% 87%; /* #F3E7C9 — highlight annotation */
+    --canvas: 216 16% 94%; /* #EDEFF2 — desk behind the app */
+    --line-strong: 218 15% 86%;
+    --line-faint: 216 16% 94%;
+
+    /* brand = Oxford (links, marks, active state) */
+    --brand: 216 47% 34%;
     --brand-foreground: 0 0% 100%;
-    --brand-muted: 152 46% 94%;
-    --brand-ink: 154 58% 24%;
+    --brand-muted: 217 45% 96%;
+    --brand-ink: 214 52% 25%;
 
-    /* sage mirrors the brand so positive UI stays cohesive */
-    --sage: 152 52% 40%;
+    /* sage mirrors the brand so affirmative UI stays Oxford-cohesive */
+    --sage: 216 47% 34%;
     --sage-foreground: 0 0% 100%;
-    --sage-muted: 152 46% 94%;
-    --sage-ink: 154 58% 24%;
+    --sage-muted: 217 45% 96%;
+    --sage-ink: 214 52% 25%;
 
-    --gold: 38 92% 50%;
-    --gold-foreground: 30 45% 15%;
+    /* gold = Ochre (streaks, milestones, gentle warnings) */
+    --gold: 41 59% 34%;
+    --gold-foreground: 0 0% 100%;
 
-    --warning-muted: 38 90% 94%;
-    --warning-ink: 28 62% 32%;
+    --warning-muted: 41 60% 96%; /* ochre-tint */
+    --warning-ink: 41 60% 26%;
 
-    /* sidebar — a soft cool gray rail */
-    --sidebar-background: 220 18% 97%;
-    --sidebar-foreground: 220 13% 22%;
-    --sidebar-primary: 220 13% 12%;
+    /* sidebar — the canvas rail behind the app */
+    --sidebar-background: 216 16% 94%; /* canvas #EDEFF2 */
+    --sidebar-foreground: 221 18% 25%;
+    --sidebar-primary: 216 47% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 92%;
-    --sidebar-accent-foreground: 220 13% 13%;
-    --sidebar-border: 220 13% 90%;
-    --sidebar-ring: 152 52% 42%;
+    --sidebar-accent: 216 24% 90%;
+    --sidebar-accent-foreground: 221 21% 17%;
+    --sidebar-border: 218 16% 91%;
+    --sidebar-ring: 216 47% 34%;
   }
 
   .dark {
-    --background: 220 16% 8%;
-    --foreground: 220 14% 92%;
+    /* base — dark ("lamplight") */
+    --background: 224 17% 9%; /* paper  #14161C */
+    --foreground: 224 18% 92%; /* ink    #E6E8EE */
 
-    --card: 220 14% 11%;
-    --card-foreground: 220 14% 92%;
+    --card: 224 16% 13%; /* sheet #1C1F27 */
+    --card-foreground: 224 18% 92%;
 
-    --popover: 220 14% 11%;
-    --popover-foreground: 220 14% 92%;
+    --popover: 224 16% 13%;
+    --popover-foreground: 224 18% 92%;
 
-    /* primary flips to near-white in the dark */
-    --primary: 0 0% 96%;
-    --primary-foreground: 220 16% 11%;
+    /* accents lighten in the dark; hover LIGHTENS instead of darkening */
+    --primary: 216 52% 71%; /* oxford #8FAEDC */
+    --primary-foreground: 224 17% 9%;
 
-    --secondary: 220 12% 16%;
-    --secondary-foreground: 220 14% 90%;
+    --secondary: 224 17% 17%; /* hover-wash #242833 */
+    --secondary-foreground: 224 18% 92%;
 
-    --muted: 220 12% 16%;
-    --muted-foreground: 220 10% 62%;
+    --muted: 224 17% 17%;
+    --muted-foreground: 220 12% 65%; /* slate #9AA1B0 */
 
-    --accent: 220 12% 19%;
-    --accent-foreground: 220 14% 92%;
+    --accent: 224 17% 17%;
+    --accent-foreground: 224 18% 92%;
 
-    --destructive: 0 63% 50%;
+    --destructive: 6 48% 52%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 12% 20%;
-    --input: 220 12% 24%;
-    --ring: 152 46% 46%;
+    --border: 224 15% 19%; /* line collapses to one grey #2A2E39 */
+    --input: 224 15% 19%;
+    --ring: 216 52% 71%;
 
-    --shadow-color: 220 45% 2%;
+    --shadow-color: 224 40% 2%;
 
-    --brand: 152 48% 47%;
-    --brand-foreground: 220 20% 10%;
-    --brand-muted: 152 28% 18%;
-    --brand-ink: 152 46% 72%;
+    --oxford: 216 52% 71%;
+    --oxford-deep: 215 55% 78%; /* #A9C2E6 — hover lightens */
+    --oxford-tint: 220 28% 15%; /* #1B2230 */
+    --oxford-line: 217 29% 24%; /* #2C3A50 */
+    --oxford-hl: 217 29% 24%;
+    --ochre: 40 58% 63%; /* #D8B36A */
+    --ochre-tint: 40 16% 12%; /* #24211A */
+    --ochre-line: 40 37% 21%; /* #4A3D22 */
+    --ochre-hl: 40 37% 21%;
+    --canvas: 223 19% 7%; /* #0F1116 */
+    --line-strong: 224 15% 19%;
+    --line-faint: 224 15% 19%;
 
-    --sage: 152 48% 47%;
-    --sage-foreground: 220 20% 10%;
-    --sage-muted: 152 28% 18%;
-    --sage-ink: 152 46% 72%;
+    --brand: 216 52% 71%;
+    --brand-foreground: 224 17% 9%;
+    --brand-muted: 220 28% 15%;
+    --brand-ink: 215 55% 78%;
 
-    --gold: 40 85% 58%;
-    --gold-foreground: 30 45% 12%;
+    --sage: 216 52% 71%;
+    --sage-foreground: 224 17% 9%;
+    --sage-muted: 220 28% 15%;
+    --sage-ink: 215 55% 78%;
 
-    --warning-muted: 36 38% 18%;
-    --warning-ink: 40 80% 72%;
+    --gold: 40 58% 63%;
+    --gold-foreground: 224 17% 9%;
 
-    --sidebar-background: 220 18% 7%;
-    --sidebar-foreground: 220 12% 82%;
-    --sidebar-primary: 0 0% 96%;
-    --sidebar-primary-foreground: 220 16% 11%;
-    --sidebar-accent: 220 12% 15%;
-    --sidebar-accent-foreground: 220 14% 92%;
-    --sidebar-border: 220 12% 16%;
-    --sidebar-ring: 152 46% 46%;
+    --warning-muted: 40 16% 12%;
+    --warning-ink: 40 55% 70%;
+
+    --sidebar-background: 223 19% 7%; /* canvas #0F1116 */
+    --sidebar-foreground: 220 12% 80%;
+    --sidebar-primary: 216 52% 71%;
+    --sidebar-primary-foreground: 224 17% 9%;
+    --sidebar-accent: 224 16% 15%;
+    --sidebar-accent-foreground: 224 18% 92%;
+    --sidebar-border: 224 15% 19%;
+    --sidebar-ring: 216 52% 71%;
   }
 
   * {
@@ -145,10 +184,12 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Newsreader carries every heading — the scholarly-journal voice. */
   h1,
   h2,
   h3 {
-    @apply font-serif font-semibold;
+    @apply font-serif;
+    font-weight: 500;
     line-height: 1.2;
   }
 
@@ -159,9 +200,38 @@
 }
 
 @layer components {
+  /* ---- Scriptorium motifs ------------------------------------------- */
+
+  /* mono uppercase kicker — SUBJECT–VERB AGREEMENT, STYLE SUGGESTION */
+  .kicker {
+    @apply font-mono uppercase text-muted-foreground;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+  }
+
+  /* mono metadata — word counts, save state, rubric codes, citations */
+  .meta {
+    @apply font-mono text-muted-foreground;
+    font-size: 12.5px;
+    letter-spacing: 0;
+  }
+
+  /* inline annotations — a tutor's pencil, never a punitive red.
+     Ochre = grammar issue, Oxford = style suggestion. */
+  .annot-issue {
+    text-decoration: underline wavy hsl(var(--ochre));
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+  }
+  .annot-suggestion {
+    text-decoration: underline wavy hsl(var(--oxford));
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+  }
+
   /* status notes shared by Home / Write / Feedback */
   .note {
-    @apply rounded-md px-4 py-2.5 text-sm;
+    @apply px-4 py-2.5 text-sm;
   }
   .note-positive {
     background: hsl(var(--brand-muted));
@@ -172,29 +242,29 @@
     color: hsl(var(--warning-ink));
   }
 
-  /* the free-writing surface */
+  /* the free-writing surface — Source Sans 3, comfortable measure */
   .app-editor {
-    @apply w-full flex-1 resize-none border-0 bg-transparent font-serif text-foreground outline-none;
-    font-size: 1.32rem;
-    line-height: 1.7;
+    @apply w-full flex-1 resize-none border-0 bg-transparent font-sans text-foreground outline-none;
+    font-size: 1.125rem; /* 18px — the Scriptorium 17px surface, one notch up for the freewrite hero */
+    line-height: 1.65;
     padding: 0.4rem 0 40vh; /* deep bottom pad keeps the caret comfortably high */
   }
+  /* empty-state prose reads in Newsreader, faint and unhurried */
   .app-editor::placeholder {
-    @apply italic text-muted-foreground;
+    @apply font-serif italic text-muted-foreground;
+    opacity: 0.85;
   }
 
-  /* prompt hero card — a soft green glow in the corner */
+  /* prompt hero card — flat solid surface, no gradient (Scriptorium rule) */
   .prompt-surface {
-    background:
-      radial-gradient(120% 140% at 100% 0%, hsl(var(--brand) / 0.1) 0%, transparent 46%),
-      hsl(var(--card));
+    background: hsl(var(--card));
   }
 
-  /* a piece of writing being read back */
+  /* a piece of writing being read back — the "sheet" voice */
   .entry-read {
-    @apply whitespace-pre-wrap rounded-md border border-border bg-muted px-5 py-4 font-serif text-foreground;
-    font-size: 1.08rem;
-    line-height: 1.7;
+    @apply whitespace-pre-wrap border border-border bg-card px-5 py-4 font-sans text-foreground;
+    font-size: 1.0625rem; /* 17px */
+    line-height: 1.65;
   }
 
   .spinner {
@@ -202,7 +272,7 @@
     width: 22px;
     height: 22px;
     border: 3px solid hsl(var(--border));
-    border-top-color: hsl(var(--brand));
+    border-top-color: hsl(var(--oxford));
     animation: spin 0.8s linear infinite;
   }
   .spinner-sm {
@@ -224,7 +294,6 @@
     top: -12px;
     width: 9px;
     height: 14px;
-    border-radius: 2px;
     opacity: 0.9;
     animation: confetti-fall linear forwards;
   }
