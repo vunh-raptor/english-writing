@@ -80,8 +80,8 @@ export function Celebrate({ entry, onFeedback, onDone }: CelebrateProps) {
     <div className="relative">
       <Confetti />
       <PageContainer width="narrow" className="text-center">
-        <div className="animate-pop text-6xl leading-none">🎉</div>
-        <h1 className="mt-4 text-3xl">{title}</h1>
+        <div className="kicker animate-pop">Session complete</div>
+        <h1 className="mt-3 text-3xl">{title}</h1>
         <p className="mt-2 text-muted-foreground">
           {entry.newWords > 0
             ? "You stretched your English a little further today."
@@ -91,7 +91,7 @@ export function Celebrate({ entry, onFeedback, onDone }: CelebrateProps) {
         <div className="my-7 grid grid-cols-3 gap-3">
           <Stat value={words} label="words written" />
           <Stat value={newWords} label="new words used" accent />
-          <Stat value={`${streak} 🔥`} label="day streak" />
+          <Stat value={streak} label="day streak" />
         </div>
 
         <div className="mx-auto flex max-w-sm flex-col gap-2.5">

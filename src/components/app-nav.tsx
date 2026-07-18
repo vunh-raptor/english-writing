@@ -33,14 +33,13 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 export function Brand() {
+  // The brand mark is the wordmark itself — Newsreader, Oxford, no drawn logo.
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="grid h-6 w-6 place-items-center rounded-md bg-brand text-brand-foreground">
-        <PenLine className="size-3.5" />
-      </span>
-      <span className="font-serif text-lg font-semibold tracking-tight text-foreground">
-        Flowrite
-      </span>
+    <Link
+      href="/"
+      className="font-serif text-[19px] font-semibold tracking-tight text-brand"
+    >
+      Flowrite
     </Link>
   );
 }
@@ -55,15 +54,15 @@ function SidebarProfile() {
   return (
     <div className="border-t border-sidebar-border p-3">
       <div className="flex items-center gap-2.5">
-        <div className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-muted text-sm font-semibold text-brand-ink">
+        <div className="grid size-9 shrink-0 place-items-center rounded-none bg-brand-muted font-serif text-sm font-semibold text-brand-ink">
           {initial || <User className="size-4" />}
         </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-sm font-medium text-sidebar-foreground">
             {name || "Your workspace"}
           </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {streak > 0 ? `🔥 ${streak}-day streak` : "New writer"}
+          <div className="meta truncate">
+            {streak > 0 ? `${streak}-day streak` : "New writer"}
           </div>
         </div>
         <ThemeToggle />

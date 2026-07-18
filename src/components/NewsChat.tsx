@@ -317,7 +317,7 @@ export function NewsChat() {
         // The ending never dies with the network: build the debrief locally.
         setDebrief({
           celebration:
-            "You held a real conversation in English about today's news — that's exactly how fluency grows. 🎉",
+            "You held a real conversation in English about today's news — that's exactly how fluency grows.",
           goalHit: true,
           targetResults: mission.targets.map((t) => ({
             id: t.id,
@@ -453,7 +453,7 @@ export function NewsChat() {
   if (needsAI) {
     return (
       <PageContainer width="narrow">
-        <h1 className="text-2xl">📰 News Chat</h1>
+        <h1 className="text-2xl">News Chat</h1>
         <div className="note note-warning mt-3.5">
           News Chat is a fully online mode: it plans a real mission from
           today&apos;s news and chats with you about it using AI. It needs a
@@ -466,7 +466,7 @@ export function NewsChat() {
 
   const chipStyle = (s: TargetStatus) =>
     cn(
-      "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+      "rounded-none border px-2.5 py-0.5 text-xs transition-colors",
       s === "produced" && "border-sage bg-sage-muted font-semibold text-sage-ink",
       s === "assisted" && "border-dashed border-sage bg-sage-muted/60 text-sage-ink",
       s === "missed" && "border-input bg-muted text-muted-foreground opacity-60",
@@ -486,7 +486,7 @@ export function NewsChat() {
         {/* --- Mission header + learning HUD --- */}
         <div className="border-b border-border py-3.5">
           <div className="flex items-baseline justify-between gap-2">
-            <h1 className="text-xl">📰 News Chat</h1>
+            <h1 className="text-xl">News Chat</h1>
             {mission && (
               <span className="text-xs text-muted-foreground">
                 from{" "}
@@ -518,7 +518,8 @@ export function NewsChat() {
                 {mission.title}
               </div>
               <div className="mt-1 text-sm text-muted-foreground">
-                🎯 {mission.goal}
+                <span className="kicker mr-1.5">Goal</span>
+                {mission.goal}
               </div>
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 {mission.beats.map((b, i) => (
@@ -562,7 +563,7 @@ export function NewsChat() {
           {mission && (
             <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
               <div className="text-sm text-muted-foreground">
-                💬 You&apos;re chatting with <b>{mission.scenario.role}</b>.{" "}
+                You&apos;re chatting with <b>{mission.scenario.role}</b>.{" "}
                 {mission.scenario.situation}
               </div>
               <div className="mt-3 border-t border-border pt-3">
@@ -591,7 +592,7 @@ export function NewsChat() {
                         type="button"
                         onClick={() => pickCheck(i)}
                         className={cn(
-                          "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                          "rounded-none border px-3 py-1.5 text-sm transition-colors",
                           checkPick === i && i === mission.check!.answer
                             ? "border-sage bg-sage-muted font-medium text-sage-ink"
                             : checkPick === i
@@ -605,7 +606,7 @@ export function NewsChat() {
                   </div>
                   {checkPick !== null && checkPick !== mission.check.answer && (
                     <div className="mt-2 text-sm text-muted-foreground">
-                      Not quite — read the briefing once more. 😊
+                      Not quite — read the briefing once more.
                     </div>
                   )}
                   {checkPick === mission.check.answer && (
@@ -650,7 +651,7 @@ export function NewsChat() {
           {debrief && mission && (
             <div className="rounded-2xl border border-border bg-sage-muted p-4 text-sage-ink">
               <div className="text-[15px] font-medium">
-                {debrief.goalHit ? "🎉 Mission complete." : "🌱 Mission over."}{" "}
+                {debrief.goalHit ? "Mission complete." : "Mission over."}{" "}
                 {debrief.celebration}
               </div>
               <ul className="mt-3 space-y-2 border-t border-sage/30 pt-3 text-sm">
@@ -728,7 +729,7 @@ export function NewsChat() {
                 {hintOpen && (
                   <div className="flex flex-col gap-2.5">
                     {RUNG_ORDER.indexOf(hintRung) >= 1 && (
-                      <div className="text-sm">💡 {currentBeat.hints.idea}</div>
+                      <div className="text-sm">{currentBeat.hints.idea}</div>
                     )}
                     {RUNG_ORDER.indexOf(hintRung) >= 2 && (
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -779,7 +780,7 @@ export function NewsChat() {
                               “{currentBeat.hints.model}”
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              Now write it your way — from memory. 💪
+                              Now write it your way — from memory.
                             </div>
                           </div>
                         )}
@@ -867,7 +868,7 @@ export function NewsChat() {
                 type="button"
                 onClick={() => (hintOpen ? setHintOpen(false) : descend())}
                 className={cn(
-                  "ml-auto flex items-center gap-1 rounded-full border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "ml-auto flex items-center gap-1 rounded-none border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
                   stuckPulse && !hintOpen && "animate-nudge",
                 )}
               >
@@ -876,7 +877,7 @@ export function NewsChat() {
               <button
                 type="button"
                 onClick={() => setBridgeOpen((v) => !v)}
-                className="flex items-center gap-1 rounded-full border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                className="flex items-center gap-1 rounded-none border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               >
                 <Languages className="h-3.5 w-3.5" /> Say it your way
               </button>

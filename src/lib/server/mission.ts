@@ -696,7 +696,7 @@ export async function missionDebrief(
 
   const fallback: Debrief = {
     celebration:
-      "You held a real conversation in English about today's news — that's exactly how fluency grows. 🎉",
+      "You held a real conversation in English about today's news — that's exactly how fluency grows.",
     goalHit: progress.beatIndex >= mission.beats.length,
     targetResults: mission.targets.map((t) => ({
       id: t.id,

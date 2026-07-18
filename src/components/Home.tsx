@@ -26,11 +26,11 @@ function statusCopy(status: StreakStatus, streak: number): { text: string; warn:
     case "none":
       return { text: "The first session is the hardest to start — so let's keep it small. A few minutes is plenty.", warn: false };
     case "today":
-      return { text: "You've already written today. ✓ Anything more is a bonus.", warn: false };
+      return { text: "You've already written today. Anything more is a bonus.", warn: false };
     case "safe":
       return { text: `You're on a ${streak}-day streak. A few minutes today keeps it alive.`, warn: false };
     case "at-risk":
-      return { text: "You missed a day — but a freeze will quietly cover it when you write today. 🧊", warn: true };
+      return { text: "You missed a day — but a freeze will quietly cover it when you write today.", warn: true };
     case "broken":
       return { text: "Your streak reset. No guilt — today simply starts a new one.", warn: true };
   }
@@ -111,9 +111,9 @@ export function Home({ onStart }: HomeProps) {
       <Card className="prompt-surface overflow-hidden p-6 shadow-md sm:p-7">
         <div className="flex items-center justify-between gap-2.5">
           <Badge variant="eyebrow" className="text-brand">
-            {theme ? `${theme.emoji} ${theme.label}` : "Today's prompt"}
+            {theme ? theme.label : "Today's prompt"}
           </Badge>
-          {prompt.source === "ai" && <Badge variant="brand">✨ fresh</Badge>}
+          {prompt.source === "ai" && <Badge variant="brand">fresh</Badge>}
         </div>
         <p className="mt-3 font-serif text-[1.6rem] leading-tight tracking-tight">
           {prompt.text}
@@ -164,43 +164,37 @@ export function Home({ onStart }: HomeProps) {
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-        <Card className="flex items-center gap-3.5 p-4">
-          <div className="text-3xl leading-none">
-            {info.streak > 0 ? "🔥" : "🌱"}
+        <Card className="p-4">
+          <div className="kicker">Streak</div>
+          <div className="mt-1 font-serif text-2xl font-semibold leading-none">
+            {info.streak}
           </div>
-          <div>
-            <div className="font-serif text-2xl font-semibold leading-none">
-              {info.streak}
-            </div>
-            <div className="text-[13px] text-muted-foreground">day streak</div>
-            <div
-              className="mt-1.5 inline-flex gap-1"
-              title={`${info.freezes} streak freezes`}
-            >
-              {Array.from({ length: MAX_FREEZES }, (_, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "h-2.5 w-2.5 rounded-[3px] border",
-                    i < info.freezes
-                      ? "border-sage bg-sage-muted"
-                      : "border-input bg-transparent",
-                  )}
-                />
-              ))}
-            </div>
+          <div className="text-[13px] text-muted-foreground">day streak</div>
+          <div
+            className="mt-1.5 inline-flex gap-1"
+            title={`${info.freezes} streak freezes`}
+          >
+            {Array.from({ length: MAX_FREEZES }, (_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "h-2.5 w-2.5 rounded-none border",
+                  i < info.freezes
+                    ? "border-sage bg-sage-muted"
+                    : "border-input bg-transparent",
+                )}
+              />
+            ))}
           </div>
         </Card>
 
-        <Card className="flex items-center gap-3.5 p-4">
-          <div className="text-3xl leading-none">🎯</div>
-          <div>
-            <div className="font-serif text-2xl font-semibold leading-none">
-              {goalLabel(settings)}
-            </div>
-            <div className="text-[13px] text-muted-foreground">
-              today&apos;s goal · the point is to not stop
-            </div>
+        <Card className="p-4">
+          <div className="kicker">Today&apos;s goal</div>
+          <div className="mt-1 font-serif text-2xl font-semibold leading-none">
+            {goalLabel(settings)}
+          </div>
+          <div className="text-[13px] text-muted-foreground">
+            the point is to not stop
           </div>
         </Card>
       </div>

@@ -101,7 +101,6 @@ export interface Store {
 export interface Theme {
   id: string;
   label: string;
-  emoji: string;
   /** What real-life skill this theme builds. */
   blurb: string;
 }

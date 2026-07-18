@@ -15,13 +15,13 @@ import { parseDayKey } from "./date";
  */
 
 export const THEMES: Theme[] = [
-  { id: "everyday", label: "Everyday life", emoji: "🌤️", blurb: "Routines, food, errands — the small stuff" },
-  { id: "work", label: "Work & email", emoji: "💼", blurb: "Messages, updates, and requests at work or school" },
-  { id: "social", label: "Friends & social", emoji: "💬", blurb: "Texts, plans, and catching up" },
-  { id: "opinions", label: "Opinions & debate", emoji: "⚖️", blurb: "Take a side and explain it" },
-  { id: "travel", label: "Travel & places", emoji: "✈️", blurb: "Trips, directions, describing places" },
-  { id: "stories", label: "Stories & memories", emoji: "📖", blurb: "Tell what happened" },
-  { id: "growth", label: "Goals & reflection", emoji: "🌱", blurb: "You, your plans, what matters" },
+  { id: "everyday", label: "Everyday life", blurb: "Routines, food, errands — the small stuff" },
+  { id: "work", label: "Work & email", blurb: "Messages, updates, and requests at work or school" },
+  { id: "social", label: "Friends & social", blurb: "Texts, plans, and catching up" },
+  { id: "opinions", label: "Opinions & debate", blurb: "Take a side and explain it" },
+  { id: "travel", label: "Travel & places", blurb: "Trips, directions, describing places" },
+  { id: "stories", label: "Stories & memories", blurb: "Tell what happened" },
+  { id: "growth", label: "Goals & reflection", blurb: "You, your plans, what matters" },
 ];
 
 const C = (
