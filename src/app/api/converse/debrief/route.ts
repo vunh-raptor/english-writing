@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { missionConverse, isMissionShaped, sanitizeMessages } from "@/lib/server/mission";
+import { missionDebrief, isMissionShaped, sanitizeMessages } from "@/lib/server/mission";
 import { aiConfigured } from "@/lib/server/ai";
 import type { MissionProgress } from "@/types";
 
@@ -19,12 +19,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing or malformed mission." }, { status: 400 });
   }
   try {
-    const turn = await missionConverse(
+    const debrief = await missionDebrief(
       body.mission,
       body.progress,
       sanitizeMessages(body.messages),
     );
-    return NextResponse.json(turn);
+    return NextResponse.json(debrief);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "AI request failed." },

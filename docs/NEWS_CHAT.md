@@ -1,5 +1,10 @@
 # News Chat — architecture & prompt strategy
 
+> **Superseded.** This v1 design (open conversation, word count as the only
+> metric, tap-to-insert starters) is replaced by the Mission model in
+> [NEWS_CHAT_V2.md](./NEWS_CHAT_V2.md), which is what's implemented. Kept for
+> the rationale that still applies (trend ingestion, robustness patterns).
+
 > A fully online mode: collect today's trending news → curate one discussable
 > subject → run a real conversation whose single job is to **force the learner
 > to keep producing English** about that subject, helping them continue whenever

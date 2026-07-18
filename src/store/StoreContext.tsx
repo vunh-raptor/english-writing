@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Entry, Prompt, Settings, Store } from "@/types";
+import type { Entry, NewsLevel, Phrase, Prompt, Settings, Store } from "@/types";
 import { loadStore, saveStore, clearStore, defaultStore } from "@/lib/client/storage";
 import { todayKey } from "@/lib/shared/date";
 import {
@@ -31,6 +31,16 @@ interface FinishInput {
   durationMs: number;
 }
 
+/** What a completed News Chat mission hands the store (see docs/NEWS_CHAT_V2.md §9). */
+interface MissionOutcome {
+  /** The mission's targets with their final verdicts. */
+  targets: { phrase: Phrase; verdict: "produced" | "assisted" | "missed" }[];
+  /** Bonus phrases worth keeping from the chat. */
+  keep: Phrase[];
+  /** Rolling level, persisted so tomorrow's mission is planned at it. */
+  level: NewsLevel;
+}
+
 interface StoreContextValue {
   store: Store;
   /** Commit a completed session. Returns the created entry for the celebrate screen. */
@@ -40,11 +50,15 @@ interface StoreContextValue {
   addGeneratedPrompts(prompts: Prompt[]): void;
   /** Update the spaced-repetition schedule for reviewed phrases. */
   reviewPhrases(ids: string[], success: boolean): void;
+  /** Fold a finished News Chat mission into the Coach's pool + SRS. */
+  saveMissionOutcome(outcome: MissionOutcome): void;
   reset(): void;
 }
 
 /** Keep the on-device AI prompt library from growing without bound. */
 const MAX_AI_PROMPTS = 120;
+/** Keep the mined-phrase pool bounded too. */
+const MAX_MINED_PHRASES = 60;
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
@@ -164,6 +178,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const saveMissionOutcome = useCallback(
+    (outcome: MissionOutcome) => {
+      const prev = storeRef.current;
+      const day = todayKey();
+
+      // Pool: every phrase the mission touched joins the Coach's practice pool
+      // (deduped — a repeat target keeps its first saved version).
+      const seen = new Set(prev.minedPhrases.map((p) => p.id));
+      const incoming = [...outcome.targets.map((t) => t.phrase), ...outcome.keep];
+      const fresh = incoming.filter((p) => p.id && !seen.has(p.id));
+      const minedPhrases = [...prev.minedPhrases, ...fresh].slice(-MAX_MINED_PHRASES);
+
+      // SRS: a clean production earns an interval; an assisted or missed target
+      // stays due now so the Phrase Coach picks up what the mission couldn't land.
+      const phraseSrs = { ...prev.phraseSrs };
+      for (const { phrase, verdict } of outcome.targets) {
+        if (!phrase.id) continue;
+        if (verdict === "produced") {
+          phraseSrs[phrase.id] = reviewCard(phraseSrs[phrase.id], true, day);
+        } else if (phraseSrs[phrase.id]) {
+          phraseSrs[phrase.id] = reviewCard(phraseSrs[phrase.id], false, day);
+        }
+        // No record yet + not produced → leave it absent: "new" is already due.
+      }
+
+      commit({ ...prev, minedPhrases, phraseSrs, newsLevel: outcome.level });
+    },
+    [commit],
+  );
+
   const reset = useCallback(() => {
     clearStore();
     commit(defaultStore());
@@ -176,9 +220,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateSettings,
       addGeneratedPrompts,
       reviewPhrases,
+      saveMissionOutcome,
       reset,
     }),
-    [store, finishSession, updateSettings, addGeneratedPrompts, reviewPhrases, reset],
+    [
+      store,
+      finishSession,
+      updateSettings,
+      addGeneratedPrompts,
+      reviewPhrases,
+      saveMissionOutcome,
+      reset,
+    ],
   );
 
   // Until the persisted store is loaded, render the calm boot placeholder. The

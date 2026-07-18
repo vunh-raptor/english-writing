@@ -89,6 +89,10 @@ export interface Store {
   aiPrompts: Prompt[];
   /** Spaced-repetition schedule per phrase id. */
   phraseSrs: Record<string, SrsRecord>;
+  /** Phrases mined from News Chat sessions, added to the Coach's practice pool. */
+  minedPhrases: Phrase[];
+  /** Rolling CEFR-ish level from News Chat missions — tomorrow's mission is planned at it. */
+  newsLevel: NewsLevel;
   /** Whether the learner has finished the first session (we defer "settings" nudges). */
   hasWritten: boolean;
 }
@@ -229,4 +233,152 @@ export interface WriteSession {
   /** Display label for the subject's source, e.g. a platform name. */
   platform?: string;
   beats: WriteBeat[];
+}
+
+// --- News Chat v2: today's real news → one planned "mission" ---
+//
+// The plan is fixed; only the delivery is live. A mission is generated once per
+// day (per level) from real headlines and then frozen: one scenario, one goal,
+// three language targets, four beats with fading support. See docs/NEWS_CHAT_V2.md.
+
+/** Rolling CEFR-ish level missions are planned at and adapted to. */
+export type NewsLevel = "A2" | "B1" | "B2" | "C1";
+
+export type TargetKind = "pattern" | "phrase";
+
+/** One reusable language item this mission teaches, elicits, and tracks. */
+export interface MissionTarget {
+  id: string;
+  /** e.g. "It's worth ___" — gaps in patterns use ___. */
+  text: string;
+  kind: TargetKind;
+  /** Plain-words gloss (tap-to-reveal in the HUD). */
+  meaning: string;
+  /** A natural example ABOUT this topic (also woven into the briefing). */
+  example: string;
+}
+
+/** The communicative act of a beat — the fixed react → reason → flip → goal arc. */
+export type MissionAct = "react" | "reason" | "flip" | "goal";
+
+/** Inline support the scene partner weaves into its own question (the fading curve). */
+export type BeatSupport = "frame" | "keywords" | "none";
+
+/**
+ * Pre-generated stall help for one beat. Rungs are ordered and each preserves a
+ * generation gap: a hint may unlock ideas or language, never a finished sentence.
+ */
+export interface HintLadder {
+  /** Rung 1 — a thinking nudge; contains NO reusable English sentence material. */
+  idea: string;
+  /** Rung 2 — 3-4 short chunks (1-3 words) to build with; rendered inert, not tappable. */
+  keywords: string[];
+  /** Rung 3 — one sentence frame, gaps as "___"; insertable WITH gaps, send blocked until filled. */
+  frame: string;
+  /** Rung 4 — a full model answer; timed reveal, then write-from-memory. Never insertable. */
+  model: string;
+}
+
+export interface MissionBeat {
+  id: string;
+  act: MissionAct;
+  /** What the learner must produce — written as an instruction to the scene partner. */
+  elicit: string;
+  /** The one target this beat elicits; null for the final "goal" beat. */
+  targetId: string | null;
+  support: BeatSupport;
+  hints: HintLadder;
+}
+
+/** The whole lesson plan, fixed at session start. */
+export interface Mission {
+  /** `${day}-${level}` — also the server cache key. */
+  id: string;
+  day: DayKey;
+  level: NewsLevel;
+  title: string;
+  /** Honest attribution to the real headline. */
+  source: string;
+  url?: string;
+  /** Who the AI plays + why they need the learner's words. */
+  scenario: { role: string; situation: string };
+  /** The one visible communicative outcome, addressed to the learner. */
+  goal: string;
+  /** 3-5 sentences of input; target uses marked **like this**. */
+  briefing: string;
+  /** One-tap comprehension check — the guaranteed first win. */
+  check?: { question: string; options: string[]; answer: number };
+  targets: MissionTarget[]; // exactly 3
+  beats: MissionBeat[]; // exactly 4
+}
+
+export type TargetStatus =
+  | "pending" // not yet produced
+  | "produced" // learner's own sentence, no frame/model open this beat
+  | "assisted" // produced, but after seeing the frame or model rung
+  | "missed"; // beat ended without it (force-advanced)
+
+/** Deepest hint rung opened this beat; frame/model downgrade a production to "assisted". */
+export type HintRung = "none" | "idea" | "keywords" | "frame" | "model";
+
+/** Client-held session progress; the server merges it each turn (never the model). */
+export interface MissionProgress {
+  /** 0-based; === beats.length ⇒ mission complete. */
+  beatIndex: number;
+  /** Code force-advances a beat after 3 learner turns so nothing drags. */
+  turnsInBeat: number;
+  turn: number;
+  level: NewsLevel;
+  /** Kept as momentum, demoted from "the metric" — see the HUD. */
+  wordsProduced: number;
+  deepestHint: HintRung;
+  targets: Record<string, TargetStatus>;
+}
+
+/** One scene-partner turn: in-character reply + honest judgment, merged state. */
+export interface MissionTurn {
+  /** Always ends with exactly one production demand (the Iron Rule). */
+  reply: string;
+  /** Target ids the learner produced this turn, in their own words. */
+  targetsUsed: string[];
+  beatDone: boolean;
+  /** Was their last message English, about the scenario? */
+  onTask: boolean;
+  missionComplete: boolean;
+  state: MissionProgress;
+}
+
+/** "Say it your way": building material for the learner's own intent — never a translation. */
+export interface BridgeHelp {
+  /** 3-4 short English chunks carrying their meaning. */
+  keywords: string[];
+  /** One sentence frame with 2+ ___ gaps. */
+  frame: string;
+}
+
+export interface TargetResult {
+  id: string;
+  verdict: "produced" | "assisted" | "missed";
+  /** Tiny specific note; quotes the learner's own words when produced. */
+  note: string;
+}
+
+/** Post-hoc, pattern-level correction — the only correction in the product. */
+export interface Upgrade {
+  /** The learner's actual sentence (short quote). */
+  you: string;
+  /** The natural version. */
+  upgrade: string;
+  /** ≤6 words. */
+  why: string;
+}
+
+/** Closing debrief: where learning becomes explicit, then feeds the SRS. */
+export interface Debrief {
+  celebration: string;
+  goalHit: boolean;
+  targetResults: TargetResult[]; // one per target
+  upgrades: Upgrade[]; // 0-2, never more
+  /** 0-2 bonus phrases from the chat → the mined pool. */
+  keep: { text: string; meaning: string }[];
 }

@@ -1,4 +1,4 @@
-import type { Store, Settings, AiSettings, AiProvider } from "@/types";
+import type { Store, Settings, AiSettings, AiProvider, NewsLevel } from "@/types";
 import { STARTING_FREEZES } from "@/lib/shared/streak";
 
 /**
@@ -85,6 +85,8 @@ export function defaultStore(): Store {
     vocab: {},
     aiPrompts: [],
     phraseSrs: {},
+    minedPhrases: [],
+    newsLevel: "B1",
     hasWritten: false,
   };
 }
@@ -111,6 +113,12 @@ export function loadStore(): Store {
       vocab: parsed.vocab ?? {},
       aiPrompts: parsed.aiPrompts ?? [],
       phraseSrs: parsed.phraseSrs ?? {},
+      minedPhrases: parsed.minedPhrases ?? [],
+      newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(
+        parsed.newsLevel as NewsLevel,
+      )
+        ? (parsed.newsLevel as NewsLevel)
+        : "B1",
     };
   } catch {
     return defaultStore();

@@ -1,335 +1,921 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Languages, LifeBuoy, Send, X } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
 import type {
   ChatMessage,
-  NewsSubject,
-  DirectorState,
-  ConverseTurn,
-  AssistHelp,
-  Recap,
+  Mission,
+  MissionProgress,
+  MissionTarget,
+  MissionTurn,
+  TargetStatus,
+  HintRung,
+  BridgeHelp,
+  Debrief,
+  Phrase,
 } from "@/types";
 import {
-  fetchNewsSubject,
-  converse,
-  converseAssist,
-  converseRecap,
+  fetchMission,
+  missionConverse,
+  missionBridge,
+  missionDebrief,
 } from "@/lib/client/clientApi";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PageContainer } from "@/components/page-container";
 
 /**
- * News Chat — a fully online mode: today's real news → one curated subject → a
- * conversation whose only job is to keep the learner *producing* English about
- * it. The one metric is how many words they write, shown live as a momentum
- * meter. When they pause, tappable "ways to continue" lower the cost of the next
- * sentence. At the end, a warm recap mines phrases into the Phrase Coach's SRS.
+ * News Chat v2 — the Mission (docs/NEWS_CHAT_V2.md). One planned scenario from
+ * today's real news, one visible goal, three language targets, four beats with
+ * fading support. The plan is fixed; only the delivery is live.
+ *
+ * The hint system preserves the generation gap: an idea nudge, then inert
+ * keywords, then a frame that inserts WITH its ___ gaps (send stays blocked
+ * until they're filled), then a model answer revealed briefly and rewritten
+ * from memory. No interaction path lets a tap alone produce a sendable message.
  */
 
-const INITIAL_STATE: DirectorState = {
-  level: "B1",
-  facetsCovered: [],
-  wordsProduced: 0,
-  turn: 0,
-  stalls: 0,
-};
+const RUNG_ORDER: HintRung[] = ["none", "idea", "keywords", "frame", "model"];
+/** A frame gap the learner still has to fill, e.g. "___". */
+const GAP_RE = /_{2,}/;
+const MODEL_REVEAL_SECONDS = 7;
+/** Pause before the Stuck? button starts pulsing. */
+const PULSE_MS = 7000;
+/** Long pause before the idea rung opens by itself (never more than that). */
+const AUTO_IDEA_MS = 15000;
 
-/** Word target that earns the warm wrap (the coach can also wrap earlier). */
-const WORD_TARGET = 120;
-/** How long the learner must sit paused (focused, non-empty question) before help. */
-const STALL_MS = 7000;
+function initialProgress(mission: Mission): MissionProgress {
+  const targets: Record<string, TargetStatus> = {};
+  for (const t of mission.targets) targets[t.id] = "pending";
+  return {
+    beatIndex: 0,
+    turnsInBeat: 0,
+    turn: 0,
+    level: mission.level,
+    wordsProduced: 0,
+    deepestHint: "none",
+    targets,
+  };
+}
+
+/** Same slug scheme as the v1 miner, so repeat phrases dedupe in the pool. */
+function phraseId(text: string): string {
+  return `nc-${text.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`;
+}
+
+function targetToPhrase(t: MissionTarget): Phrase {
+  return {
+    id: phraseId(t.text),
+    text: t.text,
+    meaning: t.meaning,
+    example: t.example,
+    register: "from your News Chat",
+  };
+}
+
+/** The learner-visible outcome of a target once the session is over. */
+function finalVerdict(status: TargetStatus): "produced" | "assisted" | "missed" {
+  return status === "produced" || status === "assisted" ? status : "missed";
+}
+
+/** Longest plain word of a target — to match briefing highlights to targets. */
+function longestWord(text: string): string | null {
+  const words = text.replace(/_+/g, " ").toLowerCase().match(/[a-z][a-z'-]{3,}/g);
+  if (!words || words.length === 0) return null;
+  return words.reduce((a, b) => (b.length > a.length ? b : a));
+}
+
+/** Render the briefing with its **target** uses highlighted and tappable. */
+function BriefingText({
+  briefing,
+  targets,
+  onPeek,
+}: {
+  briefing: string;
+  targets: MissionTarget[];
+  onPeek: (t: MissionTarget) => void;
+}) {
+  const parts = briefing.split(/\*\*(.+?)\*\*/g);
+  return (
+    <p className="text-[15px] leading-relaxed">
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return <span key={i}>{part}</span>;
+        const hit = targets.find((t) => {
+          const anchor = longestWord(t.text);
+          return anchor ? part.toLowerCase().includes(anchor) : false;
+        });
+        return (
+          <button
+            key={i}
+            type="button"
+            className="rounded bg-brand-muted px-1 font-medium text-brand-ink"
+            onClick={() => hit && onPeek(hit)}
+          >
+            {part}
+          </button>
+        );
+      })}
+    </p>
+  );
+}
 
 export function NewsChat() {
-  const { saveMinedPhrases } = useStore();
+  const { store, saveMissionOutcome } = useStore();
 
-  const [subject, setSubject] = useState<NewsSubject | null>(null);
+  const [mission, setMission] = useState<Mission | null>(null);
+  const [progress, setProgress] = useState<MissionProgress | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [state, setState] = useState<DirectorState>(INITIAL_STATE);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // mission fetch
+  const [busy, setBusy] = useState(false); // a turn in flight
+  const [started, setStarted] = useState(false);
   const [needsAI, setNeedsAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Stall assist.
-  const [assist, setAssist] = useState<AssistHelp | null>(null);
-  const [assisting, setAssisting] = useState(false);
+  // Briefing phase.
+  const [checkPick, setCheckPick] = useState<number | null>(null);
+  const [peek, setPeek] = useState<MissionTarget | null>(null);
 
-  // Wrap / recap.
-  const [recap, setRecap] = useState<Recap | null>(null);
-  const [wrapping, setWrapping] = useState(false);
-  const [done, setDone] = useState(false);
+  // The hint ladder (per beat).
+  const [hintRung, setHintRung] = useState<HintRung>("none");
+  const [hintOpen, setHintOpen] = useState(false);
+  const [stuckPulse, setStuckPulse] = useState(false);
+  const [modelVisible, setModelVisible] = useState(false);
+  const [modelCountdown, setModelCountdown] = useState(MODEL_REVEAL_SECONDS);
+
+  // "Say it your way" (the L1 bridge).
+  const [bridgeOpen, setBridgeOpen] = useState(false);
+  const [bridgeIntent, setBridgeIntent] = useState("");
+  const [bridgeHelp, setBridgeHelp] = useState<BridgeHelp | null>(null);
+  const [bridging, setBridging] = useState(false);
+
+  // Debrief.
+  const [debrief, setDebrief] = useState<Debrief | null>(null);
+  const [debriefing, setDebriefing] = useState(false);
+
+  /** Target chips that just flipped — get the milestone pop for a moment. */
+  const [flipped, setFlipped] = useState<Record<string, boolean>>({});
 
   const startedRef = useRef(false);
+  const savedRef = useRef(false);
+  const hintRungRef = useRef<HintRung>("none");
   const endRef = useRef<HTMLDivElement>(null);
-  const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The coach's current question, so stall help knows what they're stuck on.
-  const currentDemand = messages.length
-    ? messages[messages.length - 1].content
-    : subject?.hook ?? "";
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ideaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const complete = debrief !== null || debriefing;
+  const currentBeat =
+    mission && progress && progress.beatIndex < mission.beats.length
+      ? mission.beats[progress.beatIndex]
+      : null;
+  /** The partner's current question — what the bridge helps them answer. */
+  const currentDemand = messages.length ? messages[messages.length - 1].content : "";
+  const inputHasGaps = GAP_RE.test(input);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, recap]);
+  }, [messages, busy, debrief, debriefing]);
 
-  // Load the curated subject, then open the conversation.
+  // Reveal the model answer for a few seconds, then blur it for good (this
+  // beat): what they rebuild from memory is what sticks.
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    (async () => {
-      try {
-        const subj = await fetchNewsSubject();
-        setSubject(subj);
-        const turn = await converse(subj, INITIAL_STATE, []);
-        applyTurn(turn);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        if (/503/.test(msg)) setNeedsAI(true);
-        else if (/502/.test(msg)) setError("Couldn't reach today's news — try again.");
-        else setError("Couldn't start the chat — try refreshing.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!modelVisible) return;
+    setModelCountdown(MODEL_REVEAL_SECONDS);
+    const iv = setInterval(() => {
+      setModelCountdown((s) => {
+        if (s <= 1) {
+          setModelVisible(false);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [modelVisible]);
 
-  const applyTurn = useCallback((turn: ConverseTurn) => {
-    setMessages((m) => [...m, { role: "coach", content: turn.reply }]);
-    setState(turn.state);
-    if (turn.shouldWrap) setDone(true);
-  }, []);
-
-  const clearStall = useCallback(() => {
-    if (stallTimer.current) clearTimeout(stallTimer.current);
-    stallTimer.current = null;
-  }, []);
-
-  async function send() {
-    const text = input.trim();
-    if (!text || loading || wrapping) return;
-    clearStall();
-    setAssist(null);
-    const history: ChatMessage[] = [...messages, { role: "user", content: text }];
-    setMessages(history);
-    setInput("");
+  const loadMission = useCallback(async (level: Mission["level"]) => {
     setLoading(true);
     setError(null);
-    if (!subject) return;
     try {
-      const turn = await converse(subject, state, history);
-      applyTurn(turn);
-    } catch {
-      setError("That message didn't go through — try again.");
+      const m = await fetchMission(level);
+      setMission(m);
+      setProgress(initialProgress(m));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (/503/.test(msg)) setNeedsAI(true);
+      else if (/502/.test(msg)) setError(msg.replace(/^\d+\s*/, "") || "Couldn't plan today's mission — try again.");
+      else setError("Couldn't plan today's mission — try again.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  // Fire stall help when the learner sits paused with the input focused.
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void loadMission(store.newsLevel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Stall handling: pulse, then quietly open the idea rung — never more.
+
+  const clearStall = useCallback(() => {
+    if (pulseTimer.current) clearTimeout(pulseTimer.current);
+    if (ideaTimer.current) clearTimeout(ideaTimer.current);
+    pulseTimer.current = null;
+    ideaTimer.current = null;
+  }, []);
+
+  /** Record hint depth in the progress the next send will carry. */
+  const markHint = useCallback((rung: HintRung) => {
+    setProgress((p) =>
+      p && RUNG_ORDER.indexOf(rung) > RUNG_ORDER.indexOf(p.deepestHint)
+        ? { ...p, deepestHint: rung }
+        : p,
+    );
+  }, []);
+
+  /** One rung further down the ladder (Stuck? / More help). */
+  const descend = useCallback(() => {
+    const idx = RUNG_ORDER.indexOf(hintRungRef.current);
+    const next = RUNG_ORDER[Math.min(idx + 1, RUNG_ORDER.length - 1)];
+    if (next !== hintRungRef.current) {
+      hintRungRef.current = next;
+      setHintRung(next);
+      markHint(next);
+      if (next === "model") setModelVisible(true);
+    }
+    setHintOpen(true);
+    setStuckPulse(false);
+    clearStall();
+  }, [markHint, clearStall]);
+
   function armStall() {
     clearStall();
-    if (loading || wrapping || done || !subject) return;
-    stallTimer.current = setTimeout(async () => {
-      setAssisting(true);
+    if (!started || busy || complete || !mission) return;
+    pulseTimer.current = setTimeout(() => setStuckPulse(true), PULSE_MS);
+    ideaTimer.current = setTimeout(() => {
+      if (hintRungRef.current === "none") descend();
+    }, AUTO_IDEA_MS);
+  }
+
+  const resetHintUi = useCallback(() => {
+    hintRungRef.current = "none";
+    setHintRung("none");
+    setHintOpen(false);
+    setStuckPulse(false);
+    setModelVisible(false);
+    setBridgeOpen(false);
+    setBridgeHelp(null);
+    setBridgeIntent("");
+  }, []);
+
+  // --- The conversation loop ------------------------------------------------
+
+  /** Save once, at completion — the debrief only supplies the words (and keeps). */
+  const saveOutcome = useCallback(
+    (finalProgress: MissionProgress, m: Mission) => {
+      if (savedRef.current) return;
+      savedRef.current = true;
+      saveMissionOutcome({
+        targets: m.targets.map((t) => ({
+          phrase: targetToPhrase(t),
+          verdict: finalVerdict(finalProgress.targets[t.id]),
+        })),
+        keep: [],
+        level: finalProgress.level,
+      });
+    },
+    [saveMissionOutcome],
+  );
+
+  const finish = useCallback(
+    async (finalProgress: MissionProgress, finalMessages: ChatMessage[]) => {
+      if (!mission) return;
+      saveOutcome(finalProgress, mission);
+      setDebriefing(true);
       try {
-        const help = await converseAssist(subject.subject, currentDemand, input);
-        setAssist(help);
-        setState((s) => ({ ...s, stalls: s.stalls + 1 }));
+        const d = await missionDebrief(mission, finalProgress, finalMessages);
+        setDebrief(d);
+        if (d.keep.length) {
+          saveMissionOutcome({
+            targets: [],
+            keep: d.keep.map((p) => ({
+              id: phraseId(p.text),
+              text: p.text,
+              meaning: p.meaning,
+              example: p.text,
+              register: "from your News Chat",
+            })),
+            level: finalProgress.level,
+          });
+        }
       } catch {
-        /* stall help is a nicety; never surface an error */
+        // The ending never dies with the network: build the debrief locally.
+        setDebrief({
+          celebration:
+            "You held a real conversation in English about today's news — that's exactly how fluency grows. 🎉",
+          goalHit: true,
+          targetResults: mission.targets.map((t) => ({
+            id: t.id,
+            verdict: finalVerdict(finalProgress.targets[t.id]),
+            note: "",
+          })),
+          upgrades: [],
+          keep: [],
+        });
       } finally {
-        setAssisting(false);
+        setDebriefing(false);
       }
-    }, STALL_MS);
-  }
+    },
+    [mission, saveOutcome, saveMissionOutcome],
+  );
 
-  function insertStarter(starter: string) {
-    setInput((prev) => {
-      const sep = prev && !prev.endsWith(" ") ? " " : "";
-      return `${prev}${sep}${starter} `;
-    });
-    setAssist(null);
-    clearStall();
-  }
+  const applyTurn = useCallback(
+    (turn: MissionTurn, history: ChatMessage[]) => {
+      const withReply: ChatMessage[] = [...history, { role: "coach", content: turn.reply }];
+      setMessages(withReply);
 
-  async function wrapUp() {
-    if (!subject || wrapping) return;
-    clearStall();
-    setWrapping(true);
+      // Pop the chips that flipped this turn.
+      if (progress) {
+        const justFlipped: Record<string, boolean> = {};
+        for (const id of Object.keys(turn.state.targets)) {
+          const was = progress.targets[id];
+          const now = turn.state.targets[id];
+          if (
+            (was === "pending" || was === "missed") &&
+            (now === "produced" || now === "assisted")
+          ) {
+            justFlipped[id] = true;
+          }
+        }
+        if (Object.keys(justFlipped).length) {
+          setFlipped(justFlipped);
+          setTimeout(() => setFlipped({}), 900);
+        }
+        if (turn.state.beatIndex !== progress.beatIndex) resetHintUi();
+      }
+
+      setProgress(turn.state);
+      if (turn.missionComplete) void finish(turn.state, withReply);
+    },
+    [progress, resetHintUi, finish],
+  );
+
+  async function start() {
+    if (!mission || !progress || started || busy) return;
+    setStarted(true);
+    setBusy(true);
     setError(null);
     try {
-      const r = await converseRecap(subject.subject, messages);
-      setRecap(r);
-      setDone(true);
-      // Feed the mined phrases into the Phrase Coach's practice pool (they become
-      // "new" phrases there, due immediately, and then get spaced like the rest).
-      if (r.phrasesToTry.length) {
-        saveMinedPhrases(
-          r.phrasesToTry.map((p) => ({
-            id: `nc-${p.text.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`,
-            text: p.text,
-            meaning: p.meaning,
-            example: p.text,
-            register: "from your News Chat",
-          })),
-        );
-      }
+      const turn = await missionConverse(mission, progress, []);
+      applyTurn(turn, []);
     } catch {
-      setError("Couldn't build your recap — but your words still count. 🎉");
+      setError("Couldn't start the chat — try again.");
+      setStarted(false);
     } finally {
-      setWrapping(false);
+      setBusy(false);
     }
   }
 
-  const reachedTarget = state.wordsProduced >= WORD_TARGET;
-  const meterPct = Math.min(100, Math.round((state.wordsProduced / WORD_TARGET) * 100));
+  async function send() {
+    const text = input.trim();
+    if (!text || busy || !mission || !progress || !started || complete) return;
+    if (GAP_RE.test(text)) return; // gaps are theirs to fill
+    clearStall();
+    setHintOpen(false);
+    const history: ChatMessage[] = [...messages, { role: "user", content: text }];
+    setMessages(history);
+    setInput("");
+    setBusy(true);
+    setError(null);
+    try {
+      const turn = await missionConverse(mission, progress, history);
+      applyTurn(turn, history);
+    } catch {
+      setError("That message didn't go through — try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Insert a frame WITH its gaps; select the first gap so typing replaces it.
+   *  The clicked button is blurred so a stray Enter can't re-insert (the input
+   *  may be disabled mid-turn, in which case focus() below silently no-ops). */
+  function insertFrame(frame: string, e?: React.MouseEvent<HTMLButtonElement>) {
+    e?.currentTarget.blur();
+    setInput((prev) => {
+      const sep = prev && !prev.endsWith(" ") ? " " : "";
+      return `${prev}${sep}${frame}`;
+    });
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      const pos = el.value.indexOf("___");
+      if (pos >= 0) el.setSelectionRange(pos, pos + 3);
+    });
+  }
+
+  async function submitBridge() {
+    const intent = bridgeIntent.trim();
+    if (!intent || bridging || !mission || !progress) return;
+    setBridging(true);
+    // Bridge material is frame-level help, wherever it comes from.
+    markHint("frame");
+    try {
+      const help = await missionBridge(progress.level, currentDemand, intent);
+      setBridgeHelp(help);
+    } catch {
+      // Fail soft to the beat's pre-planned ladder — help never blocks.
+      if (currentBeat) {
+        setBridgeHelp({
+          keywords: currentBeat.hints.keywords,
+          frame: currentBeat.hints.frame,
+        });
+      }
+    } finally {
+      setBridging(false);
+    }
+  }
+
+  function pickCheck(i: number) {
+    if (!mission?.check || started || busy) return;
+    setCheckPick(i);
+    if (i === mission.check.answer) setTimeout(() => void start(), 700);
+  }
+
+  // --- Renders ----------------------------------------------------------------
 
   if (needsAI) {
     return (
-      <div className="screen screen-pad">
-        <div className="container center-narrow">
-          <h1 style={{ fontSize: 26 }}>📰 News Chat</h1>
-          <div className="status-note warn" style={{ marginTop: 14 }}>
-            News Chat is a fully online mode: it curates a real topic from today's
-            news and chats with you about it using AI. It needs a server AI key
-            (free-tier Groq or Gemini works) and network access. Set one and it'll
-            come alive.
-          </div>
+      <PageContainer width="narrow">
+        <h1 className="text-2xl">📰 News Chat</h1>
+        <div className="note note-warning mt-3.5">
+          News Chat is a fully online mode: it plans a real mission from
+          today&apos;s news and chats with you about it using AI. It needs a
+          server AI key (free-tier Groq or Gemini works) and network access.
+          Set one and it&apos;ll come alive.
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
+  const chipStyle = (s: TargetStatus) =>
+    cn(
+      "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+      s === "produced" && "border-sage bg-sage-muted font-semibold text-sage-ink",
+      s === "assisted" && "border-dashed border-sage bg-sage-muted/60 text-sage-ink",
+      s === "missed" && "border-input bg-muted text-muted-foreground opacity-60",
+      s === "pending" && "border-input bg-muted text-muted-foreground",
+    );
+
+  const verdictIcon = { produced: "✓", assisted: "✓", missed: "→" } as const;
+  const verdictLabel = {
+    produced: "produced on your own",
+    assisted: "produced with a little help",
+    missed: "waiting in your Phrase Coach",
+  } as const;
+
   return (
-    <div className="coach-screen">
-      <div className="container coach-wrap">
-        <div className="coach-head">
-          <h1 style={{ fontSize: 22 }}>📰 News Chat</h1>
-          {subject ? (
-            <div className="news-subject">
-              <div className="news-subject-text">{subject.subject}</div>
-              <div className="news-subject-src">
-                from {subject.url ? (
-                  <a href={subject.url} target="_blank" rel="noreferrer">
-                    {subject.source} ↗
+    <div className="flex h-full flex-col">
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-5 sm:px-6">
+        {/* --- Mission header + learning HUD --- */}
+        <div className="border-b border-border py-3.5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h1 className="text-xl">📰 News Chat</h1>
+            {mission && (
+              <span className="text-xs text-muted-foreground">
+                from{" "}
+                {mission.url ? (
+                  <a
+                    href={mission.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand hover:underline"
+                  >
+                    {mission.source} ↗
                   </a>
                 ) : (
-                  subject.source
+                  mission.source
                 )}
-              </div>
-            </div>
-          ) : (
-            <p className="muted" style={{ margin: "2px 0 0" }}>
-              Finding today's talk of the day…
+              </span>
+            )}
+          </div>
+
+          {loading && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Planning today&apos;s mission from the news…
             </p>
           )}
 
-          <div className="momentum">
-            <div className="momentum-bar">
-              <div className="momentum-fill" style={{ width: `${meterPct}%` }} />
-            </div>
-            <span className="momentum-label">
-              {state.wordsProduced} {state.wordsProduced === 1 ? "word" : "words"} written
-              {reachedTarget ? " — nice momentum! 🎉" : ""}
-            </span>
-          </div>
+          {mission && progress && (
+            <>
+              <div className="mt-1.5 font-serif text-lg font-semibold leading-snug">
+                {mission.title}
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                🎯 {mission.goal}
+              </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                {mission.beats.map((b, i) => (
+                  <span
+                    key={b.id}
+                    title={b.act}
+                    className={cn(
+                      "h-2 w-2 rounded-full transition-colors",
+                      i < progress.beatIndex
+                        ? "bg-brand"
+                        : i === progress.beatIndex && started && !complete
+                          ? "bg-brand/40 ring-2 ring-brand/25"
+                          : "bg-muted-foreground/20",
+                    )}
+                  />
+                ))}
+                <span className="mx-1 h-3 w-px bg-border" />
+                {mission.targets.map((t) => {
+                  const s = progress.targets[t.id];
+                  return (
+                    <span
+                      key={t.id}
+                      title={`${t.meaning} — e.g. ${t.example}`}
+                      className={cn(chipStyle(s), flipped[t.id] && "animate-milestone")}
+                    >
+                      {s === "produced" || s === "assisted" ? "✓ " : ""}
+                      {t.text}
+                    </span>
+                  );
+                })}
+                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                  {progress.wordsProduced} words
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="chat">
+        {/* --- Briefing + conversation --- */}
+        <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto py-4">
+          {mission && (
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+              <div className="text-sm text-muted-foreground">
+                💬 You&apos;re chatting with <b>{mission.scenario.role}</b>.{" "}
+                {mission.scenario.situation}
+              </div>
+              <div className="mt-3 border-t border-border pt-3">
+                <BriefingText
+                  briefing={mission.briefing}
+                  targets={mission.targets}
+                  onPeek={(t) => setPeek((p) => (p?.id === t.id ? null : t))}
+                />
+                {peek && (
+                  <div className="mt-2.5 rounded-lg bg-muted p-2.5 text-sm">
+                    <b>{peek.text}</b> — {peek.meaning}
+                    <div className="mt-0.5 text-muted-foreground">
+                      e.g. {peek.example}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!started && mission.check && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <div className="text-sm font-medium">{mission.check.question}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {mission.check.options.map((opt, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => pickCheck(i)}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                          checkPick === i && i === mission.check!.answer
+                            ? "border-sage bg-sage-muted font-medium text-sage-ink"
+                            : checkPick === i
+                              ? "border-destructive/40 bg-muted text-muted-foreground"
+                              : "border-input bg-muted hover:bg-accent hover:text-accent-foreground",
+                        )}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  {checkPick !== null && checkPick !== mission.check.answer && (
+                    <div className="mt-2 text-sm text-muted-foreground">
+                      Not quite — read the briefing once more. 😊
+                    </div>
+                  )}
+                  {checkPick === mission.check.answer && (
+                    <div className="mt-2 text-sm font-medium text-sage-ink">
+                      ✓ Got it — here we go…
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!started && !mission.check && (
+                <Button className="mt-3 w-full" onClick={() => void start()} disabled={busy}>
+                  Start the mission →
+                </Button>
+              )}
+            </div>
+          )}
+
           {messages.map((m, i) => (
-            <div key={i} className={`msg ${m.role}`}>
+            <div
+              key={i}
+              className={cn(
+                "max-w-[80%] whitespace-pre-wrap px-3.5 py-2.5 text-[15px] leading-relaxed",
+                m.role === "coach"
+                  ? "self-start rounded-2xl rounded-bl-md border border-border bg-card text-card-foreground shadow-soft"
+                  : "self-end rounded-2xl rounded-br-md bg-brand text-brand-foreground",
+              )}
+            >
               {m.content}
             </div>
           ))}
-          {(loading || assisting) && (
-            <div className="msg coach typing">
-              <span />
-              <span />
-              <span />
+
+          {(busy || debriefing) && (
+            <div className="flex max-w-[80%] items-center gap-1 self-start rounded-2xl rounded-bl-md border border-border bg-card px-3.5 py-3 shadow-soft">
+              <span className="typing-dot" />
+              <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+              <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
             </div>
           )}
 
-          {assist && !done && (
-            <div className="assist">
-              <div className="assist-q">{assist.simplerQuestion}</div>
-              <div className="assist-opts">
-                {assist.options.map((o, i) => (
-                  <button key={i} className="assist-chip" onClick={() => insertStarter(o.starter)}>
-                    <span className="assist-angle">{o.angle}</span>
-                    {o.starter}…
-                  </button>
-                ))}
+          {/* --- Debrief --- */}
+          {debrief && mission && (
+            <div className="rounded-2xl border border-border bg-sage-muted p-4 text-sage-ink">
+              <div className="text-[15px] font-medium">
+                {debrief.goalHit ? "🎉 Mission complete." : "🌱 Mission over."}{" "}
+                {debrief.celebration}
               </div>
-            </div>
-          )}
-
-          {recap && (
-            <div className="recap">
-              <div className="recap-celebrate">🎉 {recap.celebration}</div>
-              {recap.didWell.length > 0 && (
-                <ul className="recap-wins">
-                  {recap.didWell.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
-              )}
-              {recap.phrasesToTry.length > 0 && (
-                <div className="recap-phrases">
-                  <div className="eyebrow">Phrases to try</div>
-                  {recap.phrasesToTry.map((p, i) => (
-                    <div className="recap-phrase" key={i}>
-                      <b>{p.text}</b> <span className="muted">— {p.meaning}</span>
+              <ul className="mt-3 space-y-2 border-t border-sage/30 pt-3 text-sm">
+                {debrief.targetResults.map((r) => {
+                  const t = mission.targets.find((x) => x.id === r.id);
+                  if (!t) return null;
+                  return (
+                    <li key={r.id}>
+                      <span
+                        className={cn(
+                          "mr-1.5 font-semibold",
+                          r.verdict === "missed" && "opacity-60",
+                        )}
+                      >
+                        {verdictIcon[r.verdict]}
+                      </span>
+                      <b>{t.text}</b>{" "}
+                      <span className="opacity-80">— {verdictLabel[r.verdict]}</span>
+                      {r.note && <div className="ml-5 mt-0.5 opacity-80">{r.note}</div>}
+                    </li>
+                  );
+                })}
+              </ul>
+              {debrief.upgrades.length > 0 && (
+                <div className="mt-3 border-t border-sage/30 pt-3">
+                  <div className="text-xs font-medium uppercase tracking-wide opacity-80">
+                    Next time you can
+                  </div>
+                  {debrief.upgrades.map((u, i) => (
+                    <div className="mt-1.5 text-sm" key={i}>
+                      <span className="opacity-70">You wrote:</span> “{u.you}”
+                      <br />
+                      <span className="opacity-70">Try:</span> <b>“{u.upgrade}”</b>
+                      {u.why && <span className="opacity-70"> — {u.why}</span>}
                     </div>
                   ))}
-                  <div className="faint" style={{ marginTop: 6, fontSize: 12.5 }}>
-                    Saved to your Phrase Coach to practice later.
-                  </div>
                 </div>
               )}
+              {debrief.keep.length > 0 && (
+                <div className="mt-3 border-t border-sage/30 pt-3">
+                  <div className="text-xs font-medium uppercase tracking-wide opacity-80">
+                    Also worth keeping
+                  </div>
+                  {debrief.keep.map((p, i) => (
+                    <div className="mt-1 text-sm" key={i}>
+                      <b>{p.text}</b> <span className="opacity-80">— {p.meaning}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-2.5 text-xs opacity-70">
+                Today&apos;s phrases are saved to your Phrase Coach to practice later.
+              </div>
             </div>
           )}
           <div ref={endRef} />
         </div>
 
         {error && (
-          <div className="status-note warn" style={{ margin: "0 0 8px" }}>
-            {error}
+          <div className="note note-warning mb-2 flex items-center justify-between gap-2">
+            <span>{error}</span>
+            {!mission && !loading && (
+              <Button variant="outline" size="sm" onClick={() => void loadMission(store.newsLevel)}>
+                Try again
+              </Button>
+            )}
           </div>
         )}
 
-        {!done && (reachedTarget || messages.length >= 4) && subject && (
-          <button className="wrap-btn" onClick={wrapUp} disabled={wrapping}>
-            {wrapping ? "Wrapping up…" : "Wrap up & see my recap →"}
-          </button>
+        {/* --- Help affordances: one quiet path, one rung at a time --- */}
+        {started && !complete && currentBeat && (
+          <>
+            {(hintOpen || bridgeOpen) && (
+              <div className="mb-2 rounded-xl border border-border bg-card p-3.5 shadow-soft">
+                {hintOpen && (
+                  <div className="flex flex-col gap-2.5">
+                    {RUNG_ORDER.indexOf(hintRung) >= 1 && (
+                      <div className="text-sm">💡 {currentBeat.hints.idea}</div>
+                    )}
+                    {RUNG_ORDER.indexOf(hintRung) >= 2 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">build with:</span>
+                        {currentBeat.hints.keywords.map((k, i) => (
+                          <span
+                            key={i}
+                            className="select-none rounded-md border border-border bg-muted px-2 py-0.5 text-[13px]"
+                          >
+                            {k}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {RUNG_ORDER.indexOf(hintRung) >= 3 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md border border-dashed border-border bg-muted px-2 py-1 text-[13px]">
+                          {currentBeat.hints.frame}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => insertFrame(currentBeat.hints.frame, e)}
+                        >
+                          Use frame
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          the ___ parts are yours to fill
+                        </span>
+                      </div>
+                    )}
+                    {hintRung === "model" && (
+                      <div>
+                        {modelVisible ? (
+                          <div className="text-sm">
+                            <span className="italic">“{currentBeat.hints.model}”</span>
+                            <span className="ml-2 text-xs tabular-nums text-muted-foreground">
+                              memorize it — {modelCountdown}s
+                            </span>
+                          </div>
+                        ) : (
+                          <div>
+                            <div
+                              aria-hidden
+                              className="select-none text-sm italic opacity-60 blur-sm"
+                            >
+                              “{currentBeat.hints.model}”
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Now write it your way — from memory. 💪
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      {hintRung !== "model" && (
+                        <Button type="button" variant="ghost" size="sm" onClick={descend}>
+                          More help ↓
+                        </Button>
+                      )}
+                      <button
+                        type="button"
+                        className="ml-auto text-muted-foreground hover:text-foreground"
+                        onClick={() => setHintOpen(false)}
+                        aria-label="Close help"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {bridgeOpen && (
+                  <div className={cn("flex flex-col gap-2.5", hintOpen && "mt-3 border-t border-border pt-3")}>
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void submitBridge();
+                      }}
+                    >
+                      <Input
+                        value={bridgeIntent}
+                        onChange={(e) => setBridgeIntent(e.target.value)}
+                        placeholder="Type your idea in any language…"
+                        className="flex-1"
+                      />
+                      <Button type="submit" variant="outline" size="sm" disabled={bridging || !bridgeIntent.trim()}>
+                        {bridging ? "…" : "Help me say it"}
+                      </Button>
+                    </form>
+                    {bridgeHelp && (
+                      <>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">build with:</span>
+                          {bridgeHelp.keywords.map((k, i) => (
+                            <span
+                              key={i}
+                              className="select-none rounded-md border border-border bg-muted px-2 py-0.5 text-[13px]"
+                            >
+                              {k}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md border border-dashed border-border bg-muted px-2 py-1 text-[13px]">
+                            {bridgeHelp.frame}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => insertFrame(bridgeHelp.frame, e)}
+                          >
+                            Use frame
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mb-1.5 flex items-center gap-1.5">
+              {inputHasGaps ? (
+                <span className="text-xs text-muted-foreground">
+                  Fill your <b>___</b> blanks with your own words first.
+                </span>
+              ) : (
+                <span />
+              )}
+              <button
+                type="button"
+                onClick={() => (hintOpen ? setHintOpen(false) : descend())}
+                className={cn(
+                  "ml-auto flex items-center gap-1 rounded-full border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                  stuckPulse && !hintOpen && "animate-nudge",
+                )}
+              >
+                <LifeBuoy className="h-3.5 w-3.5" /> Stuck?
+              </button>
+              <button
+                type="button"
+                onClick={() => setBridgeOpen((v) => !v)}
+                className="flex items-center gap-1 rounded-full border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <Languages className="h-3.5 w-3.5" /> Say it your way
+              </button>
+            </div>
+          </>
         )}
 
-        <form
-          className="chat-input"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send();
-          }}
-        >
-          <input
-            className="input"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              armStall();
+        {!complete && (
+          <form
+            className="flex gap-2.5 border-t border-border py-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
             }}
-            onFocus={armStall}
-            onBlur={clearStall}
-            placeholder={done ? "Great session 🎉" : "Write your reply…"}
-            disabled={loading || wrapping || done || !subject}
-            autoComplete="off"
-          />
-          <button
-            className="btn btn-primary"
-            type="submit"
-            disabled={loading || wrapping || done || !input.trim()}
           >
-            Send
-          </button>
-        </form>
+            <Input
+              ref={inputRef}
+              className="flex-1"
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                armStall();
+              }}
+              onFocus={armStall}
+              onBlur={clearStall}
+              placeholder={started ? "Write your reply…" : "Read the briefing above to begin"}
+              disabled={!started || busy || !mission}
+              autoComplete="off"
+            />
+            <Button
+              type="submit"
+              disabled={!started || busy || !input.trim() || inputHasGaps}
+              title={inputHasGaps ? "Fill your ___ blanks first" : undefined}
+            >
+              <Send />
+              <span className="hidden sm:inline">Send</span>
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   MessageCircle,
+  Newspaper,
   PenLine,
   Settings as SettingsIcon,
   TrendingUp,
@@ -22,6 +23,7 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Write", icon: PenLine },
   { href: "/trending", label: "Trending", icon: TrendingUp },
   { href: "/coach", label: "Coach", icon: MessageCircle },
+  { href: "/news", label: "News", icon: Newspaper },
   { href: "/progress", label: "Writing Stats", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
