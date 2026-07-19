@@ -80,6 +80,22 @@ export function phraseById(id: string): Phrase | undefined {
 }
 
 /**
+ * How many phrases are queued for practice today, capped at the daily session
+ * size — the number the Phrase Coach badge nudges with. New phrases count as
+ * due; returns 0 (badge hidden) once today's rotation is cleared.
+ */
+export function dueTodayCount(
+  srs: Record<string, SrsRecord>,
+  extra: Phrase[] = [],
+  cap = 3,
+): number {
+  const today = todayKey();
+  const all = [...SEED_PHRASES, ...extra];
+  const due = all.reduce((n, p) => (isDue(srs[p.id], today) ? n + 1 : n), 0);
+  return Math.min(due, cap);
+}
+
+/**
  * "Today's phrases": the ones due for practice (new + review-due), newest first,
  * then soonest due. Deterministic per day so the session is stable on reload.
  * `extra` folds in phrases mined from other modes (e.g. News Chat) so they enter

@@ -86,14 +86,14 @@
     --warning-muted: 41 60% 96%; /* ochre-tint */
     --warning-ink: 41 60% 26%;
 
-    /* sidebar — the canvas rail behind the app */
-    --sidebar-background: 216 16% 94%; /* canvas #EDEFF2 */
-    --sidebar-foreground: 221 18% 25%;
+    /* sidebar — a sheet-white panel raised above the paper desk */
+    --sidebar-background: 0 0% 100%; /* sheet #FFFFFF */
+    --sidebar-foreground: 221 21% 17%; /* ink */
     --sidebar-primary: 216 47% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 216 24% 90%;
-    --sidebar-accent-foreground: 221 21% 17%;
-    --sidebar-border: 218 16% 91%;
+    --sidebar-accent: 217 45% 96%; /* oxford-tint #F2F5FA — active nav wash */
+    --sidebar-accent-foreground: 214 52% 25%; /* oxford-deep #1F3A61 — active nav ink */
+    --sidebar-border: 218 15% 86%; /* line-strong #D6DAE1 */
     --sidebar-ring: 216 47% 34%;
   }
 
@@ -159,13 +159,13 @@
     --warning-muted: 40 16% 12%;
     --warning-ink: 40 55% 70%;
 
-    --sidebar-background: 223 19% 7%; /* canvas #0F1116 */
-    --sidebar-foreground: 220 12% 80%;
+    --sidebar-background: 221 21% 17%; /* raised slate panel #232936 */
+    --sidebar-foreground: 220 25% 92%; /* #E4E8F0 */
     --sidebar-primary: 216 52% 71%;
     --sidebar-primary-foreground: 224 17% 9%;
-    --sidebar-accent: 224 16% 15%;
-    --sidebar-accent-foreground: 224 18% 92%;
-    --sidebar-border: 224 15% 19%;
+    --sidebar-accent: 218 25% 24%; /* active nav wash #2E3A4F */
+    --sidebar-accent-foreground: 217 50% 91%; /* #DCE6F5 — active nav ink */
+    --sidebar-border: 222 18% 28%; /* divider #3A4356 */
     --sidebar-ring: 216 52% 71%;
   }
 
