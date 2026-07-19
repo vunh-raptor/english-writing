@@ -1,8 +1,12 @@
 import "server-only";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerClient, type SetAllCookies } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { supabaseUrl, supabasePublishableKey } from "@/lib/shared/supabaseEnv";
+import {
+  supabaseUrl,
+  supabasePublishableKey,
+  supabaseConfigured,
+} from "@/lib/shared/supabaseEnv";
 import type { Database } from "./db/types";
 
 /**
@@ -14,12 +18,14 @@ import type { Database } from "./db/types";
  * `lib/shared/supabaseEnv`; the secret key is read only here.)
  *
  * Two clients, on purpose:
- *   supabaseAdmin()  — secret key, bypasses RLS. For trusted server paths that
- *                      already know whose data they touch and scope every query
- *                      by user_id in code (the data-access layer does).
- *   supabaseServer() — request-scoped, bound to the caller's auth cookies;
- *                      every query runs AS the signed-in user under RLS. Use
- *                      this once Supabase Auth is wired.
+ *   supabaseAdmin()  — secret key, bypasses RLS. Stateless, so it's a memoized
+ *                      singleton reused across warm invocations. For trusted
+ *                      server paths that already know whose data they touch and
+ *                      scope every query by user_id in code (the data-access
+ *                      layer does) — RLS is not a backstop for it.
+ *   supabaseServer() — request-scoped, bound to THIS request's auth cookies, so
+ *                      every query runs AS the signed-in user under RLS. Built
+ *                      fresh per call (never memoized) and used once Auth lands.
  */
 
 export type Db = SupabaseClient<Database>;
@@ -35,62 +41,77 @@ function secretKey(): string {
   return key;
 }
 
+// Stateless (no per-request cookies), so one instance is safe to share and
+// reuse across warm serverless invocations. Lazy so importing this module never
+// throws before the secret key is configured; recreated on a cold start.
+let adminClient: Db | null = null;
+
 /**
  * Full-access client. Never expose to the browser. Callers are responsible for
- * scoping by user_id; RLS is not a backstop here.
+ * scoping by user_id; RLS does not protect its queries.
  */
 export function supabaseAdmin(): Db {
-  return createClient<Database>(supabaseUrl(), secretKey(), {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  if (!adminClient) {
+    adminClient = createClient<Database>(supabaseUrl(), secretKey(), {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+  return adminClient;
 }
 
 /**
  * Request-scoped client that reads/writes the caller's Supabase auth cookies,
  * so RLS applies as that user. Must be called within a request (it reads
- * `next/headers` cookies). Return type is inferred — `@supabase/ssr`'s
- * `createServerClient` resolves its own client generics, which also gives the
- * cookie callbacks their types.
+ * `next/headers` cookies), and must NOT be cached — each request has its own
+ * cookies. Throws if Supabase env is absent; prefer `getUser()`/`getUserId()`
+ * on guest-first paths, which fail soft.
+ *
+ * Return type is inferred — `@supabase/ssr`'s `createServerClient` resolves its
+ * own client generics, which also gives the cookie callbacks their types.
  */
 export function supabaseServer() {
   const store = cookies();
-  return createServerClient<Database>(
-    supabaseUrl(),
-    supabasePublishableKey(),
-    {
-      cookies: {
-        getAll() {
-          return store.getAll();
-        },
-        setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
-          try {
-            for (const { name, value, options } of cookiesToSet) {
-              store.set(name, value, options);
-            }
-          } catch {
-            // Called from a Server Component where cookies are read-only —
-            // safe to ignore when middleware is responsible for refreshing
-            // the session cookie.
+  return createServerClient<Database>(supabaseUrl(), supabasePublishableKey(), {
+    cookies: {
+      getAll() {
+        return store.getAll();
+      },
+      setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
+        try {
+          for (const { name, value, options } of cookiesToSet) {
+            store.set(name, value, options);
           }
-        },
+        } catch {
+          // Called from a Server Component where cookies are read-only —
+          // safe to ignore when middleware is responsible for refreshing
+          // the session cookie.
+        }
       },
     },
-  );
+  });
 }
 
 /**
- * The signed-in user's id, or null when there's no session. The seam the news
- * data-access layer waits on: once Auth lands, a route resolves the id here and
- * hands it to `db/news.ts`. Returns null (never throws) when Supabase env is
- * absent, so guest-first paths keep working.
+ * The authenticated user, validated against the Auth server (not just decoded
+ * from the cookie). Null for a guest, and — by design — null when Supabase
+ * isn't configured or the Auth call fails, so guest-first paths never break on
+ * it. The single place the news data-access layer's Auth seam resolves.
  */
-export async function getUserId(): Promise<string | null> {
+export async function getUser(): Promise<User | null> {
+  if (!supabaseConfigured()) return null;
   try {
-    const {
-      data: { user },
-    } = await supabaseServer().auth.getUser();
-    return user?.id ?? null;
+    const { data, error } = await supabaseServer().auth.getUser();
+    return error ? null : data.user;
   } catch {
     return null;
   }
+}
+
+/** The signed-in user's id, or null when there's no (validated) session. */
+export async function getUserId(): Promise<string | null> {
+  return (await getUser())?.id ?? null;
 }
