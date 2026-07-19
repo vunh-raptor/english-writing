@@ -76,13 +76,18 @@ interface StoreContextValue {
   saveMissionOutcome(outcome: MissionOutcome): void;
   /** Create or update a saved News Chat conversation (keyed by id). */
   saveNewsSession(input: NewsSessionInput): void;
+  /** Add a captured highlight to the phrase pool (deduped; new = due today). */
+  collectPhrase(phrase: Phrase): void;
+  /** Remove a phrase from the pool and drop its SRS schedule. */
+  removePhrase(id: string): void;
   reset(): void;
 }
 
 /** Keep the on-device AI prompt library from growing without bound. */
 const MAX_AI_PROMPTS = 120;
-/** Keep the mined-phrase pool bounded too. */
-const MAX_MINED_PHRASES = 60;
+/** Keep the phrase pool bounded — it's the Phrasebook's library now, so
+ *  roomier than the old mined-only pool, but still finite for localStorage. */
+const MAX_MINED_PHRASES = 100;
 /** Keep saved News Chat conversations bounded — the dashboard only shows recent. */
 const MAX_NEWS_SESSIONS = 40;
 
@@ -276,6 +281,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const collectPhrase = useCallback(
+    (phrase: Phrase) => {
+      if (!phrase.id || !phrase.text) return;
+      const prev = storeRef.current;
+      // First save wins — re-capturing the same phrase keeps its history.
+      if (prev.minedPhrases.some((p) => p.id === phrase.id)) return;
+      const minedPhrases = [...prev.minedPhrases, phrase].slice(-MAX_MINED_PHRASES);
+      // No SRS record on purpose: "new" is already due today, so the drill and
+      // the Phrase Coach pick it up immediately.
+      commit({ ...prev, minedPhrases });
+    },
+    [commit],
+  );
+
+  const removePhrase = useCallback(
+    (id: string) => {
+      const prev = storeRef.current;
+      if (!prev.minedPhrases.some((p) => p.id === id)) return;
+      const phraseSrs = { ...prev.phraseSrs };
+      delete phraseSrs[id];
+      commit({
+        ...prev,
+        minedPhrases: prev.minedPhrases.filter((p) => p.id !== id),
+        phraseSrs,
+      });
+    },
+    [commit],
+  );
+
   const reset = useCallback(() => {
     clearStore();
     commit(defaultStore());
@@ -290,6 +324,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
+      collectPhrase,
+      removePhrase,
       reset,
     }),
     [
@@ -300,6 +336,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
+      collectPhrase,
+      removePhrase,
       reset,
     ],
   );

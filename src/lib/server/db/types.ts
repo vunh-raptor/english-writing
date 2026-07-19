@@ -19,7 +19,7 @@ import type {
 
 export type NewsSessionStatus = "active" | "complete";
 export type PhraseKind = "pattern" | "phrase";
-export type PhraseSource = "news" | "coach";
+export type PhraseSource = "news" | "coach" | "captured";
 
 /** `YYYY-MM-DD`, the learner's local calendar day (Postgres `date`). */
 type DateStr = string;
@@ -151,6 +151,7 @@ export interface Database {
           alternatives: PhraseAlternative[];
           source: PhraseSource;
           source_session_id: string | null;
+          captured_context: string | null;
           srs_box: number | null;
           srs_due: DateStr | null;
           srs_reps: number;
@@ -171,6 +172,7 @@ export interface Database {
           alternatives?: PhraseAlternative[];
           source: PhraseSource;
           source_session_id?: string | null;
+          captured_context?: string | null;
           srs_box?: number | null;
           srs_due?: DateStr | null;
           srs_reps?: number;
@@ -191,6 +193,7 @@ export interface Database {
           alternatives?: PhraseAlternative[];
           source?: PhraseSource;
           source_session_id?: string | null;
+          captured_context?: string | null;
           srs_box?: number | null;
           srs_due?: DateStr | null;
           srs_reps?: number;

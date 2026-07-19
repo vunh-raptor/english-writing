@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  BookMarked,
   ChevronsLeft,
   ChevronsRight,
   MessageCircle,
@@ -59,6 +60,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/coach", label: "Phrase coach", short: "Coach", icon: MessageCircle, badge: "coach" },
       { href: "/news", label: "News chat", short: "News", icon: Newspaper },
+      { href: "/phrasebook", label: "Phrasebook", short: "Phrases", icon: BookMarked },
     ],
   },
   {

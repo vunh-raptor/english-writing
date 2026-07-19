@@ -20,6 +20,7 @@ import type {
 import { chatComplete, rawComplete, type ChatTurn } from "./ai";
 import { fetchNewsHeadlines, type NewsHeadline } from "./news";
 import { countWords } from "@/lib/shared/stats";
+import { phraseMatcher } from "@/lib/shared/phrases";
 import { todayKey } from "@/lib/shared/date";
 
 /**
@@ -495,23 +496,6 @@ function mergeTargetStatus(current: TargetStatus, helped: boolean): TargetStatus
   return incoming; // pending or missed → they used it after all
 }
 
-/** A target as a lenient matcher: gaps become short wildcards, apostrophes and
- *  spacing flex. "It's worth ___" matches "its worth trying it, honestly". */
-function targetRegex(t: MissionTarget): RegExp {
-  const parts = t.text
-    .split(/_{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) =>
-      p
-        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-        .replace(/['’]/g, "['’]?")
-        .replace(/\s+/g, "\\s+"),
-    );
-  if (parts.length === 0) return /$^/;
-  return new RegExp(parts.join("[\\s\\S]{0,40}?"), "i");
-}
-
 /**
  * Fast models under-attend to the judging half of the job (observed: a learner
  * writes the target verbatim, the model reports nothing until the very end).
@@ -524,7 +508,7 @@ const MIN_PRODUCTION_WORDS = 5;
 function detectTargets(mission: Mission, lastUserText: string): string[] {
   if (countWords(lastUserText) < MIN_PRODUCTION_WORDS) return [];
   return mission.targets
-    .filter((t) => targetRegex(t).test(lastUserText))
+    .filter((t) => phraseMatcher(t.text).test(lastUserText))
     .map((t) => t.id);
 }
 

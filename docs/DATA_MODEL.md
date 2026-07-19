@@ -119,8 +119,10 @@ here on their SRS schedule, and the Phrase Coach picks them up when due.
   dedupes across missions.
 - **Payload:** `text`, `meaning`, `example`, `kind` (`pattern|phrase`),
   `register`, `origin`, `alternatives jsonb`.
-- **Provenance:** `source` (`news|coach`), `source_session_id` (soft FK,
-  `on delete set null`).
+- **Provenance:** `source` (`news|coach|captured` — `captured` + the
+  `captured_context` passage added by migration `0003` for Phrasebook
+  highlights, see [`PHRASEBOOK.md`](PHRASEBOOK.md)), `source_session_id`
+  (soft FK, `on delete set null`).
 - **Schedule (folded-in `SrsRecord`):** `srs_box`, `srs_due date`, `srs_reps`,
   `srs_last_reviewed`.
 - **Index:** `(user_id, srs_due)` — the Coach's "what's due?" query.

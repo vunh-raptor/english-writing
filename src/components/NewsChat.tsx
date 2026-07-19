@@ -34,11 +34,14 @@ import {
   missionContinue,
   missionAsk,
   missionDebrief,
+  enrichPhrase,
 } from "@/lib/client/clientApi";
+import { todayKey } from "@/lib/shared/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageContainer } from "@/components/page-container";
+import { SelectionCapture } from "@/components/SelectionCapture";
 
 /**
  * News Chat v2 — the Mission (docs/NEWS_CHAT_V2.md). One planned scenario from
@@ -242,7 +245,7 @@ function AskPanel({
                 {e.q}
               </div>
               {e.help && (
-                <div className="text-[12.5px] leading-relaxed text-foreground">
+                <div className="text-[12.5px] leading-relaxed text-foreground" data-capture-context>
                   {e.help.answer}
                   {e.help.insert && (
                     <button
@@ -311,7 +314,7 @@ export function NewsChat({
   /** Return to the /news dashboard. */
   onExit?: () => void;
 } = {}) {
-  const { store, saveMissionOutcome, saveNewsSession } = useStore();
+  const { store, saveMissionOutcome, saveNewsSession, collectPhrase } = useStore();
 
   const [mission, setMission] = useState<Mission | null>(resume?.mission ?? null);
   const [progress, setProgress] = useState<MissionProgress | null>(resume?.progress ?? null);
@@ -437,6 +440,33 @@ export function NewsChat({
     void loadMission(store.newsLevel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Highlight-to-save (the Phrasebook capture). Enrich best-effort; on any
+   * failure keep the raw highlight — capture never fails, and either way the
+   * phrase joins the pool unscheduled (= due today for the drill and Coach).
+   */
+  const captureHighlight = useCallback(
+    async (text: string, context: string) => {
+      const level = progress?.level ?? store.newsLevel;
+      const captured = { module: "News Chat", context: context || undefined, day: todayKey() };
+      try {
+        const e = await enrichPhrase(level, text, context);
+        collectPhrase({
+          id: phraseId(e.text || text),
+          text: e.text || text,
+          meaning: e.meaning,
+          example: e.example || text,
+          register: e.register,
+          alternatives: e.alternatives,
+          captured,
+        });
+      } catch {
+        collectPhrase({ id: phraseId(text), text, meaning: "", example: text, captured });
+      }
+    },
+    [progress?.level, store.newsLevel, collectPhrase],
+  );
 
   /** Persist the conversation so the dashboard can list + resume it. Only once
    *  the learner has actually written — an opened-but-untouched chat is noise. */
@@ -1066,7 +1096,11 @@ export function NewsChat({
   );
 
   return (
-    <div className="flex h-full min-h-0">
+    <SelectionCapture
+      onCapture={captureHighlight}
+      disabled={!mission}
+      className="flex h-full min-h-0"
+    >
       {/* Left margin — metadata (top) + Ask aide (bottom). Desktop only. */}
       {marginOpen && (
         <aside className="relative hidden w-[248px] flex-none flex-col border-r border-sidebar-border bg-background lg:flex">
@@ -1163,7 +1197,7 @@ export function NewsChat({
                     <b className="font-semibold not-italic text-foreground">{mission.scenario.role}</b>.{" "}
                     {mission.scenario.situation}
                   </p>
-                  <div className="mt-3">
+                  <div className="mt-3" data-capture-context>
                     <BriefingText
                       briefing={mission.briefing}
                       targets={mission.targets}
@@ -1225,7 +1259,10 @@ export function NewsChat({
                 <div className={cn("kicker", m.role === "coach" ? "text-brand" : "text-gold")}>
                   {m.role === "coach" ? speaker : "You"}
                 </div>
-                <div className="mt-1.5 whitespace-pre-wrap font-serif text-[15.5px] leading-relaxed text-foreground">
+                <div
+                  className="mt-1.5 whitespace-pre-wrap font-serif text-[15.5px] leading-relaxed text-foreground"
+                  data-capture-context
+                >
                   {m.content}
                 </div>
               </div>
@@ -1337,7 +1374,7 @@ export function NewsChat({
 
             {/* Debrief — the close, inline at the end of the document. */}
             {debrief && mission && (
-              <div className="mt-6 border border-border bg-sage-muted p-4 text-sage-ink">
+              <div className="mt-6 border border-border bg-sage-muted p-4 text-sage-ink" data-capture-context>
                 <div className="text-[15px] font-medium">
                   {debrief.goalHit ? "Mission complete." : "Mission over."} {debrief.celebration}
                 </div>
@@ -1411,6 +1448,6 @@ export function NewsChat({
           </button>
         )}
       </div>
-    </div>
+    </SelectionCapture>
   );
 }

@@ -89,7 +89,8 @@ export interface Store {
   aiPrompts: Prompt[];
   /** Spaced-repetition schedule per phrase id. */
   phraseSrs: Record<string, SrsRecord>;
-  /** Phrases mined from News Chat sessions, added to the Coach's practice pool. */
+  /** The learner's phrase pool — mission targets/keeps from News Chat plus
+   *  captured highlights. The Phrasebook's library; the Coach practices it too. */
   minedPhrases: Phrase[];
   /** Saved News Chat conversations — powers the /news dashboard (recent, stats, resume). */
   newsSessions: NewsSession[];
@@ -172,6 +173,15 @@ export interface PhraseAlternative {
   note?: string;
 }
 
+/** Where a captured phrase was highlighted — the Phrasebook's provenance. */
+export interface CaptureSource {
+  /** Module label, e.g. "News Chat". */
+  module: string;
+  /** The sentence/passage around the highlight (trimmed). */
+  context?: string;
+  day: DayKey;
+}
+
 /** A native phrase/idiom the learner practices producing in conversation. */
 export interface Phrase {
   id: string;
@@ -185,6 +195,8 @@ export interface Phrase {
   origin?: string;
   /** 2+ popular "similar ways" to say the same thing, for real-world flexibility. */
   alternatives?: PhraseAlternative[];
+  /** Present when the learner highlighted this themselves (Phrasebook capture). */
+  captured?: CaptureSource;
 }
 
 /** Spaced-repetition state for one phrase (Leitner boxes). */
@@ -396,6 +408,42 @@ export interface Debrief {
   upgrades: Upgrade[]; // 0-2, never more
   /** 0-2 bonus phrases from the chat → the mined pool. */
   keep: { text: string; meaning: string }[];
+}
+
+// --- Phrasebook: highlight anywhere → collect → apply in real situations ---
+//
+// The capture-to-application loop (docs/PHRASEBOOK.md). Highlights are enriched
+// into reusable Phrase entries; practice is always PRODUCTION — a real-life
+// situation the learner answers in their own sentence — never a flashcard flip.
+
+/** What enrichment makes of a raw highlight — a Phrase minus id/provenance. */
+export interface CaptureEnrichment {
+  /** The reusable unit (trimmed/normalized; patterns may carry ___ gaps). */
+  text: string;
+  /** Plain-words gloss at the learner's level. */
+  meaning: string;
+  /** One natural example in a DIFFERENT situation than the source (transfer). */
+  example: string;
+  register?: string;
+  alternatives?: PhraseAlternative[];
+}
+
+/** One practice round's setup: a situation that calls for the phrase. */
+export interface DrillSituation {
+  /** The phrase id this situation elicits. */
+  id: string;
+  /** 1-2 sentences, second person, everyday life. Never contains the phrase. */
+  situation: string;
+}
+
+/** Honest judgment of one drill answer. */
+export interface DrillJudgment {
+  /** Did they apply the phrase (or a close variant) in their OWN sentence? */
+  used: boolean;
+  /** One short warm line; quotes their words when it worked. */
+  note: string;
+  /** At most one pattern-level fix (the debrief's Upgrade shape). */
+  upgrade?: Upgrade;
 }
 
 /**

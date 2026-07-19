@@ -139,6 +139,9 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `POST /api/converse/continue` | "Next words": a stalled mid-sentence draft → next-word options + a gapped continuation frame. Never a completion. |
 | `POST /api/converse/ask` | "Ask · anything": translate / explain / rephrase aide. |
 | `POST /api/converse/debrief` | Closing debrief: per-target results, ≤2 upgrades, keep-phrases → SRS. |
+| `POST /api/phrasebook/enrich` | A captured highlight → reusable form + meaning + transfer example. |
+| `POST /api/phrasebook/drill` | One call per practice session: a real-life situation per due phrase. |
+| `POST /api/phrasebook/judge` | Honest per-answer judgment: applied in their own sentence, or not. |
 
 The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
 the director prompt, stall assist, recap — are documented in detail in

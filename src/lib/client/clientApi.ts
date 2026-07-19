@@ -12,6 +12,9 @@ import type {
   AskHelp,
   Debrief,
   NewsLevel,
+  CaptureEnrichment,
+  DrillSituation,
+  DrillJudgment,
 } from "@/types";
 
 /** Client calls to our own API routes (server does the crawling + AI). */
@@ -149,6 +152,55 @@ export async function missionAsk(
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<AskHelp>;
+}
+
+// --- Phrasebook: capture anywhere → apply in real situations -----------------
+
+/** Enrich a highlighted snippet into a phrasebook entry (reusable form,
+ *  meaning, transfer example). Callers fail soft to saving the raw text. */
+export async function enrichPhrase(
+  level: NewsLevel,
+  text: string,
+  context: string,
+): Promise<CaptureEnrichment> {
+  const res = await fetch("/api/phrasebook/enrich", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, text, context }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<CaptureEnrichment>;
+}
+
+/** One practice session's situations — one call for all due phrases. */
+export async function drillPhrases(
+  level: NewsLevel,
+  items: { id: string; text: string; meaning: string }[],
+): Promise<DrillSituation[]> {
+  const res = await fetch("/api/phrasebook/drill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, items }),
+  });
+  if (!res.ok) throw await httpError(res);
+  const data = await res.json();
+  return Array.isArray(data.situations) ? (data.situations as DrillSituation[]) : [];
+}
+
+/** Honest judgment of one drill answer: applied, or not yet. */
+export async function judgePhrase(
+  level: NewsLevel,
+  phrase: { text: string; meaning: string },
+  situation: string,
+  sentence: string,
+): Promise<DrillJudgment> {
+  const res = await fetch("/api/phrasebook/judge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, phrase, situation, sentence }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<DrillJudgment>;
 }
 
 /** Closing debrief: per-target results, ≤2 upgrades, phrases to keep. */
