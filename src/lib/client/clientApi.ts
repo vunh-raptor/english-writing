@@ -8,6 +8,7 @@ import type {
   MissionProgress,
   MissionTurn,
   BridgeHelp,
+  ContinueHelp,
   AskHelp,
   Debrief,
   NewsLevel,
@@ -115,6 +116,23 @@ export async function missionBridge(
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<BridgeHelp>;
+}
+
+/** "Next words": the learner stalled mid-sentence — their unfinished draft →
+ *  2-4 alternative next-word chunks + one continuation frame with ___ gaps.
+ *  Building material only; by contract never a completion of their sentence. */
+export async function missionContinue(
+  level: NewsLevel,
+  currentDemand: string,
+  draft: string,
+): Promise<ContinueHelp> {
+  const res = await fetch("/api/converse/continue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, currentDemand, draft }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<ContinueHelp>;
 }
 
 /** "Ask · anything": a free translate / explain / rephrase aide, with an

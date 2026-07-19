@@ -357,6 +357,20 @@ export interface BridgeHelp {
   frame: string;
 }
 
+/**
+ * "Next words": help for a learner who stalled MID-sentence, grounded in the
+ * draft they've already written. Options are alternative directions for the
+ * very next words (1-3 words each, rendered inert — never tappable-to-insert);
+ * the frame is one possible shape for the REST of the sentence, gaps as ___.
+ * By contract this is never a completion: the learner always keeps writing.
+ */
+export interface ContinueHelp {
+  /** 2-4 short alternative next-word chunks. Different directions, not a sequence. */
+  options: string[];
+  /** One continuation frame with ___ gaps for what's still theirs to write. */
+  frame: string;
+}
+
 export interface TargetResult {
   id: string;
   verdict: "produced" | "assisted" | "missed";

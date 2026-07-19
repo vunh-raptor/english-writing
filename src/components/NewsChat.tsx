@@ -23,6 +23,7 @@ import type {
   TargetStatus,
   HintRung,
   BridgeHelp,
+  ContinueHelp,
   Debrief,
   Phrase,
 } from "@/types";
@@ -30,6 +31,7 @@ import {
   fetchMission,
   missionConverse,
   missionBridge,
+  missionContinue,
   missionAsk,
   missionDebrief,
 } from "@/lib/client/clientApi";
@@ -342,6 +344,14 @@ export function NewsChat({
   const [bridgeHelp, setBridgeHelp] = useState<BridgeHelp | null>(null);
   const [bridging, setBridging] = useState(false);
 
+  // "Next words" — continuation help grounded in the unfinished draft, for a
+  // stall MID-sentence. Options render inert; the structure is a separate
+  // reveal so help depth stays honestly accounted.
+  const [nextOpen, setNextOpen] = useState(false);
+  const [nextHelp, setNextHelp] = useState<ContinueHelp | null>(null);
+  const [nextBusy, setNextBusy] = useState(false);
+  const [nextFrameShown, setNextFrameShown] = useState(false);
+
   // Debrief.
   const [debrief, setDebrief] = useState<Debrief | null>(null);
   const [debriefing, setDebriefing] = useState(false);
@@ -357,6 +367,12 @@ export function NewsChat({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ideaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The draft the current next-word help was fetched for (skip re-fetch). */
+  const nextDraftRef = useRef("");
+  /** Auto-fetched next-word help once already this learner turn. */
+  const autoNextRef = useRef(false);
+  /** Ref-stable handle so the long-stall timer can call the latest fetch. */
+  const fetchNextRef = useRef<() => void>(() => {});
 
   const complete = debrief !== null || debriefing;
   const currentBeat =
@@ -471,12 +487,64 @@ export function NewsChat({
     clearStall();
   }, [markHint, clearStall]);
 
+  /**
+   * "Next words": fetch continuation material for the current unfinished
+   * draft. Viewing the chunk options is keywords-level help; the structure is
+   * a separate reveal that marks frame-level (→ "assisted") — same honesty as
+   * the ladder. Reuses the last result while the draft hasn't changed.
+   */
+  const fetchNextWords = useCallback(async () => {
+    const draft = (inputRef.current?.value ?? "").trim();
+    if (!draft || !mission || !progress) return;
+    clearStall();
+    setStuckPulse(false);
+    setNextOpen(true);
+    markHint("keywords");
+    if (nextBusy) return;
+    if (draft === nextDraftRef.current && nextHelp) return; // same words — reuse
+    setNextBusy(true);
+    try {
+      const help = await missionContinue(progress.level, currentDemand, draft);
+      nextDraftRef.current = draft;
+      setNextHelp(help);
+      setNextFrameShown(false);
+    } catch {
+      // Fail soft to the beat's pre-planned ladder — help never blocks.
+      if (currentBeat) {
+        nextDraftRef.current = draft;
+        setNextHelp({ options: currentBeat.hints.keywords, frame: currentBeat.hints.frame });
+        setNextFrameShown(false);
+      }
+    } finally {
+      setNextBusy(false);
+    }
+  }, [mission, progress, currentDemand, currentBeat, nextBusy, nextHelp, clearStall, markHint]);
+  fetchNextRef.current = () => void fetchNextWords();
+
+  const resetNextWords = useCallback(() => {
+    setNextOpen(false);
+    setNextHelp(null);
+    setNextFrameShown(false);
+    nextDraftRef.current = "";
+    autoNextRef.current = false;
+  }, []);
+
   function armStall() {
     clearStall();
     if (!started || busy || complete || !mission) return;
     pulseTimer.current = setTimeout(() => setStuckPulse(true), PULSE_MS);
     ideaTimer.current = setTimeout(() => {
-      if (hintRungRef.current === "none") descend();
+      // Frozen MID-sentence → offer next words for what they wrote (once per
+      // turn). Frozen at zero → the planned idea nudge, as before.
+      const draft = (inputRef.current?.value ?? "").trim();
+      if (draft) {
+        if (!autoNextRef.current) {
+          autoNextRef.current = true;
+          fetchNextRef.current();
+        }
+      } else if (hintRungRef.current === "none") {
+        descend();
+      }
     }, AUTO_IDEA_MS);
   }
 
@@ -489,7 +557,8 @@ export function NewsChat({
     setBridgeOpen(false);
     setBridgeHelp(null);
     setBridgeIntent("");
-  }, []);
+    resetNextWords();
+  }, [resetNextWords]);
 
   // --- The conversation loop ------------------------------------------------
 
@@ -611,6 +680,7 @@ export function NewsChat({
     if (GAP_RE.test(text)) return; // gaps are theirs to fill
     clearStall();
     setHintOpen(false);
+    resetNextWords(); // the sent draft is gone; next stall gets fresh help
     const history: ChatMessage[] = [...messages, { role: "user", content: text }];
     setMessages(history);
     setInput("");
@@ -806,10 +876,85 @@ export function NewsChat({
   );
 
   /** One inline hint / bridge panel — shown in the flow beside the writing. */
-  const helpPanel = currentBeat && (hintOpen || bridgeOpen) && (
+  const helpPanel = currentBeat && (hintOpen || bridgeOpen || nextOpen) && (
     <div className="mt-2.5 border border-border bg-secondary/50 p-3.5">
-      {hintOpen && (
+      {nextOpen && (
         <div className="flex flex-col gap-2.5">
+          <div className="text-xs text-muted-foreground">
+            Next words — pick a direction, then keep writing your own:
+          </div>
+          {nextBusy && (
+            <div className="flex items-center gap-1 py-0.5">
+              <span className="typing-dot" />
+              <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+              <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
+            </div>
+          )}
+          {!nextBusy && nextHelp && (
+            <>
+              {/* Inert word-bricks — deliberately not buttons; they get typed. */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {nextHelp.options.map((o, i) => (
+                  <span
+                    key={i}
+                    className="select-none border border-border bg-card px-2 py-0.5 text-[13px]"
+                  >
+                    {o}
+                  </span>
+                ))}
+              </div>
+              {!nextFrameShown ? (
+                <div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setNextFrameShown(true);
+                      markHint("frame");
+                    }}
+                  >
+                    Show a structure ↓
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="border border-dashed border-border bg-card px-2 py-1 text-[13px]">
+                    {nextHelp.frame}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => insertFrame(nextHelp.frame, e)}
+                  >
+                    Use frame
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    the ___ parts are yours to fill
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={descend}>
+                  More help ↓
+                </Button>
+                <button
+                  type="button"
+                  className="ml-auto text-muted-foreground hover:text-foreground"
+                  onClick={() => setNextOpen(false)}
+                  aria-label="Close next-word help"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {hintOpen && (
+        <div className={cn("flex flex-col gap-2.5", nextOpen && "mt-3 border-t border-border pt-3")}>
           {RUNG_ORDER.indexOf(hintRung) >= 1 && (
             <div className="text-sm">{currentBeat.hints.idea}</div>
           )}
@@ -872,7 +1017,12 @@ export function NewsChat({
       )}
 
       {bridgeOpen && (
-        <div className={cn("flex flex-col gap-2.5", hintOpen && "mt-3 border-t border-border pt-3")}>
+        <div
+          className={cn(
+            "flex flex-col gap-2.5",
+            (hintOpen || nextOpen) && "mt-3 border-t border-border pt-3",
+          )}
+        >
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -1143,10 +1293,21 @@ export function NewsChat({
                   <div className="mt-2.5 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => (hintOpen ? setHintOpen(false) : descend())}
+                      onClick={() => {
+                        // Mid-sentence, help starts from THEIR words (next-word
+                        // options); at zero, from the planned ladder.
+                        if (hintOpen || nextOpen) {
+                          setHintOpen(false);
+                          setNextOpen(false);
+                        } else if (input.trim()) {
+                          void fetchNextWords();
+                        } else {
+                          descend();
+                        }
+                      }}
                       className={cn(
                         "flex items-center gap-1 rounded-none border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                        stuckPulse && !hintOpen && "animate-nudge",
+                        stuckPulse && !hintOpen && !nextOpen && "animate-nudge",
                       )}
                     >
                       <LifeBuoy className="h-3.5 w-3.5" /> Stuck?

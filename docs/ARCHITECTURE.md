@@ -133,10 +133,12 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `POST /api/prompts/generate` | Fresh, theme+level-grounded writing prompts. |
 | `POST /api/sparks` | Tap-to-insert sentence starters for the writing surface. |
 | `POST /api/coach` | Phrase Coach turn (SRS-scheduled phrase drilling). |
-| `GET /api/news/subject` | Curate ONE live news subject + opening hook. |
-| `POST /api/converse` | News Chat turn — the "forced production" engine. |
-| `POST /api/converse/assist` | Stall help: a simpler question + tappable starters. |
-| `POST /api/converse/recap` | Closing celebration + mined phrases → Coach/SRS. |
+| `GET /api/news/mission` | Today's planned News Chat mission, cached per (day, level). |
+| `POST /api/converse` | News Chat turn — the scene-partner engine (state merged in code). |
+| `POST /api/converse/bridge` | "Say it your way": intent (any language) → keywords + gapped frame. |
+| `POST /api/converse/continue` | "Next words": a stalled mid-sentence draft → next-word options + a gapped continuation frame. Never a completion. |
+| `POST /api/converse/ask` | "Ask · anything": translate / explain / rephrase aide. |
+| `POST /api/converse/debrief` | Closing debrief: per-target results, ≤2 upgrades, keep-phrases → SRS. |
 
 The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
 the director prompt, stall assist, recap — are documented in detail in

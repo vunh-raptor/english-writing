@@ -527,9 +527,29 @@ input ("type your idea in any language") → the bridge prompt (§5.3) → keywo
 head has the idea in Vietnamese and no path to English — the single most
 common freeze for real beginners. Counts as `frame`-level assistance.
 
+And for the *other* common freeze — stuck **mid-sentence**, with words already
+in the input — **"Next words"**: the unfinished draft (plus the question being
+answered) goes to `POST /api/converse/continue`, which returns
+
+- `options` — 2-4 alternative chunks (**≤3 words each, code-enforced**) that
+  could come right after their draft: different *directions*, not pieces of one
+  sentence. Rendered as the same inert word-bricks as rung 2 — not buttons.
+- `frame` — one continuation frame for the *rest* of the sentence, gaps as
+  `___`, behind a separate "Show a structure" reveal; inserting it uses the
+  rung-3 mechanics (gaps kept, send blocked while `___` remains).
+
+Viewing the options counts as `keywords`-level help; revealing the structure
+counts as `frame` (→ "assisted"). On failure it falls back to the beat's
+pre-planned ladder material — help never blocks. Because chunks are hard-capped
+at 3 words, the frame must contain gaps (a gapless one is refused server-side),
+and options render inert, no path through this help completes the learner's
+sentence: they always type the words.
+
 Stall behavior: the 7s pause timer no longer fetches options — it just makes
-the Stuck? button pulse, and on a *long* stall (~15s) auto-opens **rung 1
-only**. Nothing is ever auto-inserted.
+the Stuck? button pulse. On a *long* stall (~15s): with an empty input it
+auto-opens **rung 1 only**; with an unfinished draft it fetches **Next words**
+for that draft (at most once per turn). The Stuck? button routes the same way —
+draft → next words, blank → the ladder. Nothing is ever auto-inserted.
 
 What's deleted: the 3 tappable starter chips, the rotating options feed, and
 tap-to-insert of any complete text. (The freewriting Sparks in Write mode keep
@@ -546,6 +566,9 @@ POST /api/converse                { mission-slice, progress, messages } → Miss
                                   mission-slice = scenario, goal, targets,
                                   current beat only (token diet)
 POST /api/converse/bridge         { level, currentDemand, intent } → BridgeHelp
+POST /api/converse/continue       { level, currentDemand, draft } → ContinueHelp
+                                  (next-word options + a gapped continuation
+                                  frame for a stalled mid-sentence draft)
 POST /api/converse/debrief        { goal, targets+status, messages } → Debrief
 ```
 
