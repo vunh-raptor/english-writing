@@ -16,7 +16,7 @@ module-driven backend), see [`PATTERNS.md`](PATTERNS.md).
 | Server AI | A **server-only gateway** (`src/lib/server/ai.ts`) fronting Groq · Google Gemini · Anthropic, chosen by which env key is present. Keys never leave the server. |
 | Content sources | Keyless server **adapters**: trends (Hacker News + operator `custom` feed) and news (Google News RSS, GDELT, Reddit). |
 | Client state (today) | Browser **`localStorage`**, guest-first (`src/lib/client/storage.ts`, `src/store/StoreContext.tsx`). |
-| Auth + DB (planned) | **Supabase** (Postgres + Auth). `@supabase/ssr` + `@supabase/supabase-js` are installed but **not yet wired** — no `supabase/` schema exists in the repo yet. |
+| Auth + DB (in progress) | **Supabase** (Postgres + Auth). The Postgres **schema exists** (`supabase/migrations/`, RLS) with a typed server data-access layer (`src/lib/server/db/`), landed News-Chat-first — see [`DATA_MODEL.md`](DATA_MODEL.md). Ready to wire; **Auth is not connected yet**, so the live app still runs guest-first on `localStorage`. |
 | Hosting | **Vercel** (Hobby). A Vercel Cron can warm the trend/news caches. |
 
 ---
@@ -133,10 +133,15 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `POST /api/prompts/generate` | Fresh, theme+level-grounded writing prompts. |
 | `POST /api/sparks` | Tap-to-insert sentence starters for the writing surface. |
 | `POST /api/coach` | Phrase Coach turn (SRS-scheduled phrase drilling). |
-| `GET /api/news/subject` | Curate ONE live news subject + opening hook. |
-| `POST /api/converse` | News Chat turn — the "forced production" engine. |
-| `POST /api/converse/assist` | Stall help: a simpler question + tappable starters. |
-| `POST /api/converse/recap` | Closing celebration + mined phrases → Coach/SRS. |
+| `GET /api/news/mission` | Today's planned News Chat mission, cached per (day, level). |
+| `POST /api/converse` | News Chat turn — the scene-partner engine (state merged in code). |
+| `POST /api/converse/bridge` | "Say it your way": intent (any language) → keywords + gapped frame. |
+| `POST /api/converse/continue` | "Next words": a stalled mid-sentence draft → next-word options + a gapped continuation frame. Never a completion. |
+| `POST /api/converse/ask` | "Ask · anything": translate / explain / rephrase aide. |
+| `POST /api/converse/debrief` | Closing debrief: per-target results, ≤2 upgrades, keep-phrases → SRS. |
+| `POST /api/phrasebook/enrich` | A captured highlight → reusable form + meaning + transfer example. |
+| `POST /api/phrasebook/drill` | One call per practice session: a real-life situation per due phrase. |
+| `POST /api/phrasebook/judge` | Honest per-answer judgment: applied in their own sentence, or not. |
 
 The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
 the director prompt, stall assist, recap — are documented in detail in
@@ -171,7 +176,10 @@ additive rather than a rewrite:
 2. Add a Postgres schema (SQL migrations under `supabase/`, Row-Level Security)
    for `entries`, `vocab`, streak/profile, and cached `trends`/`scenarios`.
    `supabase-js` from the server — no ORM, to avoid serverless
-   connection-pool pain.
+   connection-pool pain. **Landed News-Chat-first:** `profiles` (streak/profile
+   + rolling level), `news_sessions`, and `phrases` (library + SRS), with a
+   typed data-access layer in `src/lib/server/db/`. See
+   [`DATA_MODEL.md`](DATA_MODEL.md); `entries`/`vocab` are the next tables.
 3. Move the currently-client stats/streak/vocab merge behind the API so they're
    consistent across devices and can't be tampered with. The client keeps light
    display helpers and swaps `localStorage` reads for API calls.

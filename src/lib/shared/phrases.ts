@@ -80,6 +80,27 @@ export function phraseById(id: string): Phrase | undefined {
 }
 
 /**
+ * A phrase as a lenient matcher: ___ gaps become short wildcards; apostrophes
+ * and spacing flex. "It's worth ___" matches "its worth trying it, honestly".
+ * Used server-side to detect honest production (missions, drills) and
+ * client-side as the offline judging fallback.
+ */
+export function phraseMatcher(text: string): RegExp {
+  const parts = text
+    .split(/_{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) =>
+      p
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/['’]/g, "['’]?")
+        .replace(/\s+/g, "\\s+"),
+    );
+  if (parts.length === 0) return /$^/;
+  return new RegExp(parts.join("[\\s\\S]{0,40}?"), "i");
+}
+
+/**
  * How many phrases are queued for practice today, capped at the daily session
  * size — the number the Phrase Coach badge nudges with. New phrases count as
  * due; returns 0 (badge hidden) once today's rotation is cleared.
