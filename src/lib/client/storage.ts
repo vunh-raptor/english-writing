@@ -86,6 +86,7 @@ export function defaultStore(): Store {
     aiPrompts: [],
     phraseSrs: {},
     minedPhrases: [],
+    newsSessions: [],
     newsLevel: "B1",
     hasWritten: false,
   };
@@ -114,6 +115,7 @@ export function loadStore(): Store {
       aiPrompts: parsed.aiPrompts ?? [],
       phraseSrs: parsed.phraseSrs ?? {},
       minedPhrases: parsed.minedPhrases ?? [],
+      newsSessions: parsed.newsSessions ?? [],
       newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(
         parsed.newsLevel as NewsLevel,
       )

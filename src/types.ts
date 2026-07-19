@@ -91,6 +91,8 @@ export interface Store {
   phraseSrs: Record<string, SrsRecord>;
   /** Phrases mined from News Chat sessions, added to the Coach's practice pool. */
   minedPhrases: Phrase[];
+  /** Saved News Chat conversations — powers the /news dashboard (recent, stats, resume). */
+  newsSessions: NewsSession[];
   /** Rolling CEFR-ish level from News Chat missions — tomorrow's mission is planned at it. */
   newsLevel: NewsLevel;
   /** Whether the learner has finished the first session (we defer "settings" nudges). */
@@ -380,4 +382,50 @@ export interface Debrief {
   upgrades: Upgrade[]; // 0-2, never more
   /** 0-2 bonus phrases from the chat → the mined pool. */
   keep: { text: string; meaning: string }[];
+}
+
+/**
+ * "Ask · anything": the free aide in the News Chat margin. The learner asks to
+ * translate / explain / rephrase; the aide answers briefly and, when they asked
+ * how to say something, hands back an insertable English phrase.
+ */
+export interface AskHelp {
+  /** A short, level-appropriate answer (plain text). */
+  answer: string;
+  /** An English phrase the learner can drop straight into their reply, if any. */
+  insert?: string;
+}
+
+/**
+ * A saved News Chat conversation — persisted so the /news dashboard can show
+ * recent chats, roll up stats, and resume an unfinished one. Holds enough of the
+ * live session (mission + transcript + progress) to re-enter it exactly.
+ */
+export interface NewsSession {
+  id: string;
+  day: DayKey;
+  createdAt: number;
+  updatedAt: number;
+  level: NewsLevel;
+  /** The mission title — the conversation's headline. */
+  title: string;
+  /** Attribution to the real source. */
+  source: string;
+  url?: string;
+  /** The mission goal, for the resume card. */
+  goal: string;
+  /** "active" until the debrief lands; "complete" after. */
+  status: "active" | "complete";
+  wordsProduced: number;
+  /** Targets produced or assisted so far — the numerator of the phrase count. */
+  targetsProduced: number;
+  targetsTotal: number;
+  /** Whether the learner accomplished the mission goal (set at debrief). */
+  goalHit?: boolean;
+  /** The full frozen mission — lets resume run turns with no re-plan. */
+  mission: Mission;
+  /** The transcript so far (partner + learner). */
+  messages: ChatMessage[];
+  /** Client-held progress — merged server-side each turn. */
+  progress: MissionProgress;
 }

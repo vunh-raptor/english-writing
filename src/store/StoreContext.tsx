@@ -10,7 +10,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Entry, NewsLevel, Phrase, Prompt, Settings, Store } from "@/types";
+import type {
+  ChatMessage,
+  Entry,
+  Mission,
+  MissionProgress,
+  NewsLevel,
+  NewsSession,
+  Phrase,
+  Prompt,
+  Settings,
+  Store,
+} from "@/types";
 import { loadStore, saveStore, clearStore, defaultStore } from "@/lib/client/storage";
 import { todayKey } from "@/lib/shared/date";
 import {
@@ -41,6 +52,17 @@ interface MissionOutcome {
   level: NewsLevel;
 }
 
+/** A News Chat conversation snapshot to persist for the /news dashboard. */
+interface NewsSessionInput {
+  id: string;
+  mission: Mission;
+  messages: ChatMessage[];
+  progress: MissionProgress;
+  status: "active" | "complete";
+  /** Only meaningful when status is "complete". */
+  goalHit?: boolean;
+}
+
 interface StoreContextValue {
   store: Store;
   /** Commit a completed session. Returns the created entry for the celebrate screen. */
@@ -52,6 +74,8 @@ interface StoreContextValue {
   reviewPhrases(ids: string[], success: boolean): void;
   /** Fold a finished News Chat mission into the Coach's pool + SRS. */
   saveMissionOutcome(outcome: MissionOutcome): void;
+  /** Create or update a saved News Chat conversation (keyed by id). */
+  saveNewsSession(input: NewsSessionInput): void;
   reset(): void;
 }
 
@@ -59,6 +83,15 @@ interface StoreContextValue {
 const MAX_AI_PROMPTS = 120;
 /** Keep the mined-phrase pool bounded too. */
 const MAX_MINED_PHRASES = 60;
+/** Keep saved News Chat conversations bounded — the dashboard only shows recent. */
+const MAX_NEWS_SESSIONS = 40;
+
+/** Count targets the learner produced or produced-with-help — the phrase tally. */
+function countProduced(progress: MissionProgress): number {
+  return Object.values(progress.targets).filter(
+    (s) => s === "produced" || s === "assisted",
+  ).length;
+}
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
@@ -208,6 +241,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const saveNewsSession = useCallback(
+    (input: NewsSessionInput) => {
+      const prev = storeRef.current;
+      const now = Date.now();
+      const { mission, progress } = input;
+      const existing = prev.newsSessions.find((s) => s.id === input.id);
+
+      const session: NewsSession = {
+        id: input.id,
+        day: mission.day,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        level: mission.level,
+        title: mission.title,
+        source: mission.source,
+        url: mission.url,
+        goal: mission.goal,
+        status: input.status,
+        wordsProduced: progress.wordsProduced,
+        targetsProduced: countProduced(progress),
+        targetsTotal: mission.targets.length,
+        goalHit: input.status === "complete" ? input.goalHit ?? existing?.goalHit : existing?.goalHit,
+        mission,
+        messages: input.messages,
+        progress,
+      };
+
+      // Upsert by id, newest first, bounded.
+      const rest = prev.newsSessions.filter((s) => s.id !== input.id);
+      const newsSessions = [session, ...rest].slice(0, MAX_NEWS_SESSIONS);
+      commit({ ...prev, newsSessions });
+    },
+    [commit],
+  );
+
   const reset = useCallback(() => {
     clearStore();
     commit(defaultStore());
@@ -221,6 +289,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addGeneratedPrompts,
       reviewPhrases,
       saveMissionOutcome,
+      saveNewsSession,
       reset,
     }),
     [
@@ -230,6 +299,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addGeneratedPrompts,
       reviewPhrases,
       saveMissionOutcome,
+      saveNewsSession,
       reset,
     ],
   );

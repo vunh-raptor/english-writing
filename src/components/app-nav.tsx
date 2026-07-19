@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { Entry, Settings } from "@/types";
+import type { Entry, NewsSession, Settings } from "@/types";
 import { parseDayKey, todayKey } from "@/lib/shared/date";
 import { MAX_FREEZES, streakInfo, type StreakInfo } from "@/lib/shared/streak";
 import { dueTodayCount } from "@/lib/shared/phrases";
@@ -157,16 +157,55 @@ function initialOf(name: string): string {
   return n ? n[0].toUpperCase() : "";
 }
 
-/** e.g. "Jul 18" — compact, no weekday, for the Recent list meta line. */
-function compactDay(day: string): string {
-  return parseDayKey(day).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 /** A short glimpse of a piece — its opening line, falling back to the prompt. */
 function entryTitle(e: Entry): string {
   const firstLine = e.text.split("\n").map((l) => l.trim()).find(Boolean);
   const base = (firstLine || e.promptText || "Untitled").replace(/\s+/g, " ").trim();
   return base.length > 32 ? `${base.slice(0, 32).trimEnd()}…` : base;
+}
+
+// ---- recent, across modules (Sidebar Redesign §6b) ------------------------
+
+/** Which module a recent piece came from — a small tag says where it lives. */
+type RecentModule = "free" | "news";
+
+interface RecentItem {
+  key: string;
+  module: RecentModule;
+  title: string;
+  day: string;
+  createdAt: number;
+  /** Where clicking jumps — back into that mode. */
+  href: string;
+}
+
+/** Per-module tag: label + tint. Oxford for News, ochre for Freewrite. */
+const MODULE_TAG: Record<RecentModule, { label: string; className: string }> = {
+  news: { label: "News", className: "bg-oxford-tint text-brand" },
+  free: { label: "Free", className: "bg-ochre-tint text-gold" },
+};
+
+/** One list across all modules, newest first — the mixed, tagged Recent. */
+function recentItems(entries: Entry[], sessions: NewsSession[], limit: number): RecentItem[] {
+  const fromEntries: RecentItem[] = entries.map((e) => ({
+    key: `e-${e.id}`,
+    module: "free",
+    title: entryTitle(e),
+    day: e.day,
+    createdAt: e.createdAt,
+    href: "/",
+  }));
+  const fromNews: RecentItem[] = sessions.map((s) => ({
+    key: `n-${s.id}`,
+    module: "news",
+    title: s.title,
+    day: s.day,
+    createdAt: s.createdAt,
+    href: "/news",
+  }));
+  return [...fromEntries, ...fromNews]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit);
 }
 
 // ---- brand ----------------------------------------------------------------
@@ -253,24 +292,43 @@ function TodayPanel({ info, progress }: { info: StreakInfo; progress: TodayProgr
   );
 }
 
-/** Recent pieces — a glimpse of the last things written (expanded rail only). */
-function RecentList({ recent }: { recent: Entry[] }) {
+/**
+ * Recent pieces across every module — a glimpse of the last things written,
+ * each tagged with where it lives; clicking jumps back into that mode. Expanded
+ * rail only (Sidebar Redesign §6b).
+ */
+function RecentList({ recent }: { recent: RecentItem[] }) {
   return (
     <div>
       <p className="px-2.5 pb-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
         Recent
       </p>
-      <div className="flex flex-col gap-0.5">
-        {recent.map((e) => (
-          <div key={e.id} className="px-2.5 py-1 leading-tight">
-            <div className="truncate font-serif text-sm italic text-sidebar-foreground">
-              {entryTitle(e)}
-            </div>
-            <div className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-              {compactDay(e.day)} · {e.words} words
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-col gap-px">
+        {recent.map((item) => {
+          const tag = MODULE_TAG[item.module];
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className="group flex items-baseline gap-2 px-2.5 py-1 leading-tight transition-colors hover:bg-sidebar-accent/60"
+            >
+              <span
+                className={cn(
+                  "flex-none px-1 py-px font-mono text-[9px] font-medium uppercase tracking-wide",
+                  tag.className,
+                )}
+              >
+                {tag.label}
+              </span>
+              <span className="flex-1 truncate font-serif text-[13px] italic text-sidebar-foreground group-hover:text-foreground">
+                {item.title}
+              </span>
+              <span className="flex-none font-mono text-[10px] tabular-nums text-muted-foreground">
+                {parseDayKey(item.day).getDate()}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
@@ -283,13 +341,13 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
   const { store } = useStore();
-  const { settings, profile, entries, phraseSrs, minedPhrases } = store;
+  const { settings, profile, entries, phraseSrs, minedPhrases, newsSessions } = store;
 
   const today = todayKey();
   const info = streakInfo(profile, today);
   const due = dueTodayCount(phraseSrs, minedPhrases);
   const progress = todayProgress(entries, settings, today);
-  const recent = [...entries].sort((a, b) => b.createdAt - a.createdAt).slice(0, 2);
+  const recent = recentItems(entries, newsSessions, 4);
   const name = settings.name.trim();
 
   return (
@@ -332,7 +390,7 @@ function ExpandedRail({
   due: number;
   info: StreakInfo;
   progress: TodayProgress;
-  recent: Entry[];
+  recent: RecentItem[];
   name: string;
 }) {
   return (
