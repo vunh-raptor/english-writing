@@ -1,14 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Languages, LifeBuoy, Send, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Languages,
+  LifeBuoy,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useStore } from "@/store/StoreContext";
 import type {
+  AskHelp,
   ChatMessage,
   Mission,
   MissionProgress,
   MissionTarget,
   MissionTurn,
+  NewsLevel,
+  NewsSession,
   TargetStatus,
   HintRung,
   BridgeHelp,
@@ -19,6 +30,7 @@ import {
   fetchMission,
   missionConverse,
   missionBridge,
+  missionAsk,
   missionDebrief,
 } from "@/lib/client/clientApi";
 import { cn } from "@/lib/utils";
@@ -35,6 +47,11 @@ import { PageContainer } from "@/components/page-container";
  * keywords, then a frame that inserts WITH its ___ gaps (send stays blocked
  * until they're filled), then a model answer revealed briefly and rewritten
  * from memory. No interaction path lets a tap alone produce a sendable message.
+ *
+ * Layout (Sidebar Redesign §5): a full-bleed reading sheet holds the
+ * conversation; a collapsible left margin carries the metadata HUD (top) and a
+ * free "Ask · anything" aide (bottom). Hide the margin for a pure writing sheet;
+ * the aide shrinks to a floating pill.
  */
 
 const RUNG_ORDER: HintRung[] = ["none", "idea", "keywords", "frame", "model"];
@@ -45,6 +62,10 @@ const MODEL_REVEAL_SECONDS = 7;
 const PULSE_MS = 7000;
 /** Long pause before the idea rung opens by itself (never more than that). */
 const AUTO_IDEA_MS = 15000;
+
+function makeSessionId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
 
 function initialProgress(mission: Mission): MissionProgress {
   const targets: Record<string, TargetStatus> = {};
@@ -121,18 +142,180 @@ function BriefingText({
   );
 }
 
-export function NewsChat() {
-  const { store, saveMissionOutcome } = useStore();
+// ---- "Ask · anything" — the free aide in the margin -----------------------
 
-  const [mission, setMission] = useState<Mission | null>(null);
-  const [progress, setProgress] = useState<MissionProgress | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+interface AskEntry {
+  q: string;
+  help?: AskHelp;
+  error?: string;
+}
+
+/**
+ * A quiet, self-contained aide: the learner asks to translate / explain /
+ * rephrase and gets a short answer, optionally with an English phrase they can
+ * drop straight into their reply. It never blocks writing — failures answer
+ * with a gentle note.
+ */
+function AskPanel({
+  level,
+  context,
+  onInsert,
+  focusSignal,
+  className,
+}: {
+  level: NewsLevel;
+  context: string;
+  onInsert: (text: string) => void;
+  /** Bumped by the parent to pull focus here (e.g. from the floating pill). */
+  focusSignal?: number;
+  className?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [entries, setEntries] = useState<AskEntry[]>([]);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [entries, busy]);
+
+  useEffect(() => {
+    if (focusSignal) inputRef.current?.focus();
+  }, [focusSignal]);
+
+  async function submit() {
+    const question = q.trim();
+    if (!question || busy) return;
+    setEntries((prev) => [...prev, { q: question }]);
+    setQ("");
+    setBusy(true);
+    try {
+      const help = await missionAsk(level, context, question);
+      setEntries((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { q: question, help };
+        return copy;
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      const error = /503/.test(msg)
+        ? "Ask needs a server AI key to answer."
+        : "Couldn't answer just now — try again.";
+      setEntries((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { q: question, error };
+        return copy;
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={cn("flex flex-col", className)}>
+      <div className="px-4 pt-3 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+        Ask · anything
+      </div>
+
+      <div className="mt-2 max-h-[34vh] min-h-0 flex-1 overflow-y-auto px-4">
+        {entries.length === 0 && (
+          <p className="pb-1 font-serif text-[13px] italic leading-snug text-muted-foreground">
+            Stuck on a word? Ask me to translate, explain, or rephrase — I&apos;ll
+            keep it short.
+          </p>
+        )}
+        <div className="flex flex-col gap-2.5">
+          {entries.map((e, i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <div className="self-end max-w-[90%] bg-oxford-tint px-2.5 py-1 text-[12.5px] leading-snug text-brand-ink">
+                {e.q}
+              </div>
+              {e.help && (
+                <div className="text-[12.5px] leading-relaxed text-foreground">
+                  {e.help.answer}
+                  {e.help.insert && (
+                    <button
+                      type="button"
+                      onClick={() => onInsert(e.help!.insert!)}
+                      className="ml-1.5 whitespace-nowrap border-b border-input text-[11.5px] text-brand transition-colors hover:border-brand"
+                    >
+                      insert &ldquo;{e.help.insert}&rdquo;
+                    </button>
+                  )}
+                </div>
+              )}
+              {e.error && (
+                <div className="text-[12px] leading-snug text-muted-foreground">{e.error}</div>
+              )}
+            </div>
+          ))}
+          {busy && (
+            <div className="flex items-center gap-1 py-0.5">
+              <span className="typing-dot" />
+              <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+              <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+      </div>
+
+      <form
+        className="flex items-center gap-2 px-4 py-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <Input
+          ref={inputRef}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Translate, explain, rephrase…"
+          className="h-9 flex-1 text-[13px]"
+          autoComplete="off"
+        />
+        <Button
+          type="submit"
+          size="icon-sm"
+          variant="secondary"
+          disabled={busy || !q.trim()}
+          aria-label="Ask"
+        >
+          <Send className="size-4" />
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+// ---- the module conversation ----------------------------------------------
+
+export function NewsChat({
+  resume,
+  onExit,
+}: {
+  /** Restore an unfinished conversation from the dashboard. */
+  resume?: NewsSession;
+  /** Return to the /news dashboard. */
+  onExit?: () => void;
+} = {}) {
+  const { store, saveMissionOutcome, saveNewsSession } = useStore();
+
+  const [mission, setMission] = useState<Mission | null>(resume?.mission ?? null);
+  const [progress, setProgress] = useState<MissionProgress | null>(resume?.progress ?? null);
+  const [messages, setMessages] = useState<ChatMessage[]>(resume?.messages ?? []);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(true); // mission fetch
+  const [loading, setLoading] = useState(!resume); // mission fetch (skipped on resume)
   const [busy, setBusy] = useState(false); // a turn in flight
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(!!resume);
   const [needsAI, setNeedsAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The full-bleed sheet vs. margin — Sidebar Redesign §5.
+  const [marginOpen, setMarginOpen] = useState(true);
+  const [askFocus, setAskFocus] = useState(0);
 
   // Briefing phase.
   const [checkPick, setCheckPick] = useState<number | null>(null);
@@ -158,8 +341,9 @@ export function NewsChat() {
   /** Target chips that just flipped — get the milestone pop for a moment. */
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
 
-  const startedRef = useRef(false);
+  const loadOnceRef = useRef(false);
   const savedRef = useRef(false);
+  const sessionIdRef = useRef<string>(resume?.id ?? makeSessionId());
   const hintRungRef = useRef<HintRung>("none");
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -214,11 +398,28 @@ export function NewsChat() {
   }, []);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    if (loadOnceRef.current) return;
+    loadOnceRef.current = true;
+    if (resume) return; // everything restored from the saved session
     void loadMission(store.newsLevel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Persist the conversation so the dashboard can list + resume it. Only once
+   *  the learner has actually written — an opened-but-untouched chat is noise. */
+  const persist = useCallback(
+    (
+      m: Mission,
+      msgs: ChatMessage[],
+      prog: MissionProgress,
+      status: "active" | "complete",
+      goalHit?: boolean,
+    ) => {
+      if (status === "active" && !msgs.some((x) => x.role === "user")) return;
+      saveNewsSession({ id: sessionIdRef.current, mission: m, messages: msgs, progress: prog, status, goalHit });
+    },
+    [saveNewsSession],
+  );
 
   // --- Stall handling: pulse, then quietly open the idea rung — never more.
 
@@ -300,6 +501,7 @@ export function NewsChat() {
       try {
         const d = await missionDebrief(mission, finalProgress, finalMessages);
         setDebrief(d);
+        persist(mission, finalMessages, finalProgress, "complete", d.goalHit);
         if (d.keep.length) {
           saveMissionOutcome({
             targets: [],
@@ -327,11 +529,12 @@ export function NewsChat() {
           upgrades: [],
           keep: [],
         });
+        persist(mission, finalMessages, finalProgress, "complete", finalProgress.beatIndex >= mission.beats.length);
       } finally {
         setDebriefing(false);
       }
     },
-    [mission, saveOutcome, saveMissionOutcome],
+    [mission, saveOutcome, saveMissionOutcome, persist],
   );
 
   const applyTurn = useCallback(
@@ -360,9 +563,13 @@ export function NewsChat() {
       }
 
       setProgress(turn.state);
+      // Snapshot the live conversation for the dashboard (recent + resume).
+      if (mission && !turn.missionComplete) {
+        persist(mission, withReply, turn.state, "active");
+      }
       if (turn.missionComplete) void finish(turn.state, withReply);
     },
-    [progress, resetHintUi, finish],
+    [progress, mission, resetHintUi, finish, persist],
   );
 
   async function start() {
@@ -400,6 +607,15 @@ export function NewsChat() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Append text to the reply and focus the input — used by frames and Ask. */
+  function appendToInput(text: string) {
+    setInput((prev) => {
+      const sep = prev && !prev.endsWith(" ") ? " " : "";
+      return `${prev}${sep}${text}`;
+    });
+    requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   /** Insert a frame WITH its gaps; select the first gap so typing replaces it.
@@ -448,11 +664,25 @@ export function NewsChat() {
     if (i === mission.check.answer) setTimeout(() => void start(), 700);
   }
 
+  function revealMargin() {
+    setMarginOpen(true);
+    setAskFocus((n) => n + 1);
+  }
+
   // --- Renders ----------------------------------------------------------------
 
   if (needsAI) {
     return (
       <PageContainer width="narrow">
+        {onExit && (
+          <button
+            type="button"
+            onClick={onExit}
+            className="mb-2 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
+          >
+            ‹ All conversations
+          </button>
+        )}
         <h1 className="text-2xl">News Chat</h1>
         <div className="note note-warning mt-3.5">
           News Chat is a fully online mode: it plans a real mission from
@@ -466,7 +696,7 @@ export function NewsChat() {
 
   const chipStyle = (s: TargetStatus) =>
     cn(
-      "rounded-none border px-2.5 py-0.5 text-xs transition-colors",
+      "rounded-none border px-2 py-0.5 text-[11.5px] transition-colors",
       s === "produced" && "border-sage bg-sage-muted font-semibold text-sage-ink",
       s === "assisted" && "border-dashed border-sage bg-sage-muted/60 text-sage-ink",
       s === "missed" && "border-input bg-muted text-muted-foreground opacity-60",
@@ -480,88 +710,127 @@ export function NewsChat() {
     missed: "waiting in your Phrase Coach",
   } as const;
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-5 sm:px-6">
-        {/* --- Mission header + learning HUD --- */}
-        <div className="border-b border-border py-3.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <h1 className="text-xl">News Chat</h1>
-            {mission && (
-              <span className="text-xs text-muted-foreground">
-                from{" "}
-                {mission.url ? (
-                  <a
-                    href={mission.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-brand hover:underline"
-                  >
-                    {mission.source} ↗
-                  </a>
-                ) : (
-                  mission.source
-                )}
-              </span>
+  /** The metadata HUD — reused in the desktop margin and the mobile header. */
+  const metaHud = mission && progress && (
+    <div className="flex flex-col gap-4">
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+          News chat
+        </div>
+        <div className="mt-1.5 font-serif text-[15px] font-medium leading-snug text-foreground">
+          {mission.title}
+        </div>
+        {mission.source && (
+          <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+            {mission.url ? (
+              <a href={mission.url} target="_blank" rel="noreferrer" className="hover:text-brand">
+                {mission.source} ↗
+              </a>
+            ) : (
+              mission.source
             )}
           </div>
+        )}
+      </div>
+
+      <div>
+        <div className="kicker">Goal</div>
+        <div className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{mission.goal}</div>
+      </div>
+
+      <div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+          Phrases
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {mission.targets.map((t) => {
+            const s = progress.targets[t.id];
+            return (
+              <span
+                key={t.id}
+                title={`${t.meaning} — e.g. ${t.example}`}
+                className={cn(chipStyle(s), flipped[t.id] && "animate-milestone")}
+              >
+                {s === "produced" || s === "assisted" ? "✓ " : ""}
+                {t.text}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex gap-1" title="Beats">
+          {mission.beats.map((b, i) => (
+            <span
+              key={b.id}
+              className={cn(
+                "size-2 rounded-full transition-colors",
+                i < progress.beatIndex
+                  ? "bg-brand"
+                  : i === progress.beatIndex && started && !complete
+                    ? "bg-brand/40 ring-2 ring-brand/25"
+                    : "bg-muted-foreground/20",
+              )}
+            />
+          ))}
+        </span>
+        <span className="meta text-[11px] tabular-nums">{progress.wordsProduced} words</span>
+      </div>
+    </div>
+  );
+
+  /** The conversation body — briefing, turns, help, input — lives in the sheet. */
+  const sheet = (
+    <>
+      {/* Sheet header: back + title, with a reveal tab when the margin is hidden. */}
+      <div className="relative flex-none border-b border-border px-5 py-3 sm:px-8">
+        {!marginOpen && (
+          <button
+            type="button"
+            onClick={() => setMarginOpen(true)}
+            aria-label="Show margin"
+            title="Show margin"
+            className="absolute left-0 top-4 hidden size-6 place-items-center border border-l-0 border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:grid"
+          >
+            <ChevronRight className="size-3.5" />
+          </button>
+        )}
+        <div className={cn("flex items-baseline justify-between gap-3", !marginOpen && "lg:pl-8")}>
+          <div className="min-w-0">
+            {onExit && (
+              <button
+                type="button"
+                onClick={onExit}
+                className="mb-0.5 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
+              >
+                ‹ All conversations
+              </button>
+            )}
+            <h1 className="truncate font-serif text-xl font-medium leading-tight text-foreground">
+              {mission?.title ?? "News Chat"}
+            </h1>
+          </div>
+          {loading && <span className="meta shrink-0 text-[11px]">Planning…</span>}
+        </div>
+      </div>
+
+      {/* Conversation scroll region. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8">
+        <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
+          {/* Mobile metadata — the margin is desktop-only. */}
+          {metaHud && (
+            <div className="mb-1 border border-border bg-background p-4 lg:hidden">{metaHud}</div>
+          )}
 
           {loading && (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Planning today&apos;s mission from the news…
             </p>
           )}
 
-          {mission && progress && (
-            <>
-              <div className="mt-1.5 font-serif text-lg font-semibold leading-snug">
-                {mission.title}
-              </div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                <span className="kicker mr-1.5">Goal</span>
-                {mission.goal}
-              </div>
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                {mission.beats.map((b, i) => (
-                  <span
-                    key={b.id}
-                    title={b.act}
-                    className={cn(
-                      "h-2 w-2 rounded-full transition-colors",
-                      i < progress.beatIndex
-                        ? "bg-brand"
-                        : i === progress.beatIndex && started && !complete
-                          ? "bg-brand/40 ring-2 ring-brand/25"
-                          : "bg-muted-foreground/20",
-                    )}
-                  />
-                ))}
-                <span className="mx-1 h-3 w-px bg-border" />
-                {mission.targets.map((t) => {
-                  const s = progress.targets[t.id];
-                  return (
-                    <span
-                      key={t.id}
-                      title={`${t.meaning} — e.g. ${t.example}`}
-                      className={cn(chipStyle(s), flipped[t.id] && "animate-milestone")}
-                    >
-                      {s === "produced" || s === "assisted" ? "✓ " : ""}
-                      {t.text}
-                    </span>
-                  );
-                })}
-                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                  {progress.wordsProduced} words
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* --- Briefing + conversation --- */}
-        <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto py-4">
           {mission && (
-            <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+            <div className="border border-border bg-card p-4 shadow-soft">
               <div className="text-sm text-muted-foreground">
                 You&apos;re chatting with <b>{mission.scenario.role}</b>.{" "}
                 {mission.scenario.situation}
@@ -573,11 +842,9 @@ export function NewsChat() {
                   onPeek={(t) => setPeek((p) => (p?.id === t.id ? null : t))}
                 />
                 {peek && (
-                  <div className="mt-2.5 rounded-lg bg-muted p-2.5 text-sm">
+                  <div className="mt-2.5 bg-muted p-2.5 text-sm">
                     <b>{peek.text}</b> — {peek.meaning}
-                    <div className="mt-0.5 text-muted-foreground">
-                      e.g. {peek.example}
-                    </div>
+                    <div className="mt-0.5 text-muted-foreground">e.g. {peek.example}</div>
                   </div>
                 )}
               </div>
@@ -631,8 +898,8 @@ export function NewsChat() {
               className={cn(
                 "max-w-[80%] whitespace-pre-wrap px-3.5 py-2.5 text-[15px] leading-relaxed",
                 m.role === "coach"
-                  ? "self-start rounded-2xl rounded-bl-md border border-border bg-card text-card-foreground shadow-soft"
-                  : "self-end rounded-2xl rounded-br-md bg-brand text-brand-foreground",
+                  ? "self-start border border-border bg-card text-card-foreground shadow-soft"
+                  : "self-end bg-brand text-brand-foreground",
               )}
             >
               {m.content}
@@ -640,7 +907,7 @@ export function NewsChat() {
           ))}
 
           {(busy || debriefing) && (
-            <div className="flex max-w-[80%] items-center gap-1 self-start rounded-2xl rounded-bl-md border border-border bg-card px-3.5 py-3 shadow-soft">
+            <div className="flex max-w-[80%] items-center gap-1 self-start border border-border bg-card px-3.5 py-3 shadow-soft">
               <span className="typing-dot" />
               <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
               <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
@@ -649,10 +916,9 @@ export function NewsChat() {
 
           {/* --- Debrief --- */}
           {debrief && mission && (
-            <div className="rounded-2xl border border-border bg-sage-muted p-4 text-sage-ink">
+            <div className="border border-border bg-sage-muted p-4 text-sage-ink">
               <div className="text-[15px] font-medium">
-                {debrief.goalHit ? "Mission complete." : "Mission over."}{" "}
-                {debrief.celebration}
+                {debrief.goalHit ? "Mission complete." : "Mission over."} {debrief.celebration}
               </div>
               <ul className="mt-3 space-y-2 border-t border-sage/30 pt-3 text-sm">
                 {debrief.targetResults.map((r) => {
@@ -660,16 +926,10 @@ export function NewsChat() {
                   if (!t) return null;
                   return (
                     <li key={r.id}>
-                      <span
-                        className={cn(
-                          "mr-1.5 font-semibold",
-                          r.verdict === "missed" && "opacity-60",
-                        )}
-                      >
+                      <span className={cn("mr-1.5 font-semibold", r.verdict === "missed" && "opacity-60")}>
                         {verdictIcon[r.verdict]}
                       </span>
-                      <b>{t.text}</b>{" "}
-                      <span className="opacity-80">— {verdictLabel[r.verdict]}</span>
+                      <b>{t.text}</b> <span className="opacity-80">— {verdictLabel[r.verdict]}</span>
                       {r.note && <div className="ml-5 mt-0.5 opacity-80">{r.note}</div>}
                     </li>
                   );
@@ -705,217 +965,279 @@ export function NewsChat() {
               <div className="mt-2.5 text-xs opacity-70">
                 Today&apos;s phrases are saved to your Phrase Coach to practice later.
               </div>
+              {onExit && (
+                <Button variant="secondary" className="mt-3.5" onClick={onExit}>
+                  ‹ Back to News
+                </Button>
+              )}
             </div>
           )}
           <div ref={endRef} />
         </div>
+      </div>
 
-        {error && (
-          <div className="note note-warning mb-2 flex items-center justify-between gap-2">
-            <span>{error}</span>
-            {!mission && !loading && (
-              <Button variant="outline" size="sm" onClick={() => void loadMission(store.newsLevel)}>
-                Try again
-              </Button>
-            )}
-          </div>
-        )}
+      {/* Help affordances + input — pinned to the bottom of the sheet. */}
+      <div className="flex-none border-t border-border px-5 py-3 sm:px-8">
+        <div className="mx-auto max-w-2xl">
+          {error && (
+            <div className="note note-warning mb-2 flex items-center justify-between gap-2">
+              <span>{error}</span>
+              {!mission && !loading && (
+                <Button variant="outline" size="sm" onClick={() => void loadMission(store.newsLevel)}>
+                  Try again
+                </Button>
+              )}
+            </div>
+          )}
 
-        {/* --- Help affordances: one quiet path, one rung at a time --- */}
-        {started && !complete && currentBeat && (
-          <>
-            {(hintOpen || bridgeOpen) && (
-              <div className="mb-2 rounded-xl border border-border bg-card p-3.5 shadow-soft">
-                {hintOpen && (
-                  <div className="flex flex-col gap-2.5">
-                    {RUNG_ORDER.indexOf(hintRung) >= 1 && (
-                      <div className="text-sm">{currentBeat.hints.idea}</div>
-                    )}
-                    {RUNG_ORDER.indexOf(hintRung) >= 2 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">build with:</span>
-                        {currentBeat.hints.keywords.map((k, i) => (
-                          <span
-                            key={i}
-                            className="select-none rounded-md border border-border bg-muted px-2 py-0.5 text-[13px]"
-                          >
-                            {k}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {RUNG_ORDER.indexOf(hintRung) >= 3 && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-md border border-dashed border-border bg-muted px-2 py-1 text-[13px]">
-                          {currentBeat.hints.frame}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => insertFrame(currentBeat.hints.frame, e)}
-                        >
-                          Use frame
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          the ___ parts are yours to fill
-                        </span>
-                      </div>
-                    )}
-                    {hintRung === "model" && (
-                      <div>
-                        {modelVisible ? (
-                          <div className="text-sm">
-                            <span className="italic">“{currentBeat.hints.model}”</span>
-                            <span className="ml-2 text-xs tabular-nums text-muted-foreground">
-                              memorize it — {modelCountdown}s
-                            </span>
-                          </div>
-                        ) : (
-                          <div>
-                            <div
-                              aria-hidden
-                              className="select-none text-sm italic opacity-60 blur-sm"
-                            >
-                              “{currentBeat.hints.model}”
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              Now write it your way — from memory.
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      {hintRung !== "model" && (
-                        <Button type="button" variant="ghost" size="sm" onClick={descend}>
-                          More help ↓
-                        </Button>
+          {started && !complete && currentBeat && (
+            <>
+              {(hintOpen || bridgeOpen) && (
+                <div className="mb-2 border border-border bg-card p-3.5 shadow-soft">
+                  {hintOpen && (
+                    <div className="flex flex-col gap-2.5">
+                      {RUNG_ORDER.indexOf(hintRung) >= 1 && (
+                        <div className="text-sm">{currentBeat.hints.idea}</div>
                       )}
-                      <button
-                        type="button"
-                        className="ml-auto text-muted-foreground hover:text-foreground"
-                        onClick={() => setHintOpen(false)}
-                        aria-label="Close help"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {bridgeOpen && (
-                  <div className={cn("flex flex-col gap-2.5", hintOpen && "mt-3 border-t border-border pt-3")}>
-                    <form
-                      className="flex gap-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        void submitBridge();
-                      }}
-                    >
-                      <Input
-                        value={bridgeIntent}
-                        onChange={(e) => setBridgeIntent(e.target.value)}
-                        placeholder="Type your idea in any language…"
-                        className="flex-1"
-                      />
-                      <Button type="submit" variant="outline" size="sm" disabled={bridging || !bridgeIntent.trim()}>
-                        {bridging ? "…" : "Help me say it"}
-                      </Button>
-                    </form>
-                    {bridgeHelp && (
-                      <>
+                      {RUNG_ORDER.indexOf(hintRung) >= 2 && (
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-xs text-muted-foreground">build with:</span>
-                          {bridgeHelp.keywords.map((k, i) => (
+                          {currentBeat.hints.keywords.map((k, i) => (
                             <span
                               key={i}
-                              className="select-none rounded-md border border-border bg-muted px-2 py-0.5 text-[13px]"
+                              className="select-none border border-border bg-muted px-2 py-0.5 text-[13px]"
                             >
                               {k}
                             </span>
                           ))}
                         </div>
+                      )}
+                      {RUNG_ORDER.indexOf(hintRung) >= 3 && (
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-md border border-dashed border-border bg-muted px-2 py-1 text-[13px]">
-                            {bridgeHelp.frame}
+                          <span className="border border-dashed border-border bg-muted px-2 py-1 text-[13px]">
+                            {currentBeat.hints.frame}
                           </span>
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={(e) => insertFrame(bridgeHelp.frame, e)}
+                            onClick={(e) => insertFrame(currentBeat.hints.frame, e)}
                           >
                             Use frame
                           </Button>
+                          <span className="text-xs text-muted-foreground">
+                            the ___ parts are yours to fill
+                          </span>
                         </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                      )}
+                      {hintRung === "model" && (
+                        <div>
+                          {modelVisible ? (
+                            <div className="text-sm">
+                              <span className="italic">“{currentBeat.hints.model}”</span>
+                              <span className="ml-2 text-xs tabular-nums text-muted-foreground">
+                                memorize it — {modelCountdown}s
+                              </span>
+                            </div>
+                          ) : (
+                            <div>
+                              <div aria-hidden className="select-none text-sm italic opacity-60 blur-sm">
+                                “{currentBeat.hints.model}”
+                              </div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Now write it your way — from memory.
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        {hintRung !== "model" && (
+                          <Button type="button" variant="ghost" size="sm" onClick={descend}>
+                            More help ↓
+                          </Button>
+                        )}
+                        <button
+                          type="button"
+                          className="ml-auto text-muted-foreground hover:text-foreground"
+                          onClick={() => setHintOpen(false)}
+                          aria-label="Close help"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-            <div className="mb-1.5 flex items-center gap-1.5">
-              {inputHasGaps ? (
-                <span className="text-xs text-muted-foreground">
-                  Fill your <b>___</b> blanks with your own words first.
-                </span>
-              ) : (
-                <span />
+                  {bridgeOpen && (
+                    <div className={cn("flex flex-col gap-2.5", hintOpen && "mt-3 border-t border-border pt-3")}>
+                      <form
+                        className="flex gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void submitBridge();
+                        }}
+                      >
+                        <Input
+                          value={bridgeIntent}
+                          onChange={(e) => setBridgeIntent(e.target.value)}
+                          placeholder="Type your idea in any language…"
+                          className="flex-1"
+                        />
+                        <Button type="submit" variant="outline" size="sm" disabled={bridging || !bridgeIntent.trim()}>
+                          {bridging ? "…" : "Help me say it"}
+                        </Button>
+                      </form>
+                      {bridgeHelp && (
+                        <>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">build with:</span>
+                            {bridgeHelp.keywords.map((k, i) => (
+                              <span
+                                key={i}
+                                className="select-none border border-border bg-muted px-2 py-0.5 text-[13px]"
+                              >
+                                {k}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="border border-dashed border-border bg-muted px-2 py-1 text-[13px]">
+                              {bridgeHelp.frame}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => insertFrame(bridgeHelp.frame, e)}
+                            >
+                              Use frame
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
-              <button
-                type="button"
-                onClick={() => (hintOpen ? setHintOpen(false) : descend())}
-                className={cn(
-                  "ml-auto flex items-center gap-1 rounded-none border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                  stuckPulse && !hintOpen && "animate-nudge",
-                )}
-              >
-                <LifeBuoy className="h-3.5 w-3.5" /> Stuck?
-              </button>
-              <button
-                type="button"
-                onClick={() => setBridgeOpen((v) => !v)}
-                className="flex items-center gap-1 rounded-none border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              >
-                <Languages className="h-3.5 w-3.5" /> Say it your way
-              </button>
-            </div>
-          </>
-        )}
 
-        {!complete && (
-          <form
-            className="flex gap-2.5 border-t border-border py-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void send();
-            }}
-          >
-            <Input
-              ref={inputRef}
-              className="flex-1"
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                armStall();
+              <div className="mb-1.5 flex items-center gap-1.5">
+                {inputHasGaps ? (
+                  <span className="text-xs text-muted-foreground">
+                    Fill your <b>___</b> blanks with your own words first.
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  onClick={() => (hintOpen ? setHintOpen(false) : descend())}
+                  className={cn(
+                    "ml-auto flex items-center gap-1 rounded-none border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                    stuckPulse && !hintOpen && "animate-nudge",
+                  )}
+                >
+                  <LifeBuoy className="h-3.5 w-3.5" /> Stuck?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBridgeOpen((v) => !v)}
+                  className="flex items-center gap-1 rounded-none border border-input bg-muted px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  <Languages className="h-3.5 w-3.5" /> Say it your way
+                </button>
+              </div>
+            </>
+          )}
+
+          {!complete && (
+            <form
+              className="flex gap-2.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send();
               }}
-              onFocus={armStall}
-              onBlur={clearStall}
-              placeholder={started ? "Write your reply…" : "Read the briefing above to begin"}
-              disabled={!started || busy || !mission}
-              autoComplete="off"
-            />
-            <Button
-              type="submit"
-              disabled={!started || busy || !input.trim() || inputHasGaps}
-              title={inputHasGaps ? "Fill your ___ blanks first" : undefined}
             >
-              <Send />
-              <span className="hidden sm:inline">Send</span>
-            </Button>
-          </form>
+              <Input
+                ref={inputRef}
+                className="flex-1"
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  armStall();
+                }}
+                onFocus={armStall}
+                onBlur={clearStall}
+                placeholder={started ? "Write your reply…" : "Read the briefing above to begin"}
+                disabled={!started || busy || !mission}
+                autoComplete="off"
+              />
+              <Button
+                type="submit"
+                disabled={!started || busy || !input.trim() || inputHasGaps}
+                title={inputHasGaps ? "Fill your ___ blanks first" : undefined}
+              >
+                <Send />
+                <span className="hidden sm:inline">Send</span>
+              </Button>
+            </form>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-full min-h-0">
+      {/* Left margin — metadata (top) + Ask aide (bottom). Desktop only. */}
+      {marginOpen && (
+        <aside className="relative hidden w-[248px] flex-none flex-col border-r border-sidebar-border bg-background lg:flex">
+          <button
+            type="button"
+            onClick={() => setMarginOpen(false)}
+            aria-label="Hide margin"
+            title="Hide margin"
+            className="absolute -right-3 top-4 z-10 grid size-6 place-items-center border border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+          >
+            <ChevronLeft className="size-3.5" />
+          </button>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+            {metaHud ?? (
+              <p className="font-serif text-sm italic text-muted-foreground">
+                Planning today&apos;s mission…
+              </p>
+            )}
+          </div>
+
+          {mission && progress && (
+            <div className="flex-none border-t border-sidebar-border bg-card shadow-[0_-2px_8px_hsl(var(--shadow-color)/0.04)]">
+              <AskPanel
+                level={progress.level}
+                context={`${mission.title}${currentDemand ? ` — ${currentDemand}` : ""}`}
+                onInsert={appendToInput}
+                focusSignal={askFocus}
+              />
+            </div>
+          )}
+        </aside>
+      )}
+
+      {/* The full-bleed reading sheet. */}
+      <div className="relative flex min-w-0 flex-1 flex-col bg-card">
+        {sheet}
+
+        {/* Floating Ask pill when the margin is hidden. */}
+        {!marginOpen && mission && (
+          <button
+            type="button"
+            onClick={revealMargin}
+            aria-label="Open Ask"
+            className="absolute bottom-24 left-1/2 hidden -translate-x-1/2 items-center gap-2 bg-foreground px-3.5 py-2 text-background shadow-md transition-transform hover:-translate-y-0.5 lg:flex"
+          >
+            <Sparkles className="size-3.5 text-gold" />
+            <span className="text-[12.5px] font-medium">Ask</span>
+          </button>
         )}
       </div>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { NewsChat } from "@/components/NewsChat";
+import { News } from "@/components/News";
 
 export default function NewsPage() {
-  return <NewsChat />;
+  return <News />;
 }

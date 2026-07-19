@@ -8,6 +8,7 @@ import type {
   MissionProgress,
   MissionTurn,
   BridgeHelp,
+  AskHelp,
   Debrief,
   NewsLevel,
 } from "@/types";
@@ -114,6 +115,22 @@ export async function missionBridge(
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<BridgeHelp>;
+}
+
+/** "Ask · anything": a free translate / explain / rephrase aide, with an
+ *  optional insertable English phrase. */
+export async function missionAsk(
+  level: NewsLevel,
+  context: string,
+  question: string,
+): Promise<AskHelp> {
+  const res = await fetch("/api/converse/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, context, question }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<AskHelp>;
 }
 
 /** Closing debrief: per-target results, ≤2 upgrades, phrases to keep. */
