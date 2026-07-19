@@ -2,18 +2,21 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createServerClient, type SetAllCookies } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { supabaseUrl, supabasePublishableKey } from "@/lib/shared/supabaseEnv";
 import type { Database } from "./db/types";
 
 /**
- * The Supabase entry points, server-only so keys never reach the bundle
- * (docs/ARCHITECTURE.md). Env is read lazily inside each factory, so importing
- * this module never throws at build time while the Supabase phase is only
- * partially wired — a route calls a factory only when it actually needs the DB.
+ * The Supabase entry points, server-only so the secret key never reaches the
+ * bundle (docs/ARCHITECTURE.md). Env is read lazily inside each factory, so
+ * importing this module never throws at build time while the Supabase phase is
+ * only partially wired — a route calls a factory only when it needs the DB.
+ * (Public URL + publishable key live in the shared, bundle-safe
+ * `lib/shared/supabaseEnv`; the secret key is read only here.)
  *
  * Two clients, on purpose:
- *   supabaseAdmin()  — service role, bypasses RLS. For trusted server paths
- *                      that already know whose data they touch and scope every
- *                      query by user_id in code (the data-access layer does).
+ *   supabaseAdmin()  — secret key, bypasses RLS. For trusted server paths that
+ *                      already know whose data they touch and scope every query
+ *                      by user_id in code (the data-access layer does).
  *   supabaseServer() — request-scoped, bound to the caller's auth cookies;
  *                      every query runs AS the signed-in user under RLS. Use
  *                      this once Supabase Auth is wired.
@@ -21,12 +24,15 @@ import type { Database } from "./db/types";
 
 export type Db = SupabaseClient<Database>;
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not set — the Supabase phase needs it (see .env.example).`);
+/** The secret (service-role) key — read only on the server, never bundled. */
+function secretKey(): string {
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) {
+    throw new Error(
+      "SUPABASE_SECRET_KEY is not set (legacy SUPABASE_SERVICE_ROLE_KEY also accepted) — required for admin access; see .env.example.",
+    );
   }
-  return value;
+  return key;
 }
 
 /**
@@ -34,11 +40,9 @@ function required(name: string): string {
  * scoping by user_id; RLS is not a backstop here.
  */
 export function supabaseAdmin(): Db {
-  return createClient<Database>(
-    required("NEXT_PUBLIC_SUPABASE_URL"),
-    required("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  );
+  return createClient<Database>(supabaseUrl(), secretKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 /**
@@ -51,8 +55,8 @@ export function supabaseAdmin(): Db {
 export function supabaseServer() {
   const store = cookies();
   return createServerClient<Database>(
-    required("NEXT_PUBLIC_SUPABASE_URL"),
-    required("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    supabaseUrl(),
+    supabasePublishableKey(),
     {
       cookies: {
         getAll() {

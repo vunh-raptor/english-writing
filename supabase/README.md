@@ -39,9 +39,11 @@ supabase db reset
 ## After applying
 
 The env vars in [`../.env.example`](../.env.example) (`NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) let the server-only
-clients in `src/lib/server/supabase.ts` connect. The typed data-access layer for
-these tables lives in `src/lib/server/db/`.
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and — for server writes —
+`SUPABASE_SECRET_KEY`; the legacy `ANON_KEY`/`SERVICE_ROLE_KEY` names also work)
+let the clients in `src/lib/server/supabase.ts` (server), `src/lib/client/supabase.ts`
+(browser), and `src/middleware.ts` (session refresh) connect. The typed
+data-access layer for these tables lives in `src/lib/server/db/`.
 
 > The schema is **ready to wire, not yet wired**: no route calls the DB until
 > Supabase Auth provides a signed-in `userId`. Until then the app runs entirely

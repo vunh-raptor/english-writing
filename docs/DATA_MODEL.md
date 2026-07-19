@@ -150,7 +150,10 @@ handoff maps straight through (`NEWS_CHAT_V2.md` §9):
 
 | File | Role |
 | --- | --- |
-| `../supabase.ts` | Two server-only clients: `supabaseAdmin()` (service role, scopes by `user_id` in code) and `supabaseServer()` (request-scoped, RLS as the user), plus `getUserId()` — the Auth seam. |
+| `../supabase.ts` | Two server-only clients: `supabaseAdmin()` (secret key, scopes by `user_id` in code) and `supabaseServer()` (request-scoped, RLS as the user), plus `getUserId()` — the Auth seam. |
+| `../../client/supabase.ts` | The browser client (`createSupabaseBrowser()`) for client components — auth UI, realtime, client-side reads under RLS. |
+| `../supabaseMiddleware.ts` + `src/middleware.ts` | Refresh the auth session cookie on each request (guarded: a no-op when Supabase env is absent or the visitor is a guest). |
+| `../../shared/supabaseEnv.ts` | Bundle-safe public config (URL + publishable key), used by all three; prefers the new key names, falls back to the legacy ones. |
 | `db/types.ts` | The hand-authored `Database` type (Row/Insert/Update per table). Passing it to `createClient<Database>()` makes every query typed; JSONB columns are typed as their domain shapes. |
 | `db/news.ts` | The `/news` data-access layer — a faithful port of `StoreContext`'s `saveNewsSession` / `saveMissionOutcome` and the dashboard reads. |
 
