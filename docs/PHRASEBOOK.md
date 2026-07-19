@@ -44,9 +44,19 @@ READ (News Chat, Ask margin)
   rows:  phrase · state chip · meaning · "saved from News Chat — “…passage…”"
 
 Practice now (≤6 due)
-  └─ POST /api/phrasebook/drill  — ONE call: a situation per phrase
-       situations never contain the phrase (code-checked via phraseMatcher)
-  └─ per round: situation → (phrase shown | hidden-for-recall + Peek)
+  └─ POST /api/phrasebook/drill  — ONE call: a full round pack per phrase
+       method rotates through a fixed arc (code-assigned, not model-chosen):
+         situation  an everyday moment to respond to
+         reply      a 2-3 line mini-chat ending on a line spoken TO you
+         rephrase   a flat "Plain version: …" sentence to say better
+         personal   a pointer at YOUR life where the phrase fits
+       each round = { setup, task, 2 worked examples }
+       setups never contain the phrase; examples MUST (both code-checked
+       via phraseMatcher)
+  └─ per round: setup + task → (phrase shown | hidden-for-recall + Peek)
+       "See it used" panel: generated examples + the stored enrichment
+       example + "similar ways" — inert (select-none); in a recall round
+       opening it counts as the peek (examples show the phrase)
        → learner writes their own sentence
        → POST /api/phrasebook/judge → { used, note, ≤1 upgrade }
          model judgment ∪ deterministic phraseMatcher (a lazy model can
@@ -54,6 +64,11 @@ Practice now (≤6 due)
        → SRS applied by the clean/peeked/missed rules above
   └─ done: "N of M applied in real situations"
 ```
+
+Method variety is planned, not random: sessions walk
+`situation → reply → rephrase → personal → …` (easiest ask first), the same
+arc offline — where `rephrase` is skipped, since its plain sentence needs the
+AI, and local packs cover the other three generically.
 
 ## Guarantees (same stance as News Chat)
 
@@ -71,7 +86,7 @@ Practice now (≤6 due)
 | Route | In → out |
 | --- | --- |
 | `POST /api/phrasebook/enrich` | `{ level, text, context }` → `CaptureEnrichment` |
-| `POST /api/phrasebook/drill` | `{ level, items[{id,text,meaning}] }` → `{ situations[{id,situation}] }` |
+| `POST /api/phrasebook/drill` | `{ level, items[{id,text,meaning,example?}] }` → `{ rounds[{id,method,setup,task,examples[]}] }` |
 | `POST /api/phrasebook/judge` | `{ level, phrase{text,meaning}, situation, sentence }` → `DrillJudgment { used, note, upgrade? }` |
 
 All on the fast model tier; server module `src/lib/server/phrasebook.ts`

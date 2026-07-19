@@ -1,4 +1,4 @@
-import type { Phrase, SrsRecord } from "@/types";
+import type { DrillMethod, Phrase, SrsRecord } from "@/types";
 import { todayKey, daysBetween } from "./date";
 import { isDue } from "./srs";
 
@@ -78,6 +78,28 @@ export const SEED_PHRASES: Phrase[] = [
 export function phraseById(id: string): Phrase | undefined {
   return SEED_PHRASES.find((p) => p.id === id);
 }
+
+// --- Phrasebook drill: the shared method vocabulary -------------------------
+
+/**
+ * The fixed method rotation a practice session walks (index % length). Starts
+ * with the easiest ask; both the server (round building) and the client
+ * (offline fallback) follow it so sessions feel the same either way.
+ */
+export const DRILL_METHOD_ARC: DrillMethod[] = [
+  "situation",
+  "reply",
+  "rephrase",
+  "personal",
+];
+
+/** The learner-facing instruction each method falls back to. */
+export const DRILL_TASKS: Record<DrillMethod, string> = {
+  situation: "Answer the moment in your own sentence — work your phrase in naturally.",
+  reply: "Write your reply — use your phrase naturally.",
+  rephrase: "Say the same idea more naturally, using your phrase.",
+  personal: "Tell it in one or two true sentences, using your phrase.",
+};
 
 /**
  * A phrase as a lenient matcher: ___ gaps become short wildcards; apostrophes

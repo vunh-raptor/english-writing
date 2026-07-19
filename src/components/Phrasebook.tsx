@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Eye, Send, Trash2 } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
-import type { DrillJudgment, Phrase, SrsRecord } from "@/types";
+import type { DrillJudgment, DrillMethod, DrillRoundSetup, Phrase, SrsRecord } from "@/types";
 import { drillPhrases, judgePhrase } from "@/lib/client/clientApi";
-import { phraseMatcher } from "@/lib/shared/phrases";
+import { DRILL_TASKS, phraseMatcher } from "@/lib/shared/phrases";
 import { isDue, phraseState, srsSummary } from "@/lib/shared/srs";
 import { countWords } from "@/lib/shared/stats";
 import { prettyDay, todayKey } from "@/lib/shared/date";
@@ -33,22 +33,56 @@ const SESSION_SIZE = 6;
 /** From this Leitner box up, the drill hides the phrase first (recall + apply). */
 const RECALL_BOX = 2;
 
-/** Offline/failure fallback — weaker than AI situations, still production. */
-const LOCAL_SITUATIONS = [
-  "A friend texts you: “how's everything going?” Reply about your week — and work your phrase in naturally.",
-  "You're telling a colleague about something that happened yesterday. Tell it in a sentence or two, using your phrase.",
-  "Someone in your family asks what you think about a plan they have. Answer them, using your phrase.",
-  "You're messaging a friend about something you saw online today. Say your take, using your phrase.",
-  "A neighbor asks how your day was. Answer honestly — and fit your phrase in.",
-  "You're writing a quick reply in a group chat about weekend plans. Use your phrase in it.",
+/** How each method reads in the round header. */
+const METHOD_META: Record<DrillMethod, { label: string }> = {
+  situation: { label: "The moment" },
+  reply: { label: "Reply to them" },
+  rephrase: { label: "Upgrade it" },
+  personal: { label: "Make it yours" },
+};
+
+/** Offline/failure fallback packs — generic but still production, rotating
+ *  through the methods that work without phrase-specific content (rephrase
+ *  needs an AI-written plain sentence, so it's online-only). */
+const LOCAL_PACKS: { method: DrillMethod; setup: string }[] = [
+  {
+    method: "situation",
+    setup: "A friend texts you: “how's everything going?” — and they really want to know.",
+  },
+  {
+    method: "reply",
+    setup: "Alex: Did you see that thing everyone's talking about today?\nAlex: So — what do you think?",
+  },
+  {
+    method: "personal",
+    setup: "Think of one real moment from your week where this phrase fits.",
+  },
+  {
+    method: "situation",
+    setup: "You're telling a colleague about something that happened yesterday, and they ask for the details.",
+  },
+  {
+    method: "reply",
+    setup: "Sam: I can't decide if I should try it or not.\nSam: You know about this — what would you do?",
+  },
+  {
+    method: "personal",
+    setup: "Think of a place, a habit, or an opinion of yours this phrase is true about.",
+  },
 ];
 
 interface DrillRound {
   phrase: Phrase;
-  situation: string;
+  method: DrillMethod;
+  /** The scene: a moment, a "Name: line" mini-chat, or the plain sentence. */
+  setup: string;
+  /** What to write. */
+  task: string;
+  /** Worked examples using the phrase in other contexts (inert input). */
+  examples: string[];
   /** Phrase hidden at first — retrieve from meaning, then apply. */
   recall: boolean;
-  /** True when the situation came from the local fallback, not the AI. */
+  /** True when the setup came from the local fallback, not the AI. */
   offline: boolean;
 }
 
@@ -102,6 +136,7 @@ export function Phrasebook() {
   const [idx, setIdx] = useState(0);
   const [answer, setAnswer] = useState("");
   const [revealed, setRevealed] = useState(false);
+  const [examplesOpen, setExamplesOpen] = useState(false);
   const [judging, setJudging] = useState(false);
   const [result, setResult] = useState<DrillJudgment | null>(null);
   const [producedCount, setProducedCount] = useState(0);
@@ -114,31 +149,51 @@ export function Phrasebook() {
     const items = due.slice(0, SESSION_SIZE);
     if (items.length === 0 || loadingDrill) return;
     setLoadingDrill(true);
-    let bySituation = new Map<string, string>();
-    let offline = false;
+    let byId = new Map<string, DrillRoundSetup>();
     try {
-      const situations = await drillPhrases(
+      const fetched = await drillPhrases(
         level,
-        items.map((p) => ({ id: p.id, text: p.text, meaning: p.meaning })),
+        items.map((p) => ({
+          id: p.id,
+          text: p.text,
+          meaning: p.meaning,
+          example: p.example || undefined,
+        })),
       );
-      bySituation = new Map(situations.map((s) => [s.id, s.situation]));
+      byId = new Map(fetched.map((r) => [r.id, r]));
     } catch {
-      offline = true; // every round falls back below
+      // Offline — every round falls back to a local pack below.
     }
     setRounds(
       items.map((p, i) => {
-        const situation = bySituation.get(p.id);
+        const r = byId.get(p.id);
+        const local = LOCAL_PACKS[i % LOCAL_PACKS.length];
+        const method = r?.method ?? local.method;
+        // Worked examples: the generated ones, then the stored enrichment
+        // example — deduped, and never the bare phrase itself.
+        const examples = [...(r?.examples ?? []), p.example]
+          .filter((e): e is string => !!e && e.trim().length > 0)
+          .filter((e) => e.trim().toLowerCase() !== p.text.trim().toLowerCase())
+          .filter(
+            (e, n, arr) =>
+              arr.findIndex((x) => x.trim().toLowerCase() === e.trim().toLowerCase()) === n,
+          )
+          .slice(0, 3);
         return {
           phrase: p,
-          situation: situation ?? LOCAL_SITUATIONS[i % LOCAL_SITUATIONS.length],
+          method,
+          setup: r?.setup ?? local.setup,
+          task: r?.task ?? DRILL_TASKS[method],
+          examples,
           recall: (srs[p.id]?.box ?? 0) >= RECALL_BOX,
-          offline: offline || !situation,
+          offline: !r,
         };
       }),
     );
     setIdx(0);
     setAnswer("");
     setRevealed(false);
+    setExamplesOpen(false);
     setResult(null);
     setProducedCount(0);
     setLoadingDrill(false);
@@ -155,7 +210,7 @@ export function Phrasebook() {
       j = await judgePhrase(
         level,
         { text: round.phrase.text, meaning: round.phrase.meaning },
-        round.situation,
+        `${round.setup}\n${round.task}`,
         sentence,
       );
     } catch {
@@ -187,7 +242,16 @@ export function Phrasebook() {
     setIdx((i) => i + 1);
     setAnswer("");
     setRevealed(false);
+    setExamplesOpen(false);
     setResult(null);
+  }
+
+  /** Worked examples necessarily show the phrase — in a recall round, opening
+   *  them IS the peek (recorded the same way; the phrase just stays due). */
+  function openExamples() {
+    setExamplesOpen(true);
+    const round = rounds[idx];
+    if (round?.recall && result === null) setRevealed(true);
   }
 
   // ---- drill ----------------------------------------------------------------
@@ -225,14 +289,17 @@ export function Phrasebook() {
           </span>
         </div>
 
-        {/* The situation — the real-life moment to answer. */}
+        {/* The scene — a moment, a mini-chat to answer, a sentence to upgrade,
+            or a pointer at the learner's own life (the method rotation). */}
         <div className="mt-4 border-l-2 border-gold bg-secondary/40 py-3 pl-4 pr-4">
           <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-            The moment{round.offline ? " · offline" : ""}
+            {METHOD_META[round.method].label}
+            {round.offline ? " · offline" : ""}
           </div>
-          <p className="mt-1.5 font-serif text-[16px] leading-relaxed text-foreground">
-            {round.situation}
+          <p className="mt-1.5 whitespace-pre-line font-serif text-[16px] leading-relaxed text-foreground">
+            {round.setup}
           </p>
+          <p className="mt-2 text-[12.5px] text-muted-foreground">{round.task}</p>
         </div>
 
         {/* The phrase — shown as scaffold early, hidden for recall later. */}
@@ -271,6 +338,49 @@ export function Phrasebook() {
             </div>
           )}
         </div>
+
+        {/* Worked examples + similar ways — input to learn from, never
+            insertable (select-none keeps the generation gap real). */}
+        {(round.examples.length > 0 || (round.phrase.alternatives?.length ?? 0) > 0) && (
+          <div className="mt-2">
+            {!examplesOpen ? (
+              <button
+                type="button"
+                onClick={openExamples}
+                className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
+              >
+                See it used{round.examples.length ? ` (${round.examples.length})` : ""}
+                {round.recall && !revealed && result === null ? " — shows the phrase" : ""} ↓
+              </button>
+            ) : (
+              <div className="border border-border bg-secondary/40 p-3">
+                <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                  In action — now write your own
+                </div>
+                {round.examples.length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {round.examples.map((e, i) => (
+                      <li
+                        key={i}
+                        className="select-none font-serif text-[14px] italic leading-relaxed text-foreground/90"
+                      >
+                        “{e}”
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {round.phrase.alternatives && round.phrase.alternatives.length > 0 && (
+                  <div className="mt-2 text-[12px] text-muted-foreground">
+                    Similar ways:{" "}
+                    {round.phrase.alternatives
+                      .map((a) => a.text + (a.note ? ` (${a.note})` : ""))
+                      .join(" · ")}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Their sentence — production is the only way through. */}
         {result === null ? (

@@ -13,7 +13,7 @@ import type {
   Debrief,
   NewsLevel,
   CaptureEnrichment,
-  DrillSituation,
+  DrillRoundSetup,
   DrillJudgment,
 } from "@/types";
 
@@ -172,11 +172,13 @@ export async function enrichPhrase(
   return res.json() as Promise<CaptureEnrichment>;
 }
 
-/** One practice session's situations — one call for all due phrases. */
+/** One practice session's rounds — one call for all due phrases. Methods
+ *  rotate (situation / reply / rephrase / personal); each round carries
+ *  worked examples to learn from. */
 export async function drillPhrases(
   level: NewsLevel,
-  items: { id: string; text: string; meaning: string }[],
-): Promise<DrillSituation[]> {
+  items: { id: string; text: string; meaning: string; example?: string }[],
+): Promise<DrillRoundSetup[]> {
   const res = await fetch("/api/phrasebook/drill", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -184,7 +186,7 @@ export async function drillPhrases(
   });
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
-  return Array.isArray(data.situations) ? (data.situations as DrillSituation[]) : [];
+  return Array.isArray(data.rounds) ? (data.rounds as DrillRoundSetup[]) : [];
 }
 
 /** Honest judgment of one drill answer: applied, or not yet. */

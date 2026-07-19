@@ -428,12 +428,29 @@ export interface CaptureEnrichment {
   alternatives?: PhraseAlternative[];
 }
 
-/** One practice round's setup: a situation that calls for the phrase. */
-export interface DrillSituation {
-  /** The phrase id this situation elicits. */
+/**
+ * How one drill round asks for production — the variety axis. Every method
+ * ends the same way: the learner writes their own sentence.
+ */
+export type DrillMethod =
+  | "situation" // an everyday moment to respond to
+  | "reply" // a mini-dialogue ending on a line spoken TO the learner
+  | "rephrase" // a flat plain sentence to say more naturally with the phrase
+  | "personal"; // point at the learner's own life where the phrase fits
+
+/** One practice round's setup, built per phrase by the drill call. */
+export interface DrillRoundSetup {
+  /** The phrase id this round elicits. */
   id: string;
-  /** 1-2 sentences, second person, everyday life. Never contains the phrase. */
-  situation: string;
+  method: DrillMethod;
+  /** The scene material: the moment, the "Name: line" mini-chat, or the plain
+   *  sentence to upgrade. Never contains the phrase (code-checked). */
+  setup: string;
+  /** One short instruction telling the learner what to write. */
+  task: string;
+  /** Up to 2 worked examples USING the phrase in clearly different contexts —
+   *  input to learn from, rendered inert, never an answer to the setup. */
+  examples: string[];
 }
 
 /** Honest judgment of one drill answer. */
