@@ -85,6 +85,7 @@ export function defaultStore(): Store {
     vocab: {},
     aiPrompts: [],
     phraseSrs: {},
+    phraseApplied: {},
     minedPhrases: [],
     newsSessions: [],
     newsLevel: "B1",
@@ -114,6 +115,7 @@ export function loadStore(): Store {
       vocab: parsed.vocab ?? {},
       aiPrompts: parsed.aiPrompts ?? [],
       phraseSrs: parsed.phraseSrs ?? {},
+      phraseApplied: parsed.phraseApplied ?? {},
       minedPhrases: parsed.minedPhrases ?? [],
       newsSessions: parsed.newsSessions ?? [],
       newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(

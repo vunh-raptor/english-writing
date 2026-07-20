@@ -39,11 +39,17 @@ READ (News Chat, Ask margin)
         → store.collectPhrase (dedupe by content slug; unscheduled = due today)
         (enrich fails → the raw highlight is saved as-is — capture never fails)
 
-/phrasebook (library)
-  stats: due today · new · learning · mastered   (srsSummary)
-  rows:  phrase · state chip · meaning · "saved from News Chat — “…passage…”"
+/phrasebook (library — "your commonplace book")
+  main column: search + state filters (all/due/learning/mastered) over rows
+    grouped Due today / Learning / Mastered; each row = phrase · meaning ·
+    five Leitner-box ticks · state label, expanding to the example ("in
+    another situation"), the "similar ways" cluster + register, provenance
+    ("saved from News Chat — “…passage…”") and Remove
+  sticky rail: Today's session (due count + preview + start) ·
+    This week (day-by-day applications, Store.phraseApplied) ·
+    The journey (new → learning → mastered, srsSummary)
 
-Practice now (≤6 due)
+Start today's session (≤6 due)
   └─ POST /api/phrasebook/drill  — ONE call: a situation per phrase
        situations never contain the phrase (code-checked via phraseMatcher)
   └─ per round: situation → (phrase shown | hidden-for-recall + Peek)
@@ -52,7 +58,9 @@ Practice now (≤6 due)
          model judgment ∪ deterministic phraseMatcher (a lazy model can
          never erase a real production)
        → SRS applied by the clean/peeked/missed rules above
-  └─ done: "N of M applied in real situations"
+       (a round rail across the top tracks ✓ clean / ✓ peeked / — missed)
+  └─ debrief: "N of M said in your own words" — every round's outcome, the
+       learner's own sentence, and when each phrase returns
 ```
 
 ## Guarantees (same stance as News Chat)
@@ -83,7 +91,10 @@ hard code guards).
 - **Live (guest-first)**: captures join `Store.minedPhrases` (bounded, deduped
   by the content slug `phraseId(text)`) with `Phrase.captured =
   { module, context, day }` provenance; scheduling stays in `Store.phraseSrs`.
-  `collectPhrase` / `removePhrase` in `StoreContext`.
+  `collectPhrase` / `removePhrase` in `StoreContext`. Clean applications are
+  also tallied per local day in `Store.phraseApplied` (drill cleans, Coach
+  productions, mission `produced` targets — pruned to recent weeks), which
+  powers the library's "This week" card.
 - **DB (ready-to-wire)**: migration `0003_phrasebook.sql` adds source value
   `'captured'` + `captured_context` to the `phrases` table;
   `src/lib/server/db/phrases.ts` mirrors `collectPhrase` for when Supabase

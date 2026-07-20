@@ -89,6 +89,9 @@ export interface Store {
   aiPrompts: Prompt[];
   /** Spaced-repetition schedule per phrase id. */
   phraseSrs: Record<string, SrsRecord>;
+  /** Clean phrase applications per local day (drill, Coach, News Chat missions)
+   *  — powers the Phrasebook's "This week" card. Pruned to recent days. */
+  phraseApplied: Record<DayKey, number>;
   /** The learner's phrase pool — mission targets/keeps from News Chat plus
    *  captured highlights. The Phrasebook's library; the Coach practices it too. */
   minedPhrases: Phrase[];
