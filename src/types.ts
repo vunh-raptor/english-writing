@@ -173,6 +173,10 @@ export interface PhraseAlternative {
   note?: string;
 }
 
+/** What kind of lexical unit an item is — the Phrasebook holds them all, and
+ *  practice adapts (a word drills with its collocations; an idiom rephrases). */
+export type LexKind = "word" | "phrase" | "idiom" | "pattern" | "collocation" | "sentence";
+
 /** Where a captured phrase was highlighted — the Phrasebook's provenance. */
 export interface CaptureSource {
   /** Module label, e.g. "News Chat". */
@@ -195,6 +199,10 @@ export interface Phrase {
   origin?: string;
   /** 2+ popular "similar ways" to say the same thing, for real-world flexibility. */
   alternatives?: PhraseAlternative[];
+  /** What kind of unit this is (word/idiom/pattern/…) — practice adapts to it. */
+  kind?: LexKind;
+  /** Natural partner words — how words actually travel (e.g. "heavy rain"). */
+  collocations?: string[];
   /** Present when the learner highlighted this themselves (Phrasebook capture). */
   captured?: CaptureSource;
 }
@@ -426,6 +434,10 @@ export interface CaptureEnrichment {
   example: string;
   register?: string;
   alternatives?: PhraseAlternative[];
+  /** Classified unit kind — words, idioms, patterns… all live in the book. */
+  kind?: LexKind;
+  /** For words especially: 2-4 natural partner words/chunks. */
+  collocations?: string[];
 }
 
 /**
@@ -436,7 +448,19 @@ export type DrillMethod =
   | "situation" // an everyday moment to respond to
   | "reply" // a mini-dialogue ending on a line spoken TO the learner
   | "rephrase" // a flat plain sentence to say more naturally with the phrase
-  | "personal"; // point at the learner's own life where the phrase fits
+  | "personal" // point at the learner's own life where the phrase fits
+  | "collocation"; // use a word together with a natural partner (words travel in company)
+
+/**
+ * How the learner chooses to practice — one mode per strand of a balanced
+ * program (Nation's four strands; docs/PHRASEBOOK.md):
+ *   mixed  — meaning-focused output: AI scenario rounds, methods interleaved
+ *   recall — retrieval practice: item hidden, retrieve from meaning, then apply
+ *   sprint — fluency development: timed rounds on familiar items only
+ *   study  — language-focused learning: the full card, closed by writing
+ *            your own example (never moves the schedule — study ≠ testing)
+ */
+export type PracticeMode = "mixed" | "recall" | "sprint" | "study";
 
 /** One practice round's setup, built per phrase by the drill call. */
 export interface DrillRoundSetup {

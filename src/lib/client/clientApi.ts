@@ -15,6 +15,7 @@ import type {
   CaptureEnrichment,
   DrillRoundSetup,
   DrillJudgment,
+  LexKind,
 } from "@/types";
 
 /** Client calls to our own API routes (server does the crawling + AI). */
@@ -177,7 +178,7 @@ export async function enrichPhrase(
  *  worked examples to learn from. */
 export async function drillPhrases(
   level: NewsLevel,
-  items: { id: string; text: string; meaning: string; example?: string }[],
+  items: { id: string; text: string; meaning: string; example?: string; kind?: LexKind }[],
 ): Promise<DrillRoundSetup[]> {
   const res = await fetch("/api/phrasebook/drill", {
     method: "POST",
