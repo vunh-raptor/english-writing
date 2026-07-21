@@ -97,6 +97,8 @@ function rowToPhrase(row: PhraseRow): Phrase {
     register: row.register ?? undefined,
     origin: row.origin ?? undefined,
     alternatives: row.alternatives.length > 0 ? row.alternatives : undefined,
+    kind: row.kind,
+    collocations: row.collocations.length > 0 ? row.collocations : undefined,
   };
 }
 
@@ -121,11 +123,12 @@ function phraseInsert(userId: string, p: Phrase, sessionId?: string): PhraseInse
     text: p.text,
     meaning: p.meaning ?? "",
     example: p.example ?? "",
-    // A gap marks a reusable pattern ("It's worth ___"); otherwise a phrase.
-    kind: p.text.includes("___") ? "pattern" : "phrase",
+    // Explicit kind when known; else a gap marks a pattern, otherwise phrase.
+    kind: p.kind ?? (p.text.includes("___") ? "pattern" : "phrase"),
     register: p.register ?? null,
     origin: p.origin ?? null,
     alternatives: p.alternatives ?? [],
+    collocations: p.collocations ?? [],
     source: "news",
     source_session_id: sessionId ?? null,
   };

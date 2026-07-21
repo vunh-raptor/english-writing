@@ -1,33 +1,50 @@
 # Phrasebook — highlight it, then learn it by using it
 
-The capture-to-application loop. The learner highlights any word, phrase, or
-sentence while reading — the News Chat manuscript (briefing, partner turns,
-debrief) or the Ask margin — saves it in one tap, and later practices it in a
-dedicated module (`/phrasebook`). The practice is **production-first by
-design**: every round is a real-life situation answered in the learner's own
-sentence. There is no flashcard flip anywhere in the mode.
+The capture-to-application loop. The learner highlights any lexical unit while
+reading — a **word, collocation, idiom, pattern, phrase, or whole sentence** —
+in the News Chat manuscript (briefing, partner turns, debrief) or the Ask
+margin, saves it in one tap, and practices it in a dedicated module
+(`/phrasebook`). Whatever the practice mode, every round ends the same way:
+**the learner writes their own sentence**. There is no flashcard flip anywhere.
 
-## Why this shape
+## The research this is built on
 
-Memorization-first tools (flashcards) train *recognition*; what learners want
-is to *use* the language in life. So the Phrasebook applies the same principles
-News Chat v2 established (generation effect, desirable difficulties,
-scaffold-then-fade, honest SRS):
+The module is organized around **Nation's four strands** — a balanced language
+course gives roughly equal time to meaning-focused input, meaning-focused
+output, language-focused learning, and fluency development — plus four
+findings that shape the mechanics:
 
-- **Capture at the moment of meeting.** A phrase highlighted in a real article
-  or conversation arrives with context — the strongest encoding moment.
-- **Practice = apply, never recall-only.** A drill round shows a tiny everyday
-  situation that *calls for* the phrase; the learner answers it in their own
-  words. Knowing the meaning is never the finish line — using it is.
-- **Recall fades in with the schedule.** New/young phrases (Leitner box < 2)
-  are shown during the round (scaffold). From box 2 the phrase starts hidden —
-  meaning only — so the learner must *retrieve, then apply*. Peeking is always
-  allowed, and honestly recorded.
+| Finding | Where it lives here |
+| --- | --- |
+| **Four strands** (Nation 2007): output, deliberate study, and fluency work are *separate strands*, each needed | The four practice **modes** (below) — one per strand; capture + News Chat supply the input strand |
+| **Involvement Load Hypothesis** (Laufer & Hulstijn; systematic review 2022): tasks requiring evaluation + writing yield the deepest retention | Every mode ends in writing your own sentence; judging evaluates *application*, not recognition |
+| **Retrieval practice / testing effect** (incl. within-session repeated retrieval, SSLA): recalling beats re-study | Recall mode; hidden-first items in Mixed from Leitner box 2; peeks honestly recorded |
+| **Collocation research / the lexical approach** (Lewis; input-frequency studies): words are learned in company | `kind`-aware practice — a single word drills with its **collocations** ("word partners" method); partners stored on the item |
+| **Generation effect + desirable difficulties** (Bjork) | Nothing insertable, examples inert, delayed-copy flash for new items |
+
+- **Capture at the moment of meeting.** A unit highlighted in a real article
+  or conversation arrives with its passage — the strongest encoding moment.
+  Enrichment classifies its **kind** (word / phrase / idiom / pattern /
+  collocation / sentence) so practice can adapt.
 - **Honest scheduling, one pool.** Clean application → `reviewCard(true)`
-  (interval earned). Applied after a peek → no change (stays due). Missed →
-  lapse (due now). Captures join the same pool and SRS as News Chat's mission
-  targets, so the **Phrase Coach** recycles everything too — one curriculum,
-  two practice surfaces.
+  (interval earned). Applied after a peek/flash → no change (stays due).
+  Missed → lapse (due now). Study never touches the schedule; Sprint never
+  punishes. Captures share the pool and SRS with News Chat's mission targets,
+  so the **Phrase Coach** recycles everything too — one curriculum, two
+  practice surfaces.
+
+## The four modes — the learner chooses
+
+| Mode | Strand | What a round is | Items | Schedule effect |
+| --- | --- | --- | --- | --- |
+| **Mixed** | meaning-focused output | AI scenario rounds, methods interleaved (moment / reply / upgrade-it / make-it-yours / word-partners) | due (≤6) | clean ↑ · peek = stays due · miss ↓ |
+| **Recall** | retrieval practice | item hidden — retrieve from meaning, then apply; brand-new items get a 7s study-flash, then are written **from memory** (delayed copy) | due (≤6) | flash/peek = stays due; clean recall ↑ |
+| **Sprint** | fluency development | 45s per round, local prompts, item visible | familiar only (box ≥ 1) | clean ↑ · misses cost **nothing** |
+| **Study** | language-focused learning | the full card (meaning, example, origin, similar ways, partners, where you met it) → write your own example | newest (≤6) | **none** — study isn't testing |
+
+Only Mixed calls the AI round-builder; Recall, Sprint, and Study run on the
+item's own stored material — instant, and fully offline-capable (judging still
+uses the API when available, with the deterministic matcher as fallback).
 
 ## The flow
 
@@ -44,9 +61,19 @@ READ (News Chat, Ask margin)
   rows:  phrase · state chip · meaning · "saved from News Chat — “…passage…”"
 
 Practice now (≤6 due)
-  └─ POST /api/phrasebook/drill  — ONE call: a situation per phrase
-       situations never contain the phrase (code-checked via phraseMatcher)
-  └─ per round: situation → (phrase shown | hidden-for-recall + Peek)
+  └─ POST /api/phrasebook/drill  — ONE call: a full round pack per phrase
+       method rotates through a fixed arc (code-assigned, not model-chosen):
+         situation  an everyday moment to respond to
+         reply      a 2-3 line mini-chat ending on a line spoken TO you
+         rephrase   a flat "Plain version: …" sentence to say better
+         personal   a pointer at YOUR life where the phrase fits
+       each round = { setup, task, 2 worked examples }
+       setups never contain the phrase; examples MUST (both code-checked
+       via phraseMatcher)
+  └─ per round: setup + task → (phrase shown | hidden-for-recall + Peek)
+       "See it used" panel: generated examples + the stored enrichment
+       example + "similar ways" — inert (select-none); in a recall round
+       opening it counts as the peek (examples show the phrase)
        → learner writes their own sentence
        → POST /api/phrasebook/judge → { used, note, ≤1 upgrade }
          model judgment ∪ deterministic phraseMatcher (a lazy model can
@@ -54,6 +81,11 @@ Practice now (≤6 due)
        → SRS applied by the clean/peeked/missed rules above
   └─ done: "N of M applied in real situations"
 ```
+
+Method variety is planned, not random: sessions walk
+`situation → reply → rephrase → personal → …` (easiest ask first), the same
+arc offline — where `rephrase` is skipped, since its plain sentence needs the
+AI, and local packs cover the other three generically.
 
 ## Guarantees (same stance as News Chat)
 
@@ -71,7 +103,7 @@ Practice now (≤6 due)
 | Route | In → out |
 | --- | --- |
 | `POST /api/phrasebook/enrich` | `{ level, text, context }` → `CaptureEnrichment` |
-| `POST /api/phrasebook/drill` | `{ level, items[{id,text,meaning}] }` → `{ situations[{id,situation}] }` |
+| `POST /api/phrasebook/drill` | `{ level, items[{id,text,meaning,example?}] }` → `{ rounds[{id,method,setup,task,examples[]}] }` |
 | `POST /api/phrasebook/judge` | `{ level, phrase{text,meaning}, situation, sentence }` → `DrillJudgment { used, note, upgrade? }` |
 
 All on the fast model tier; server module `src/lib/server/phrasebook.ts`
@@ -85,7 +117,8 @@ hard code guards).
   { module, context, day }` provenance; scheduling stays in `Store.phraseSrs`.
   `collectPhrase` / `removePhrase` in `StoreContext`.
 - **DB (ready-to-wire)**: migration `0003_phrasebook.sql` adds source value
-  `'captured'` + `captured_context` to the `phrases` table;
+  `'captured'` + `captured_context`; migration `0004_lexical_kinds.sql`
+  extends `phrase_kind` to the full `LexKind` set and adds `collocations`;
   `src/lib/server/db/phrases.ts` mirrors `collectPhrase` for when Supabase
   Auth lands. See [`DATA_MODEL.md`](DATA_MODEL.md).
 

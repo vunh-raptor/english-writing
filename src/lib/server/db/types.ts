@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   PhraseAlternative,
   NewsLevel,
+  LexKind,
 } from "@/types";
 
 /**
@@ -18,7 +19,8 @@ import type {
  */
 
 export type NewsSessionStatus = "active" | "complete";
-export type PhraseKind = "pattern" | "phrase";
+/** Matches the DB enum after migration 0004 — the same set as `LexKind`. */
+export type PhraseKind = LexKind;
 export type PhraseSource = "news" | "coach" | "captured";
 
 /** `YYYY-MM-DD`, the learner's local calendar day (Postgres `date`). */
@@ -149,6 +151,7 @@ export interface Database {
           register: string | null;
           origin: string | null;
           alternatives: PhraseAlternative[];
+          collocations: string[];
           source: PhraseSource;
           source_session_id: string | null;
           captured_context: string | null;
@@ -170,6 +173,7 @@ export interface Database {
           register?: string | null;
           origin?: string | null;
           alternatives?: PhraseAlternative[];
+          collocations?: string[];
           source: PhraseSource;
           source_session_id?: string | null;
           captured_context?: string | null;
@@ -191,6 +195,7 @@ export interface Database {
           register?: string | null;
           origin?: string | null;
           alternatives?: PhraseAlternative[];
+          collocations?: string[];
           source?: PhraseSource;
           source_session_id?: string | null;
           captured_context?: string | null;

@@ -30,10 +30,11 @@ export async function saveCapturedPhrase(
     text: phrase.text,
     meaning: phrase.meaning ?? "",
     example: phrase.example ?? "",
-    kind: phrase.text.includes("___") ? "pattern" : "phrase",
+    kind: phrase.kind ?? (phrase.text.includes("___") ? "pattern" : "phrase"),
     register: phrase.register ?? null,
     origin: phrase.origin ?? null,
     alternatives: phrase.alternatives ?? [],
+    collocations: phrase.collocations ?? [],
     source: "captured",
     captured_context: context?.slice(0, 240) ?? phrase.captured?.context ?? null,
   };

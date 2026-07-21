@@ -15,6 +15,7 @@ assume a standard Supabase project (the `auth` schema and `auth.uid()` exist).
 | `migrations/0001_foundation.sql` | `news_level` enum; the `set_updated_at()` / `handle_new_user()` triggers; **`profiles`** (account anchor: streak + totals + rolling level) with RLS. |
 | `migrations/0002_news_learning.sql` | `news_session_status` / `phrase_kind` / `phrase_source` enums; **`news_sessions`** and **`phrases`** (the `/news` learning data) with indexes and RLS. |
 | `migrations/0003_phrasebook.sql` | Phrasebook capture: `phrase_source` value `'captured'` + `phrases.captured_context` (the highlighted passage). |
+| `migrations/0004_lexical_kinds.sql` | General lexical units: `phrase_kind` values `word`/`idiom`/`collocation`/`sentence` + `phrases.collocations` (partner chunks). |
 
 Everything is per-user and protected by Row-Level Security: a signed-in user can
 only read or write their own rows.
