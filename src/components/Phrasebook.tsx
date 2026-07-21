@@ -39,6 +39,15 @@ const SESSION_SIZE = 6;
 /** From this Leitner box up, the drill hides the phrase first (recall + apply). */
 const RECALL_BOX = 2;
 
+/**
+ * Capture never fails, but enrichment can (docs/PHRASEBOOK.md): a highlight
+ * saved before/without a meaning still belongs in the library and the rotation.
+ * These stand in for the missing gloss so a raw capture reads as intentional,
+ * not broken — in the row, and beside the situation in the drill.
+ */
+const RAW_MEANING_LIBRARY = "saved as you highlighted it — details pending";
+const RAW_MEANING_DRILL = "saved exactly as you highlighted it";
+
 /** Offline/failure fallback — weaker than AI situations, still production. */
 const LOCAL_SITUATIONS = [
   "A friend texts you: “how's everything going?” Reply about your week — and work your phrase in naturally.",
@@ -155,11 +164,9 @@ function PhraseRow({
           <div className="font-serif text-[16px] font-medium text-foreground">
             {phrase.text}
           </div>
-          {phrase.meaning && (
-            <div className="mt-px truncate text-[13px] text-muted-foreground">
-              {phrase.meaning}
-            </div>
-          )}
+          <div className="mt-px truncate text-[13px] text-muted-foreground">
+            {phrase.meaning || RAW_MEANING_LIBRARY}
+          </div>
         </div>
         <div className="flex flex-none items-center gap-4">
           <Ticks box={rec?.box ?? 0} />
@@ -451,11 +458,9 @@ export function Phrasebook() {
                     Your phrase
                   </span>
                 </div>
-                {round.phrase.meaning && (
-                  <div className="mt-0.5 text-sm text-muted-foreground">
-                    {round.phrase.meaning}
-                  </div>
-                )}
+                <div className="mt-0.5 text-sm text-muted-foreground">
+                  {round.phrase.meaning || RAW_MEANING_DRILL}
+                </div>
                 {ctx && (
                   <div className="mt-2.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/80">
                     Where you met it{" "}
@@ -675,7 +680,7 @@ export function Phrasebook() {
 
   const q = query.trim().toLowerCase();
   const matchesQuery = (p: Phrase) =>
-    !q || p.text.toLowerCase().includes(q) || p.meaning.toLowerCase().includes(q);
+    !q || p.text.toLowerCase().includes(q) || (p.meaning || "").toLowerCase().includes(q);
   const stateOf = (p: Phrase): RowState => {
     const rec = srs[p.id];
     if (isDue(rec)) return "due";
