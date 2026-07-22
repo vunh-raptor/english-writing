@@ -23,7 +23,7 @@ import type {
   Store,
 } from "@/types";
 import { loadStore, saveStore, clearStore, defaultStore } from "@/lib/client/storage";
-import { todayKey } from "@/lib/shared/date";
+import { daysBetween, todayKey } from "@/lib/shared/date";
 import {
   countWords,
   countChars,
@@ -96,6 +96,23 @@ function countProduced(progress: MissionProgress): number {
   return Object.values(progress.targets).filter(
     (s) => s === "produced" || s === "assisted",
   ).length;
+}
+
+/** Keep the day-keyed application log small — the UI only reads recent weeks. */
+const APPLIED_KEEP_DAYS = 70;
+
+/** Record `n` clean applications on `day`, pruning entries past the window. */
+function bumpApplied(
+  counts: Record<string, number>,
+  day: string,
+  n: number,
+): Record<string, number> {
+  const next: Record<string, number> = {};
+  for (const [k, v] of Object.entries(counts)) {
+    if (daysBetween(k, day) < APPLIED_KEEP_DAYS) next[k] = v;
+  }
+  next[day] = (next[day] ?? 0) + n;
+  return next;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -211,7 +228,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const day = todayKey();
       const next = { ...prev.phraseSrs };
       for (const id of ids) next[id] = reviewCard(next[id], success, day);
-      commit({ ...prev, phraseSrs: next });
+      commit({
+        ...prev,
+        phraseSrs: next,
+        phraseApplied: success
+          ? bumpApplied(prev.phraseApplied, day, ids.length)
+          : prev.phraseApplied,
+      });
     },
     [commit],
   );
@@ -241,7 +264,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // No record yet + not produced → leave it absent: "new" is already due.
       }
 
-      commit({ ...prev, minedPhrases, phraseSrs, newsLevel: outcome.level });
+      const produced = outcome.targets.filter((t) => t.verdict === "produced").length;
+      commit({
+        ...prev,
+        minedPhrases,
+        phraseSrs,
+        newsLevel: outcome.level,
+        phraseApplied: produced
+          ? bumpApplied(prev.phraseApplied, day, produced)
+          : prev.phraseApplied,
+      });
     },
     [commit],
   );

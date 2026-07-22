@@ -51,6 +51,7 @@ tables don't box them in later.
 | `settings.*` (goal, difficulty, focuses, AI keys…) | — stays device-local | by design¹ |
 | `newsSessions[]` | **`news_sessions`** | **done** |
 | `minedPhrases[]` + `phraseSrs{}` | **`phrases`** (schedule folded in) | **done** |
+| `phraseApplied{}` (day-keyed application tally) | — stays device-local | by design¹ |
 | `entries[]` | `entries` | planned |
 | `vocab{}` | `vocab` | planned |
 | `aiPrompts[]` | `ai_prompts` (or kept device-local) | planned |

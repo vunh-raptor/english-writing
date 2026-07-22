@@ -56,13 +56,23 @@ READ (News Chat, Ask margin)
         → store.collectPhrase (dedupe by content slug; unscheduled = due today)
         (enrich fails → the raw highlight is saved as-is — capture never fails)
 
-/phrasebook (library)
-  stats: due today · new · learning · mastered   (srsSummary)
-  rows:  phrase · state chip · meaning · "saved from News Chat — “…passage…”"
+/phrasebook (library — "your commonplace book")
+  main column: search + state filters (all/due/learning/mastered) over rows
+    grouped Due today / Learning / Mastered; each row = phrase · meaning ·
+    five Leitner-box ticks · state label, expanding to the example ("in
+    another situation"), the "similar ways" cluster + register, provenance
+    ("saved from News Chat — “…passage…”") and Remove
+  sticky rail: Today's session — the practice launcher: a four-MODE chooser
+    (Mixed / Recall / Sprint / Study, each showing how many items are ready) +
+    the selected mode's blurb + a due preview + Practice now ·
+    This week (day-by-day applications, Store.phraseApplied) ·
+    The journey (new → learning → mastered, srsSummary)
 
-Practice now (≤6 due)
-  └─ POST /api/phrasebook/drill  — ONE call: a full round pack per phrase
-       method rotates through a fixed arc (code-assigned, not model-chosen):
+Practice now (≤6 items, the chosen mode)
+  └─ mixed only: POST /api/phrasebook/drill  — ONE call: a full round pack per
+       phrase; the other modes run on the item's own stored material (instant,
+       offline-safe). Method rotates through a fixed arc (code-assigned, not
+       model-chosen):
          situation  an everyday moment to respond to
          reply      a 2-3 line mini-chat ending on a line spoken TO you
          rephrase   a flat "Plain version: …" sentence to say better
@@ -79,7 +89,9 @@ Practice now (≤6 due)
          model judgment ∪ deterministic phraseMatcher (a lazy model can
          never erase a real production)
        → SRS applied by the clean/peeked/missed rules above
-  └─ done: "N of M applied in real situations"
+       (a round rail across the top tracks ✓ clean / ✓ peeked / — missed)
+  └─ debrief: "N of M said in your own words" — every round's outcome, the
+       learner's own sentence, and when each phrase returns
 ```
 
 Method variety is planned, not random: sessions walk
@@ -115,7 +127,10 @@ hard code guards).
 - **Live (guest-first)**: captures join `Store.minedPhrases` (bounded, deduped
   by the content slug `phraseId(text)`) with `Phrase.captured =
   { module, context, day }` provenance; scheduling stays in `Store.phraseSrs`.
-  `collectPhrase` / `removePhrase` in `StoreContext`.
+  `collectPhrase` / `removePhrase` in `StoreContext`. Clean applications are
+  also tallied per local day in `Store.phraseApplied` (drill cleans, Coach
+  productions, mission `produced` targets — pruned to recent weeks), which
+  powers the library's "This week" card.
 - **DB (ready-to-wire)**: migration `0003_phrasebook.sql` adds source value
   `'captured'` + `captured_context`; migration `0004_lexical_kinds.sql`
   extends `phrase_kind` to the full `LexKind` set and adds `collocations`;

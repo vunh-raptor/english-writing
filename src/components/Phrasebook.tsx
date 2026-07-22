@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Eye, Send, Trash2 } from "lucide-react";
+import { ArrowRight, Eye, Send } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
 import type {
   DrillJudgment,
@@ -15,34 +15,38 @@ import type {
 } from "@/types";
 import { drillPhrases, judgePhrase } from "@/lib/client/clientApi";
 import { DRILL_TASKS, phraseMatcher } from "@/lib/shared/phrases";
-import { isDue, phraseState, srsSummary } from "@/lib/shared/srs";
+import { SRS_INTERVALS, isDue, phraseState, srsSummary } from "@/lib/shared/srs";
 import { countWords } from "@/lib/shared/stats";
-import { prettyDay, todayKey } from "@/lib/shared/date";
+import { addDays, parseDayKey, prettyDay, todayKey } from "@/lib/shared/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/page-container";
 
 /**
- * The Phrasebook (docs/PHRASEBOOK.md) — the learner's own collection of
+ * The Phrasebook (docs/PHRASEBOOK.md) — the learner's own commonplace book of
  * language: words, phrases, idioms, patterns, collocations — captured across
  * the app or mined from News Chat missions.
  *
- * Practice is organized as four learner-chosen MODES, one per strand of a
- * balanced program (Nation's four strands):
+ * Two layers meet here:
  *
- *   mixed  — meaning-focused output: AI scenario rounds, methods interleaved
- *            (moments, replies, upgrades, partner-words for single words).
- *   recall — retrieval practice: the item starts hidden; pull it from memory,
- *            then apply it. Brand-new items get a timed study-flash first,
- *            then are written from memory (delayed copy).
- *   sprint — fluency development: timed rounds over FAMILIAR items only;
- *            misses never punish, clean uses still advance the schedule.
- *   study  — language-focused learning: the full card (meaning, examples,
- *            origin, alternatives, collocations), closed by writing your own
- *            example. Never moves the schedule — study isn't testing.
+ *   The LIBRARY is a commonplace book — searchable, filterable (by SRS state
+ *   and by lexical kind), rows grouped Due / Learning / Mastered, each
+ *   expanding into its example, "similar ways", partner words and provenance.
+ *   A sticky rail carries the practice launcher (Today's session), the week's
+ *   applications, and the new → learning → mastered journey.
+ *
+ *   PRACTICE is four learner-chosen MODES, one per strand of a balanced
+ *   program (Nation's four strands):
+ *     mixed  — meaning-focused output: AI scenario rounds, methods interleaved.
+ *     recall — retrieval practice: the item starts hidden; pull it from memory,
+ *              then apply it. Brand-new items get a timed study-flash first.
+ *     sprint — fluency development: timed rounds over FAMILIAR items only;
+ *              misses never punish, clean uses still advance the schedule.
+ *     study  — language-focused learning: the full card, closed by writing your
+ *              own example. Never moves the schedule — study isn't testing.
  *
  * Whatever the mode, the round always ends the same way: the learner writes
- * their own sentence. Production is the through-line, not an option.
+ * their own sentence, and the session closes on an honest debrief.
  */
 
 /** Rounds per session — enough to feel real, short enough to finish. */
@@ -53,6 +57,14 @@ const RECALL_BOX = 2;
 const SPRINT_SECONDS = 45;
 /** Seconds a brand-new item is shown before writing it from memory. */
 const FLASH_SECONDS = 7;
+
+/**
+ * Capture never fails, but enrichment can (docs/PHRASEBOOK.md): a highlight
+ * saved before/without a meaning still belongs in the library and the rotation.
+ * These stand in for the missing gloss so a raw capture reads as intentional.
+ */
+const RAW_MEANING_LIBRARY = "saved as you highlighted it — details pending";
+const RAW_MEANING_DRILL = "saved exactly as you highlighted it";
 
 const MODE_META: Record<PracticeMode, { label: string; strand: string; desc: string }> = {
   mixed: {
@@ -150,10 +162,23 @@ interface DrillRound {
   offline: boolean;
 }
 
+/** How one round ended — drives the rail and the debrief. */
+type Outcome = "clean" | "peek" | "miss";
+
+interface RoundResult {
+  outcome: Outcome;
+  sentence: string;
+  /** Leitner box before this round — the debrief computes "returns in…" from it. */
+  prevBox: number;
+}
+
 type View =
   | { kind: "library" }
   | { kind: "drill" }
   | { kind: "done"; produced: number; total: number };
+
+type Filter = "all" | "due" | "learning" | "mastered";
+type RowState = "due" | "learning" | "mastered";
 
 /** Due-first (brand-new first), then saved order — the session order. */
 function dueOrder(pool: Phrase[], srs: Record<string, SrsRecord>): Phrase[] {
@@ -168,21 +193,42 @@ function dueOrder(pool: Phrase[], srs: Record<string, SrsRecord>): Phrase[] {
     });
 }
 
-function StateChip({ rec }: { rec: SrsRecord | undefined }) {
-  const state = phraseState(rec);
-  const due = isDue(rec);
+/** "returns in…" copy for a clean application's next interval. */
+function intervalLabel(days: number): string {
+  if (days <= 0) return "stays due — today";
+  if (days === 1) return "returns tomorrow";
+  if (days === 7) return "returns in a week";
+  return `returns in ${days} days`;
+}
+
+const OUTCOME_TILE: Record<Outcome, { mark: string; cls: string }> = {
+  clean: { mark: "✓", cls: "border-brand bg-brand-muted text-brand-ink" },
+  peek: { mark: "✓", cls: "border-ochre-line bg-ochre-tint text-gold" },
+  miss: { mark: "—", cls: "border-input bg-muted text-muted-foreground" },
+};
+
+const OUTCOME_LABEL: Record<Outcome, { text: string; cls: string }> = {
+  clean: { text: "applied", cls: "text-brand-ink" },
+  peek: { text: "applied · with help", cls: "text-gold" },
+  miss: { text: "not yet", cls: "text-muted-foreground" },
+};
+
+/** The five Leitner boxes as tiny square ticks — filled up to the current box. */
+function Ticks({ box }: { box: number }) {
   return (
     <span
-      className={cn(
-        "flex-none border px-1.5 py-px font-mono text-[9.5px] uppercase tracking-wide",
-        state === "mastered"
-          ? "border-sage bg-sage-muted text-sage-ink"
-          : due
-            ? "border-gold bg-ochre-tint text-gold"
-            : "border-input bg-muted text-muted-foreground",
-      )}
+      className="inline-flex gap-[3px]"
+      title={`Box ${box} of 5 — each clean use moves it up`}
     >
-      {due ? (state === "new" ? "new · due" : "due") : state}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          className={cn(
+            "size-1.5 border",
+            i < box ? "border-brand bg-brand" : "border-input bg-transparent",
+          )}
+        />
+      ))}
     </span>
   );
 }
@@ -195,6 +241,130 @@ function KindTag({ kind }: { kind: LexKind }) {
   );
 }
 
+function PhraseRow({
+  phrase,
+  rec,
+  state,
+  open,
+  onToggle,
+  onRemove,
+}: {
+  phrase: Phrase;
+  rec: SrsRecord | undefined;
+  state: RowState;
+  open: boolean;
+  onToggle: () => void;
+  onRemove: () => void;
+}) {
+  const due = state === "due";
+  const alts = phrase.alternatives ?? [];
+  const cols = phrase.collocations ?? [];
+  const ctx = phrase.captured?.context;
+  return (
+    <div className="border-b border-border">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-4 px-1 py-3 text-left transition-colors hover:bg-secondary/50"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="font-serif text-[16px] font-medium text-foreground">
+              {phrase.text}
+            </span>
+            <KindTag kind={kindOf(phrase)} />
+          </div>
+          <div className="mt-px truncate text-[13px] text-muted-foreground">
+            {phrase.meaning || RAW_MEANING_LIBRARY}
+          </div>
+        </div>
+        <div className="flex flex-none items-center gap-4">
+          <Ticks box={rec?.box ?? 0} />
+          <span
+            className={cn(
+              "min-w-[76px] text-right font-mono text-[10px] uppercase tracking-wide",
+              due ? "text-gold" : state === "mastered" ? "text-brand-ink" : "text-muted-foreground",
+            )}
+          >
+            {due ? (rec ? "due" : "new · due") : state}
+          </span>
+        </div>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-2.5 px-1 pb-4 pt-0.5">
+          {phrase.example && (
+            <div className="border-l-2 border-oxford-line pl-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                In another situation
+              </div>
+              <div className="mt-0.5 font-serif text-[15px] italic text-foreground">
+                {phrase.example}
+              </div>
+            </div>
+          )}
+          {(alts.length > 0 || phrase.register) && (
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                Similar ways
+              </span>
+              {alts.map((a) => (
+                <span
+                  key={a.text}
+                  title={a.note}
+                  className="bg-brand-muted px-2 py-px text-[12.5px] text-brand-ink"
+                >
+                  {a.text}
+                </span>
+              ))}
+              {phrase.register && (
+                <span className="bg-muted px-2 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {phrase.register}
+                </span>
+              )}
+            </div>
+          )}
+          {cols.length > 0 && (
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                Travels with
+              </span>
+              <span className="text-[13px] text-foreground/80">{cols.join(" · ")}</span>
+            </div>
+          )}
+          <div className="flex items-baseline justify-between gap-4">
+            <div className="min-w-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/80">
+              {phrase.captured ? (
+                <>
+                  Saved from {phrase.captured.module} · {prettyDay(phrase.captured.day)}
+                  {ctx && (
+                    <span className="font-serif normal-case italic tracking-normal">
+                      {" "}
+                      — “{ctx.slice(0, 90)}
+                      {ctx.length > 90 ? "…" : ""}”
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>From a News Chat mission</>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label={`Remove “${phrase.text}”`}
+              title="Remove from your Phrasebook"
+              className="flex-none font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60 transition-colors hover:text-destructive"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Phrasebook() {
   const { store, reviewPhrases, removePhrase } = useStore();
   const pool = store.minedPhrases;
@@ -202,8 +372,11 @@ export function Phrasebook() {
   const level = store.newsLevel;
 
   const [view, setView] = useState<View>({ kind: "library" });
-  const [mode, setMode] = useState<PracticeMode>("mixed");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [kindFilter, setKindFilter] = useState<LexKind | "all">("all");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [mode, setMode] = useState<PracticeMode>("mixed");
 
   // Drill session state.
   const [sessionMode, setSessionMode] = useState<PracticeMode>("mixed");
@@ -217,6 +390,7 @@ export function Phrasebook() {
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [judging, setJudging] = useState(false);
   const [result, setResult] = useState<DrillJudgment | null>(null);
+  const [results, setResults] = useState<RoundResult[]>([]);
   const [producedCount, setProducedCount] = useState(0);
   const [loadingDrill, setLoadingDrill] = useState(false);
 
@@ -226,10 +400,22 @@ export function Phrasebook() {
     [pool, srs],
   );
   const stats = useMemo(() => srsSummary(pool.map((p) => p.id), srs), [pool, srs]);
-  const kindsPresent = useMemo(
-    () => [...new Set(pool.map(kindOf))] as LexKind[],
-    [pool],
-  );
+  const kindsPresent = useMemo(() => [...new Set(pool.map(kindOf))] as LexKind[], [pool]);
+
+  // This week's applications, Monday-first — the "This week" card.
+  const week = useMemo(() => {
+    const today = todayKey();
+    const monday = addDays(today, -((parseDayKey(today).getDay() + 6) % 7));
+    const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+    const counts = days.map((d) => store.phraseApplied[d] ?? 0);
+    return {
+      days,
+      counts,
+      today,
+      total: counts.reduce((a, b) => a + b, 0),
+      max: Math.max(...counts, 1),
+    };
+  }, [store.phraseApplied]);
 
   /** Which items a mode draws from (and how many are ready right now). */
   function itemsFor(m: PracticeMode): Phrase[] {
@@ -312,6 +498,7 @@ export function Phrasebook() {
     setTimeLeft(null);
     setExamplesOpen(false);
     setResult(null);
+    setResults([]);
     setProducedCount(0);
     setLoadingDrill(false);
     setView({ kind: "drill" });
@@ -359,6 +546,10 @@ export function Phrasebook() {
     if (answer.trim()) {
       void submit();
     } else {
+      setResults((rs) => [
+        ...rs,
+        { outcome: "miss", sentence: "", prevBox: srs[rounds[idx]?.phrase.id]?.box ?? 0 },
+      ]);
       setResult({
         used: false,
         note: "Time! Sprint is about speed with what you know — no penalty. On to the next.",
@@ -395,6 +586,7 @@ export function Phrasebook() {
     //  study  — never touches the schedule (study isn't testing);
     //  sprint — clean uses advance, misses cost nothing (fluency ≠ pressure);
     //  others — clean earns an interval; peeked/flashed stays due; miss lapses.
+    const prevBox = srs[round.phrase.id]?.box ?? 0;
     const clean = j.used && !revealed && !flashed;
     if (sessionMode === "study") {
       // no-op
@@ -405,6 +597,10 @@ export function Phrasebook() {
       else if (!j.used) reviewPhrases([round.phrase.id], false);
     }
     if (clean || (sessionMode === "study" && j.used)) setProducedCount((n) => n + 1);
+    setResults((rs) => [
+      ...rs,
+      { outcome: clean ? "clean" : j.used ? "peek" : "miss", sentence, prevBox },
+    ]);
     setResult(j);
     setJudging(false);
   }
@@ -438,6 +634,8 @@ export function Phrasebook() {
     const flashActive = flashLeft !== null && flashLeft > 0;
     const showPhrase = flashActive || !round.recall || revealed || result !== null;
     const study = sessionMode === "study";
+    const last = results[results.length - 1];
+    const outcome: Outcome | null = result ? last?.outcome ?? null : null;
 
     const fullCard = (
       <>
@@ -450,9 +648,9 @@ export function Phrasebook() {
             </span>
           )}
         </div>
-        {round.phrase.meaning && (
-          <div className="mt-0.5 text-sm text-muted-foreground">{round.phrase.meaning}</div>
-        )}
+        <div className="mt-0.5 text-sm text-muted-foreground">
+          {round.phrase.meaning || RAW_MEANING_DRILL}
+        </div>
         {round.phrase.collocations && round.phrase.collocations.length > 0 && (
           <div className="mt-1.5 text-[12.5px] text-muted-foreground">
             travels with:{" "}
@@ -464,50 +662,59 @@ export function Phrasebook() {
 
     return (
       <PageContainer width="narrow">
-        <button
-          type="button"
-          onClick={() => setView({ kind: "library" })}
-          className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
-        >
-          ‹ Phrasebook
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setView({ kind: "library" })}
+            className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
+          >
+            ‹ Phrasebook
+          </button>
+          <div className="flex items-center gap-1.5">
+            {rounds.map((r, i) => {
+              const done = results[i];
+              const tile = done ? OUTCOME_TILE[done.outcome] : null;
+              return (
+                <span
+                  key={r.phrase.id}
+                  title={
+                    done ? `${r.phrase.text} — ${OUTCOME_LABEL[done.outcome].text}` : `Round ${i + 1}`
+                  }
+                  className={cn(
+                    "flex size-[22px] items-center justify-center border font-mono text-[11px]",
+                    tile
+                      ? tile.cls
+                      : i === idx
+                        ? "border-brand bg-card text-brand-ink"
+                        : "border-border bg-transparent text-muted-foreground/60",
+                  )}
+                >
+                  {tile ? tile.mark : i + 1}
+                </span>
+              );
+            })}
+          </div>
+        </div>
 
-        <div className="mt-3 flex items-baseline justify-between">
+        <div className="mt-4 flex items-baseline justify-between gap-3">
           <span className="kicker">
             {MODE_META[sessionMode].label} · round {idx + 1} of {rounds.length}
           </span>
-          <span className="flex items-center gap-3">
-            {sessionMode === "sprint" && timeLeft !== null && result === null && (
-              <span
-                className={cn(
-                  "font-mono text-[13px] font-semibold tabular-nums",
-                  timeLeft <= 10 ? "text-gold" : "text-muted-foreground",
-                )}
-              >
-                {timeLeft}s
-              </span>
-            )}
-            <span className="inline-flex gap-1">
-              {rounds.map((_, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "size-2 rounded-full",
-                    i < idx
-                      ? "bg-brand"
-                      : i === idx
-                        ? "bg-brand/40 ring-2 ring-brand/25"
-                        : "bg-muted-foreground/20",
-                  )}
-                />
-              ))}
+          {sessionMode === "sprint" && timeLeft !== null && result === null && (
+            <span
+              className={cn(
+                "font-mono text-[13px] font-semibold tabular-nums",
+                timeLeft <= 10 ? "text-gold" : "text-muted-foreground",
+              )}
+            >
+              {timeLeft}s
             </span>
-          </span>
+          )}
         </div>
 
         {/* The scene (skipped in study mode — the card is the scene). */}
         {!study && (
-          <div className="mt-4 border-l-2 border-gold bg-secondary/40 py-3 pl-4 pr-4">
+          <div className="mt-3 border-l-2 border-gold bg-secondary/40 py-3 pl-4 pr-4">
             <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
               {METHOD_META[round.method].label}
               {round.offline ? " · offline" : ""}
@@ -662,9 +869,7 @@ export function Phrasebook() {
                     void submit();
                   }
                 }}
-                placeholder={
-                  flashActive ? "Memorize it first…" : "Answer in your own sentence…"
-                }
+                placeholder={flashActive ? "Memorize it first…" : "Answer in your own sentence…"}
                 disabled={flashActive}
                 autoComplete="off"
                 className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70 disabled:opacity-60"
@@ -685,7 +890,9 @@ export function Phrasebook() {
             className={cn(
               "mt-4 border p-3.5",
               result.used
-                ? "border-sage bg-sage-muted text-sage-ink"
+                ? outcome === "clean"
+                  ? "border-brand bg-brand-muted text-brand-ink"
+                  : "border-ochre-line bg-ochre-tint text-gold"
                 : "border-border bg-secondary/50",
             )}
           >
@@ -713,7 +920,7 @@ export function Phrasebook() {
               </div>
             )}
             <Button size="sm" className="mt-3" onClick={next}>
-              {idx + 1 >= rounds.length ? "Finish" : "Next"} <ArrowRight />
+              {idx + 1 >= rounds.length ? "See your debrief" : "Next"} <ArrowRight />
             </Button>
           </div>
         )}
@@ -721,153 +928,280 @@ export function Phrasebook() {
     );
   }
 
-  // ---- done -----------------------------------------------------------------
+  // ---- done — the session debrief -------------------------------------------
 
   if (view.kind === "done") {
+    const study = sessionMode === "study";
     return (
-      <PageContainer width="narrow">
-        <div className="border border-border bg-sage-muted p-5 text-sage-ink">
-          <div className="kicker">
-            {MODE_META[sessionMode].label} session done
-          </div>
-          <div className="mt-2 font-serif text-2xl font-medium">
+      <PageContainer width="default">
+        <button
+          type="button"
+          onClick={() => setView({ kind: "library" })}
+          className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
+        >
+          ‹ Phrasebook
+        </button>
+        <div className="mt-5 bg-card p-6 sm:px-14 sm:py-12">
+          <div className="kicker">{MODE_META[sessionMode].label} · session debrief</div>
+          <h2 className="mt-2.5 text-[26px]">
             {view.produced} of {view.total}{" "}
-            {sessionMode === "study" ? "made your own." : "applied in real situations."}
-          </div>
-          <p className="mt-2 text-sm opacity-90">
-            {sessionMode === "study"
+            {study ? "made your own." : "said in your own words."}
+          </h2>
+          <p className="mt-2 text-pretty text-[14.5px] text-muted-foreground">
+            {study
               ? "Study feeds understanding — the schedule moves when you apply items in Mixed or Recall."
               : sessionMode === "sprint"
-                ? "Speed work sharpens what you already know — clean uses moved up the schedule."
-                : "Clean applications moved up the schedule; the rest stay due — your Phrase Coach and tomorrow's session will bring them back."}
+                ? "Speed work sharpens what you already know — clean uses moved up the schedule, misses cost nothing."
+                : "These are your sentences — not the app's. Clean uses earned a longer rest; the rest come straight back."}
           </p>
-          <Button
-            variant="secondary"
-            className="mt-4"
-            onClick={() => setView({ kind: "library" })}
-          >
-            ‹ Back to your Phrasebook
-          </Button>
+          <div className="mt-6 flex flex-col">
+            {rounds.map((round, i) => {
+              const r = results[i] ?? { outcome: "miss" as Outcome, sentence: "", prevBox: 0 };
+              const tile = OUTCOME_TILE[r.outcome];
+              const label = OUTCOME_LABEL[r.outcome];
+              const returns = study
+                ? "study — schedule unchanged"
+                : r.outcome === "clean"
+                  ? intervalLabel(SRS_INTERVALS[Math.min(SRS_INTERVALS.length - 1, r.prevBox + 1)])
+                  : sessionMode === "sprint"
+                    ? "no penalty — stays as it was"
+                    : r.outcome === "peek"
+                      ? "stays due — a clean try next time"
+                      : "stays due — back at the front of the queue";
+              return (
+                <div
+                  key={round.phrase.id}
+                  className="flex items-start gap-4 border-t border-border py-3.5"
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex size-[22px] flex-none items-center justify-center border font-mono text-[11px]",
+                      tile.cls,
+                    )}
+                  >
+                    {tile.mark}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                      <span className="font-serif text-[16px] font-semibold text-foreground">
+                        {round.phrase.text}
+                      </span>
+                      <KindTag kind={kindOf(round.phrase)} />
+                      <span
+                        className={cn("font-mono text-[10px] uppercase tracking-wide", label.cls)}
+                      >
+                        {label.text}
+                      </span>
+                    </div>
+                    {r.sentence && (
+                      <p className="mt-1 font-serif text-[15px] italic leading-normal text-muted-foreground">
+                        “{r.sentence}”
+                      </p>
+                    )}
+                    <div className="mt-1 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                      {returns}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-input pt-5">
+            <p className="text-pretty text-[13.5px] text-muted-foreground">
+              Your Phrase Coach picks up anything still due — same pool, in conversation.
+            </p>
+            <Button className="flex-none" onClick={() => setView({ kind: "library" })}>
+              Back to your Phrasebook
+            </Button>
+          </div>
         </div>
       </PageContainer>
     );
   }
 
-  // ---- library --------------------------------------------------------------
+  // ---- library — the commonplace book ----------------------------------------
 
-  const selectedCount = itemsFor(mode).length;
-  const shown =
-    kindFilter === "all" ? pool : pool.filter((p) => kindOf(p) === kindFilter);
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (p: Phrase) =>
+    !q || p.text.toLowerCase().includes(q) || (p.meaning || "").toLowerCase().includes(q);
+  const stateOf = (p: Phrase): RowState => {
+    const rec = srs[p.id];
+    if (isDue(rec)) return "due";
+    return phraseState(rec) === "mastered" ? "mastered" : "learning";
+  };
+  const visible = pool.filter(
+    (p) =>
+      matchesQuery(p) &&
+      (filter === "all" || stateOf(p) === filter) &&
+      (kindFilter === "all" || kindOf(p) === kindFilter),
+  );
 
-  return (
-    <PageContainer width="wide">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="kicker">Practice · Phrasebook</div>
-          <h1 className="mt-1.5 text-[28px] tracking-tight">Say it, don&apos;t just know it.</h1>
-          <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
-            Words, phrases, idioms, patterns — everything you&apos;ve collected,
-            practiced four ways: use it, remember it, speed it up, understand it.
-          </p>
-        </div>
+  const groups = (
+    [
+      { key: "due", label: "Due today", cls: "text-gold", rows: visible.filter((p) => stateOf(p) === "due") },
+      { key: "learning", label: "Learning", cls: "text-muted-foreground", rows: visible.filter((p) => stateOf(p) === "learning").reverse() },
+      { key: "mastered", label: "Mastered", cls: "text-brand", rows: visible.filter((p) => stateOf(p) === "mastered").reverse() },
+    ] as const
+  ).filter((g) => g.rows.length > 0);
+
+  const filters: { id: Filter; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "due", label: "Due" },
+    { id: "learning", label: "Learning" },
+    { id: "mastered", label: "Mastered" },
+  ];
+
+  const sessionItems = itemsFor(mode);
+  const selectedCount = sessionItems.length;
+  const sessionMinutes = Math.max(1, Math.round(selectedCount * 0.7));
+  const startLabel = loadingDrill
+    ? "Setting up…"
+    : selectedCount === 0
+      ? mode === "sprint"
+        ? "Nothing familiar yet"
+        : mode === "study"
+          ? "Nothing to study yet"
+          : "All caught up"
+      : `Practice now (${selectedCount})`;
+
+  const sessionCard = (
+    <div className="bg-card p-6">
+      <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-gold">
+        Today&apos;s session
       </div>
-
-      {/* Mode chooser — one mode per strand of a balanced program. */}
-      <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {MODE_ORDER.map((m) => {
-          const n = itemsFor(m).length;
-          const active = mode === m;
-          return (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              aria-pressed={active}
-              className={cn(
-                "border px-3 py-2.5 text-left transition-colors",
-                active
-                  ? "border-primary bg-secondary"
-                  : "border-input bg-card hover:bg-accent",
-              )}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className={cn("text-sm font-semibold", active && "text-brand")}>
-                  {MODE_META[m].label}
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {n} ready
-                </span>
-              </div>
-              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-                {MODE_META[m].strand}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-xl text-[13px] leading-snug text-muted-foreground">
-          {MODE_META[mode].desc}
-        </p>
-        <Button
-          size="lg"
-          onClick={() => void startDrill(mode)}
-          disabled={selectedCount === 0 || loadingDrill}
-        >
-          {loadingDrill
-            ? "Setting up…"
-            : selectedCount === 0
-              ? mode === "sprint"
-                ? "Nothing familiar yet"
-                : "All caught up"
-              : `Practice now (${selectedCount})`}
-        </Button>
-      </div>
-
-      {/* Stats strip */}
-      <div className="mt-7 flex flex-wrap items-baseline gap-x-10 gap-y-5 border-y border-input py-4">
-        {(
-          [
-            [stats.dueToday, "Due today", true],
-            [stats.new, "New"],
-            [stats.learning, "Learning"],
-            [stats.mastered, "Mastered"],
-          ] as [number, string, boolean?][]
-        ).map(([value, label, accent]) => (
-          <div key={label} className="flex flex-col">
-            <span
-              className={cn(
-                "font-serif text-[26px] font-semibold leading-none",
-                accent ? "text-gold" : "text-foreground",
-              )}
-            >
-              {value}
-            </span>
-            <span className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
-
       {pool.length === 0 ? (
-        <div className="mt-10 border border-border bg-card p-8 text-center">
-          <div className="kicker">Nothing collected yet</div>
-          <p className="mx-auto mt-3 max-w-md font-serif text-lg leading-snug text-muted-foreground">
-            Highlight any word, phrase, or sentence in a{" "}
-            <Link href="/news" className="border-b border-input text-brand hover:border-brand">
-              News Chat
-            </Link>{" "}
-            — the briefing, your partner&apos;s replies, even the Ask margin —
-            and save it here. Then practice it the only way that sticks:
-            by using it.
-          </p>
-        </div>
+        <p className="mt-2.5 text-pretty font-serif text-[16px] italic text-muted-foreground">
+          Your first save unlocks a session — highlight anything in a News Chat.
+        </p>
       ) : (
         <>
+          {/* Mode chooser — one mode per strand of a balanced program. */}
+          <div className="mt-3 grid grid-cols-2 gap-1.5">
+            {MODE_ORDER.map((m) => {
+              const n = itemsFor(m).length;
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  aria-pressed={active}
+                  className={cn(
+                    "border px-2.5 py-2 text-left transition-colors",
+                    active
+                      ? "border-brand bg-brand-muted"
+                      : "border-input bg-card hover:bg-secondary",
+                  )}
+                >
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span
+                      className={cn(
+                        "text-[13px] font-semibold",
+                        active ? "text-brand-ink" : "text-foreground",
+                      )}
+                    >
+                      {MODE_META[m].label}
+                    </span>
+                    <span className="font-mono text-[9px] tabular-nums text-muted-foreground">
+                      {n}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 font-mono text-[8.5px] uppercase tracking-wide text-muted-foreground">
+                    {MODE_META[m].strand}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2.5 text-[12.5px] leading-snug text-muted-foreground">
+            {MODE_META[mode].desc}
+          </p>
+          {selectedCount > 0 && (
+            <div className="mt-3 flex flex-col gap-[5px]">
+              {sessionItems.slice(0, 4).map((p) => {
+                const box = srs[p.id]?.box;
+                const tag = box == null ? "new" : box >= RECALL_BOX ? "from memory" : "";
+                return (
+                  <div key={p.id} className="flex items-baseline gap-2">
+                    <span className="size-[5px] flex-none border border-gold bg-ochre-line" />
+                    <span className="min-w-0 truncate font-serif text-[14.5px] italic text-foreground">
+                      {p.text}
+                    </span>
+                    {tag && (
+                      <span className="flex-none font-mono text-[9.5px] uppercase tracking-wide text-muted-foreground">
+                        {tag}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <Button
+            size="lg"
+            className="mt-3.5 w-full"
+            onClick={() => void startDrill(mode)}
+            disabled={selectedCount === 0 || loadingDrill}
+          >
+            {startLabel}
+          </Button>
+          {selectedCount > 0 && (
+            <p className="mt-2.5 text-center font-mono text-[10.5px] text-muted-foreground">
+              ≈ {sessionMinutes} {sessionMinutes === 1 ? "minute" : "minutes"} · one sentence each
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <PageContainer width="wide" className="max-w-[1120px]">
+      <div>
+        <div className="kicker">Practice · Phrasebook</div>
+        <h1 className="mt-1.5 text-[30px] tracking-tight">Your commonplace book</h1>
+        <p className="mt-1.5 max-w-[560px] text-pretty text-[15px] text-muted-foreground">
+          Words, phrases, idioms, patterns — everything you&apos;ve collected,
+          practiced the only way that sticks: by saying them yourself.
+        </p>
+      </div>
+
+      <div className="mt-6 lg:hidden">{sessionCard}</div>
+
+      <div className="mt-6 grid items-start gap-10 lg:mt-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12">
+        <div className="min-w-0">
+          {/* Search + state filters share one rule — the library's only chrome. */}
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-input pb-2.5">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search your phrases…"
+              aria-label="Search your phrases"
+              className="min-w-[160px] flex-1 bg-transparent py-1 text-[15px] text-foreground outline-none placeholder:font-serif placeholder:italic placeholder:text-muted-foreground/60"
+            />
+            <div className="flex flex-none gap-4">
+              {filters.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilter(f.id)}
+                  className={cn(
+                    "border-b-2 pb-0.5 font-mono text-[10.5px] uppercase tracking-[0.06em] transition-colors",
+                    filter === f.id
+                      ? "border-brand text-brand-ink"
+                      : "border-transparent text-muted-foreground hover:text-brand-ink",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Kind filter — the book holds every kind of unit. */}
           {kindsPresent.length > 1 && (
-            <div className="mt-5 flex flex-wrap items-center gap-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {(["all", ...kindsPresent] as (LexKind | "all")[]).map((k) => (
                 <button
                   key={k}
@@ -876,8 +1210,8 @@ export function Phrasebook() {
                   className={cn(
                     "border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors",
                     kindFilter === k
-                      ? "border-primary bg-secondary text-brand"
-                      : "border-input bg-card text-muted-foreground hover:bg-accent",
+                      ? "border-brand bg-brand-muted text-brand-ink"
+                      : "border-input bg-card text-muted-foreground hover:bg-secondary",
                   )}
                 >
                   {k === "all" ? "all" : KIND_LABEL[k]}
@@ -886,63 +1220,141 @@ export function Phrasebook() {
             </div>
           )}
 
-          <div className="mt-3 flex flex-col">
-            {due.length === 0 && (
-              <div className="border-b border-input pb-3 font-serif text-sm italic text-muted-foreground">
-                All caught up — nothing due right now. New saves are due the same day.
-              </div>
-            )}
-            {[...shown].reverse().map((p) => {
-              const rec = srs[p.id];
-              return (
-                <div key={p.id} className="group flex items-start gap-3 border-b border-border py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="font-serif text-[15.5px] font-medium text-foreground">
-                        {p.text}
-                      </span>
-                      <KindTag kind={kindOf(p)} />
-                      <StateChip rec={rec} />
-                    </div>
-                    {p.meaning && (
-                      <div className="mt-0.5 text-[13px] text-muted-foreground">{p.meaning}</div>
-                    )}
-                    {p.captured && (
-                      <div className="mt-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/80">
-                        Saved from {p.captured.module} · {prettyDay(p.captured.day)}
-                        {p.captured.context && (
-                          <span className="normal-case tracking-normal font-serif italic">
-                            {" "}
-                            — “{p.captured.context.slice(0, 80)}
-                            {p.captured.context.length > 80 ? "…" : ""}”
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removePhrase(p.id)}
-                    aria-label={`Remove “${p.text}”`}
-                    title="Remove from your Phrasebook"
-                    className="mt-1 flex-none text-muted-foreground/50 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+          {pool.length === 0 ? (
+            <div className="mt-10 bg-card px-8 py-12 text-center">
+              <div className="kicker">Nothing collected yet</div>
+              <p className="mx-auto mt-3 max-w-md font-serif text-lg leading-snug text-muted-foreground">
+                Highlight any word, phrase, or sentence in a{" "}
+                <Link href="/news" className="border-b border-input text-brand hover:border-brand">
+                  News Chat
+                </Link>{" "}
+                — the briefing, your partner&apos;s replies, even the Ask margin —
+                and save it here. It joins your practice rotation the same day.
+              </p>
+            </div>
+          ) : visible.length === 0 ? (
+            <p className="mt-8 font-serif text-sm italic text-muted-foreground">
+              Nothing matches — clear the search or pick another filter.
+            </p>
+          ) : (
+            groups.map((g) => (
+              <div key={g.key} className="mt-7">
+                <div className="flex items-baseline gap-2">
+                  <span className={cn("font-mono text-[11px] uppercase tracking-[0.08em]", g.cls)}>
+                    {g.label}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    · {g.rows.length}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        </>
-      )}
+                <div className="mt-1.5 flex flex-col">
+                  {g.rows.map((p) => (
+                    <PhraseRow
+                      key={p.id}
+                      phrase={p}
+                      rec={srs[p.id]}
+                      state={g.key}
+                      open={!!expanded[p.id]}
+                      onToggle={() => setExpanded((x) => ({ ...x, [p.id]: !x[p.id] }))}
+                      onRemove={() => removePhrase(p.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
 
-      <p className="mt-6 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-        Your{" "}
-        <Link href="/coach" className="border-b border-input text-brand hover:border-brand">
-          Phrase Coach
-        </Link>{" "}
-        practices this same pool in conversation.
-      </p>
+          <p className="mt-6 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
+            Your{" "}
+            <Link href="/coach" className="border-b border-input text-brand hover:border-brand">
+              Phrase Coach
+            </Link>{" "}
+            practices this same pool in conversation.
+          </p>
+        </div>
+
+        <aside className="flex flex-col gap-5 lg:sticky lg:top-8">
+          <div className="hidden lg:block">{sessionCard}</div>
+
+          <div className="bg-card p-6">
+            <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              This week
+            </div>
+            <div className="mt-2.5 flex items-baseline gap-2">
+              <span className="font-serif text-[26px] font-semibold leading-none text-foreground">
+                {week.total}
+              </span>
+              <span className="text-[13px] text-muted-foreground">
+                {week.total === 1 ? "phrase" : "phrases"} applied in real situations
+              </span>
+            </div>
+            <div className="mt-3.5 flex h-11 items-end gap-1.5">
+              {week.counts.map((v, i) => (
+                <div key={week.days[i]} className="flex h-full flex-1 items-end">
+                  <div
+                    className={cn(
+                      "w-full",
+                      week.days[i] === week.today ? "bg-gold" : v ? "bg-oxford-line" : "bg-muted",
+                    )}
+                    style={{ height: v ? `${Math.round((v / week.max) * 100)}%` : "3px" }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-1 flex gap-1.5">
+              {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+                <span
+                  key={i}
+                  className="flex-1 text-center font-mono text-[9px] uppercase text-muted-foreground"
+                >
+                  {d}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-card p-6">
+            <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              The journey
+            </div>
+            <div className="mt-3 flex items-center gap-2.5">
+              {(
+                [
+                  [stats.new, "New", false],
+                  [stats.learning, "Learning", false],
+                  [stats.mastered, "Mastered", true],
+                ] as [number, string, boolean][]
+              ).map(([value, label, accent], i) => (
+                <div key={label} className="contents">
+                  {i > 0 && <span className="text-sm text-input">→</span>}
+                  <div className="flex-1 text-center">
+                    <div
+                      className={cn(
+                        "font-serif text-[22px] font-semibold leading-none",
+                        accent ? "text-brand-ink" : "text-foreground",
+                      )}
+                    >
+                      {value}
+                    </div>
+                    <div
+                      className={cn(
+                        "mt-1 font-mono text-[9.5px] uppercase tracking-[0.06em]",
+                        accent ? "text-brand" : "text-muted-foreground",
+                      )}
+                    >
+                      {label}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3.5 text-pretty text-[13px] text-muted-foreground">
+              Every clean use moves a phrase one step right. Five in a row and
+              it&apos;s yours.
+            </p>
+          </div>
+        </aside>
+      </div>
     </PageContainer>
   );
 }
