@@ -459,6 +459,8 @@ export function NewsChat({
           example: e.example || text,
           register: e.register,
           alternatives: e.alternatives,
+          kind: e.kind,
+          collocations: e.collocations,
           captured,
         });
       } catch {

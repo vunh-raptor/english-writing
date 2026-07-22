@@ -1,4 +1,4 @@
-import type { Phrase, SrsRecord } from "@/types";
+import type { DrillMethod, LexKind, Phrase, SrsRecord } from "@/types";
 import { todayKey, daysBetween } from "./date";
 import { isDue } from "./srs";
 
@@ -78,6 +78,38 @@ export const SEED_PHRASES: Phrase[] = [
 export function phraseById(id: string): Phrase | undefined {
   return SEED_PHRASES.find((p) => p.id === id);
 }
+
+// --- Phrasebook drill: the shared method vocabulary -------------------------
+
+/**
+ * The fixed method rotation a practice session walks (index % length). Starts
+ * with the easiest ask; both the server (round building) and the client
+ * (offline fallback) follow it so sessions feel the same either way.
+ */
+export const DRILL_METHOD_ARC: DrillMethod[] = [
+  "situation",
+  "reply",
+  "rephrase",
+  "personal",
+];
+
+/** Single words learn best in company (collocation research) — their arc
+ *  leads with partner-word production instead of rephrasing an idiom. */
+const WORD_METHOD_ARC: DrillMethod[] = ["collocation", "situation", "reply", "personal"];
+
+/** The method rotation appropriate to an item's kind. */
+export function drillArcFor(kind?: LexKind): DrillMethod[] {
+  return kind === "word" ? WORD_METHOD_ARC : DRILL_METHOD_ARC;
+}
+
+/** The learner-facing instruction each method falls back to. */
+export const DRILL_TASKS: Record<DrillMethod, string> = {
+  situation: "Answer the moment in your own sentence — work your phrase in naturally.",
+  reply: "Write your reply — use your phrase naturally.",
+  rephrase: "Say the same idea more naturally, using your phrase.",
+  personal: "Tell it in one or two true sentences, using your phrase.",
+  collocation: "Use it together with a natural partner word, in your own sentence.",
+};
 
 /**
  * A phrase as a lenient matcher: ___ gaps become short wildcards; apostrophes
