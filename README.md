@@ -99,13 +99,22 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture, an
 [`docs/PATTERNS.md`](docs/PATTERNS.md) for how this app's Next.js fullstack
 pattern compares to module-driven and feature-driven architectures.
 
+### How changes get made
+
+Flowrite is developed with **Claude as the coding agent**, on a fixed cycle:
+frame → plan → build → prove → ship → review → sync docs. The rules an agent
+must not break live in [`CLAUDE.md`](CLAUDE.md); the cycle itself, and who owns
+which stage, is in [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+
 ### Status
 
 The **freewriting, trending, coach, and news** flows are built and run today.
 All AI is server-side. **Writing, streak, and progress state currently live in
-`localStorage`** (write as a guest, no account needed). **Supabase auth + a
-Postgres data layer is the next phase** — the packages are installed but not yet
-wired, so there is no `supabase/` schema in the repo yet.
+`localStorage`** (write as a guest, no account needed). The Postgres **schema
+has landed** (`supabase/migrations/`, with RLS) alongside a typed server
+data-access layer (`src/lib/server/db/`), but **Supabase Auth is not wired yet**
+— the live app still runs guest-first on `localStorage`. See
+[`docs/DATA_MODEL.md`](docs/DATA_MODEL.md).
 
 ## AI (server-side, free tier)
 
@@ -139,10 +148,17 @@ npm run dev                  # http://localhost:3000
 Other scripts:
 
 ```bash
+npm run verify               # THE GATE: lint + typecheck + unit tests + build
+npm test                     # Vitest — pure logic in src/lib/shared
+npm run e2e                  # build + Playwright smoke of the core writing loop
 npm run build && npm start   # production build + serve
 npm run lint                 # next lint
 npm run typecheck            # tsc --noEmit
 ```
+
+`npm run verify` is what CI runs on every pull request, plus the Playwright
+suite — deliberately with **no API keys**, since the core loop must work with no
+AI provider and no Supabase.
 
 The core freewriting experience runs with **no keys at all**. AI features
 activate once a provider key is set; trending/news activate with network access
@@ -190,6 +206,7 @@ src/
     ui/                        # shadcn/ui primitives
   lib/
     shared/   # pure, isomorphic: date, stats, streak, srs, prompts, phrases, sparks, feedback
+      __tests__/  # Vitest specs for the pure logic
     client/   # browser-only: storage, sound, ai/clientApi (fetch our API)
     server/   # server-only ("server-only"): ai gateway, aiTasks, trends, news, scenario, coach, newsChat
     utils.ts
@@ -198,8 +215,15 @@ src/
     SessionFlowContext.tsx     # ephemeral write-session flow
     AppProviders.tsx           # composes the providers
   types.ts
+e2e/                # Playwright smoke tests for the core writing loop
 docs/
-  ARCHITECTURE.md   NEWS_CHAT.md   PATTERNS.md
+  ARCHITECTURE.md   NEWS_CHAT.md   PATTERNS.md   WORKFLOW.md
+.claude/
+  settings.json     # permissions + SessionStart hook
+  commands/         # /spec  /checks  /ship  /docsync
+  hooks/            # session-start.sh (installs deps in web sessions)
+  skills/verify/    # how to drive the real app to verify AI surfaces
+.github/workflows/ci.yml
 ```
 
 Imports use the `@/*` alias (mapped to `src/*`), e.g. `@/lib/shared/stats`,

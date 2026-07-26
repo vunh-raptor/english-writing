@@ -30,6 +30,13 @@ yarn-error.log*
 # vercel
 .vercel
 
+# test output
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+/coverage/
+
 # editor
 .vscode/*
 !.vscode/extensions.json

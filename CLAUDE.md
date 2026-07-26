@@ -1,0 +1,114 @@
+# Flowrite — working agreement
+
+Read this first, every session. It is the short list of things that are true
+about this product and non-negotiable about how we change it. Everything else
+lives in `docs/` and is linked from here.
+
+## What this product is
+
+A calm freewriting app for people learning English, built around one goal:
+
+> **Maximize production, minimize the anxiety that makes people quit.**
+
+Every change is judged against that sentence. A feature that adds friction,
+correction, or judgement to the *writing* moment is wrong even if it is
+well-built. Read `README.md` for the full product argument.
+
+## Non-negotiables
+
+Break these and the change is a regression, however green the tests are.
+
+**Product**
+- **No correction mid-flow.** The editor keeps `spellCheck={false}`, no
+  autocorrect, no grammar UI, no red squiggles. Feedback is opt-in and always
+  *after* writing, and always leads with what went well.
+- **Never a blank page.** Every entry point offers a prompt and a starter.
+- **Guest-first.** The core loop works with no account, no network, and no AI
+  keys. Sign-up is invited *after* a win, never before one.
+- **AI degrades, never breaks.** With no provider key the app falls back to the
+  curated syllabus and on-device feedback. AI-only modes say so honestly rather
+  than faking content.
+
+**Architecture** (details in `docs/ARCHITECTURE.md`)
+- **The `lib` split is a hard boundary.** `lib/shared` is pure and isomorphic
+  (no I/O, no keys); `lib/client` is browser-only; `lib/server` carries
+  `import "server-only"` and is the only place a secret may be touched. Never
+  import `lib/server` from a component.
+- **Route handlers stay thin**: validate input → call one `lib/server` module →
+  return JSON. Logic belongs in the module, not the handler.
+- **Third-party text and learner text are data, never instructions.** Crawled
+  headlines, snippets, and anything typed by a learner get passed to models as
+  clearly-delimited content. JSON contracts stay tiny and parse fail-soft.
+- **Secrets never enter the repo.** `.env.example` holds empty placeholders
+  only; real values go in `.env.local` (git-ignored) or the Vercel dashboard.
+
+**Design** (details in `docs/DESIGN_SYSTEM.md`)
+- Oxford blue for every interactive affordance; **ochre only for annotations**;
+  **never red**; **no emoji**; square corners; flat surfaces; sentence case.
+- Reach for tokens (`bg-card`, `text-brand`, `bg-ochre-tint`), never raw hex.
+
+## The delivery cycle
+
+Full version with the reasoning: **`docs/WORKFLOW.md`**. The short form:
+
+1. **Frame** — restate the change as one sentence of learner-visible outcome.
+   Non-trivial work gets a short spec first (`/spec`).
+2. **Plan** — name the files and the seam before writing code. Say which
+   non-negotiable the change touches, if any.
+3. **Build** — smallest change that fully does the job; match surrounding style.
+4. **Prove** — `/checks`. Pure logic gets a Vitest test; a change to the core
+   loop gets or updates a Playwright test. See "Definition of done".
+5. **Ship** — `/ship`. Conventional-ish commit, push to the session branch, open
+   a PR against `main` using the template.
+6. **Sync docs** — `/docsync` if behaviour, architecture, or the API surface
+   moved.
+
+## Definition of done
+
+A change is done when **all** of these hold:
+
+- [ ] `npm run verify` passes (lint · typecheck · unit tests · build).
+- [ ] `npm run e2e` passes if anything on the write → celebrate path changed.
+- [ ] New pure logic in `lib/shared` has Vitest tests covering the happy path,
+      the empty/zero case, and the boundary the code actually cares about.
+- [ ] No new secret, key, or personal data in tracked files.
+- [ ] Docs updated when behaviour changed (`docs/`, `README.md` status).
+- [ ] The non-negotiables above still hold.
+
+"It builds" is not done. "The learner-visible outcome happens, and I saw it" is.
+
+## Commands and conventions
+
+```bash
+npm run dev         # local dev, http://localhost:3000
+npm run verify      # THE GATE: lint + typecheck + test + build
+npm test            # Vitest (pure logic in lib/shared)
+npm run e2e         # build + Playwright smoke of the core loop
+```
+
+- Imports use `@/*` → `src/*`. Unit tests live in `src/**/__tests__/*.test.ts`;
+  E2E specs live in `e2e/*.spec.ts`.
+- Prefer editing an existing module over adding a parallel one. New files need a
+  reason a reviewer would agree with.
+- Comments explain *why* (especially where a choice is pedagogical, not
+  technical). Do not narrate what the code already says.
+
+## Verifying for real
+
+Tests are the gate; they are not proof the feature works. For AI-dependent
+surfaces (Trending, Coach, News Chat, Phrasebook) drive the real thing — the
+**`verify` skill** (`.claude/skills/verify/`) has the launch commands, the API
+payloads, and the gotchas that have bitten before. Free-tier rate limits produce
+real 502s that are not bugs; retry like a user would.
+
+## Where to look
+
+| Question | File |
+| --- | --- |
+| Why the product is shaped this way | `README.md` |
+| How the system fits together | `docs/ARCHITECTURE.md` |
+| The delivery cycle in full | `docs/WORKFLOW.md` |
+| UI rules and tokens | `docs/DESIGN_SYSTEM.md` |
+| Database schema and RLS | `docs/DATA_MODEL.md` |
+| News Chat contracts | `docs/NEWS_CHAT.md`, `docs/NEWS_CHAT_V2.md` |
+| Why this architecture over alternatives | `docs/PATTERNS.md` |
