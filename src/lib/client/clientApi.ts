@@ -1,5 +1,9 @@
 import type {
   ChatMessage,
+  ContentIdea,
+  Polish,
+  SourceRef,
+  ThinkQuestion,
   Mission,
   MissionProgress,
   MissionTurn,
@@ -54,6 +58,89 @@ export async function fetchWordRounds(
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
   return Array.isArray(data.rounds) ? (data.rounds as WordRound[]) : [];
+}
+
+// --- Respond: bring a source, think against it, produce your own ------------
+
+/** Paste text or hand over a link — the server extracts the readable article.
+ *  No AI involved, so pasting works with no provider key at all. */
+export async function loadSource(input: {
+  text?: string;
+  url?: string;
+}): Promise<{ source: SourceRef; text: string }> {
+  const res = await fetch("/api/respond/source", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<{ source: SourceRef; text: string }>;
+}
+
+/** The four-rung thinking ladder, grounded in this source. Callers fall back
+ *  to `localQuestions()` so the ladder always runs. */
+export async function thinkLadder(
+  level: NewsLevel,
+  source: SourceRef,
+  text: string,
+): Promise<ThinkQuestion[]> {
+  const res = await fetch("/api/respond/questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, source, text }),
+  });
+  if (!res.ok) throw await httpError(res);
+  const data = await res.json();
+  return Array.isArray(data.questions) ? (data.questions as ThinkQuestion[]) : [];
+}
+
+/** "Push me": one harder question about the answer they just gave. */
+export async function sharpenThinking(
+  level: NewsLevel,
+  question: string,
+  answer: string,
+): Promise<string> {
+  const res = await fetch("/api/respond/sharpen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, question, answer }),
+  });
+  if (!res.ok) throw await httpError(res);
+  const data = await res.json();
+  return typeof data.question === "string" ? data.question : "";
+}
+
+/** Are these angles theirs, or the source restated? */
+export async function judgeContentIdeas(
+  level: NewsLevel,
+  source: SourceRef,
+  text: string,
+  ideas: { id: string; hook: string; bullets: string[] }[],
+): Promise<Pick<ContentIdea, "id" | "own" | "note" | "borrowed">[]> {
+  const res = await fetch("/api/respond/ideas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, source, text, ideas }),
+  });
+  if (!res.ok) throw await httpError(res);
+  const data = await res.json();
+  return Array.isArray(data.verdicts) ? data.verdicts : [];
+}
+
+/** Encouragement-first feedback on the finished piece. */
+export async function polishPiece(
+  level: NewsLevel,
+  source: SourceRef,
+  hook: string,
+  draft: string,
+): Promise<Polish> {
+  const res = await fetch("/api/respond/polish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, source, hook, draft }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<Polish>;
 }
 
 // --- News Chat v2: today's planned mission, then the beat-by-beat delivery ---

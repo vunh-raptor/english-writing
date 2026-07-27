@@ -17,6 +17,7 @@ import type {
   NewsLevel,
   NewsSession,
   Phrase,
+  RespondSession,
   Settings,
   Store,
 } from "@/types";
@@ -71,6 +72,10 @@ interface StoreContextValue {
   saveMissionOutcome(outcome: MissionOutcome): void;
   /** Create or update a saved News Chat conversation (keyed by id). */
   saveNewsSession(input: NewsSessionInput): void;
+  /** Create or update a Respond session — the reading, the thinking, the ideas. */
+  saveRespondSession(session: RespondSession): void;
+  /** Drop a saved Respond session and the unwritten ideas it held. */
+  removeRespondSession(id: string): void;
   /** Add a captured highlight to the phrase pool (deduped; new = due today). */
   collectPhrase(phrase: Phrase): void;
   /** Remove a phrase from the pool and drop its SRS schedule. */
@@ -86,6 +91,8 @@ const MAX_MINED_PHRASES = 400;
 const WORD_DAYS_KEEP = 70;
 /** Keep saved News Chat conversations bounded — the dashboard only shows recent. */
 const MAX_NEWS_SESSIONS = 40;
+/** Respond sessions carry a copy of their source text, so keep fewer of them. */
+const MAX_RESPOND_SESSIONS = 20;
 
 /** Count targets the learner produced or produced-with-help — the phrase tally. */
 function countProduced(progress: MissionProgress): number {
@@ -311,6 +318,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const saveRespondSession = useCallback(
+    (session: RespondSession) => {
+      const prev = storeRef.current;
+      const rest = prev.respondSessions.filter((s) => s.id !== session.id);
+      const respondSessions = [
+        { ...session, updatedAt: Date.now() },
+        ...rest,
+      ].slice(0, MAX_RESPOND_SESSIONS);
+      commit({ ...prev, respondSessions });
+    },
+    [commit],
+  );
+
+  const removeRespondSession = useCallback(
+    (id: string) => {
+      const prev = storeRef.current;
+      if (!prev.respondSessions.some((s) => s.id === id)) return;
+      commit({
+        ...prev,
+        respondSessions: prev.respondSessions.filter((s) => s.id !== id),
+      });
+    },
+    [commit],
+  );
+
   const collectPhrase = useCallback(
     (phrase: Phrase) => {
       if (!phrase.id || !phrase.text) return;
@@ -358,6 +390,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
+      saveRespondSession,
+      removeRespondSession,
       collectPhrase,
       removePhrase,
       reset,
@@ -371,6 +405,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
+      saveRespondSession,
+      removeRespondSession,
       collectPhrase,
       removePhrase,
       reset,

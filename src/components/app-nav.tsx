@@ -15,6 +15,7 @@ import {
   ChevronsRight,
   GraduationCap,
   Newspaper,
+  PenLine,
   Settings as SettingsIcon,
   User,
   type LucideIcon,
@@ -52,6 +53,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/words", label: "Daily words", short: "Words", icon: GraduationCap, badge: "words" },
       { href: "/news", label: "News chat", short: "News", icon: Newspaper },
+      { href: "/respond", label: "Respond", short: "Respond", icon: PenLine },
     ],
   },
   {

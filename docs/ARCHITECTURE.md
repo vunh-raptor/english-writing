@@ -17,7 +17,7 @@ module-driven backend), see [`PATTERNS.md`](PATTERNS.md).
 | Content sources | A bundled, frequency-ordered **word curriculum** (no I/O at all) plus keyless server **news adapters** (Google News RSS, GDELT, Reddit). |
 | Client state (today) | Browser **`localStorage`**, guest-first (`src/lib/client/storage.ts`, `src/store/StoreContext.tsx`). |
 | Auth + DB (in progress) | **Supabase** (Postgres + Auth). The Postgres **schema exists** (`supabase/migrations/`, RLS) with a typed server data-access layer (`src/lib/server/db/`) — see [`../supabase/README.md`](../supabase/README.md). Ready to wire; **Auth is not connected yet**, so the live app still runs guest-first on `localStorage`. |
-| Hosting | **Vercel** (Hobby). A Vercel Cron can warm the trend/news caches. |
+| Hosting | **Vercel** (Hobby). A Vercel Cron can warm the news cache. |
 
 ---
 
@@ -28,7 +28,7 @@ The whole system is three layers inside one Next.js app.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Browser (React, "use client")                               │
-│  DailyWords · NewsChat · Phrasebook · Settings                │
+│  DailyWords · Respond · NewsChat · Phrasebook · Settings      │
 │                                     state: localStorage       │
 └───────────────┬──────────────────────────────────────────────┘
                 │  fetch() JSON  (src/lib/client/{clientApi,ai}.ts)
@@ -39,7 +39,8 @@ The whole system is three layers inside one Next.js app.
                 │  import "server-only"
 ┌───────────────▼──────────────────────────────────────────────┐
 │  Server modules  (src/lib/server/*)                          │
-│  ai gateway · words · news · mission · phrasebook            │
+│  ai gateway · words · respond · extract · news · mission ·   │
+│  phrasebook                                                   │
 │      │                         │                              │
 │      ▼                         ▼                              │
 │  AI providers            Content adapters                     │
@@ -59,9 +60,9 @@ the browser:
 
 | Folder | Runs where | Contents |
 | --- | --- | --- |
-| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers). No I/O, no keys. |
+| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers), `respond` (the think ladder + the borrowing check). No I/O, no keys. |
 | `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` (fetch our own API), `supabase` (browser client). |
-| `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `news`, `mission`, `phrasebook`, `supabase` + `db/`. |
+| `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `supabase` + `db/`. |
 
 Because the stats/streak/SRS logic lives in `lib/shared`, it runs on the client
 today and can move behind the API unchanged when Supabase lands.
@@ -72,7 +73,7 @@ Screens are real routes grouped by their chrome using App Router route groups:
 
 - `app/(main)` — the shell every screen lives in: a persistent left rail on
   desktop (collapsing to a 72px icon strip), a top bar + bottom tab bar on
-  mobile. Holds Daily words, News chat, Phrasebook and Settings.
+  mobile. Holds Daily words, Respond, News chat, Phrasebook and Settings.
 - `/` redirects to `/words` — the day starts with today's words.
 
 A mode's own session state (which round, the draft, timing) is local component
@@ -99,7 +100,7 @@ settings) lives in **`StoreContext`**, persisted to `localStorage`.
   themselves as unavailable.
 
 Higher-level prompt construction lives in the feature modules (`words.ts`,
-`mission.ts`, `phrasebook.ts`).
+`respond.ts`, `mission.ts`, `phrasebook.ts`).
 
 ## Content adapters
 
@@ -118,6 +119,12 @@ frequency-ordered list bundled in `lib/shared/words.ts`, so the mode that has
 to work every single day has nothing to fetch and nothing to fail
 ([`DAILY_WORDS.md`](DAILY_WORDS.md)).
 
+`lib/server/extract.ts` is a different animal and is treated as one: it fetches
+a URL chosen by the **user**, not by us, so it carries full request-forgery
+guards — scheme allow-list, DNS resolution checked against private ranges,
+manually-followed redirects revalidated per hop, and hard caps on time, size and
+hops. See [`RESPOND.md`](RESPOND.md).
+
 ---
 
 ## API surface
@@ -128,6 +135,11 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | --- | --- |
 | `GET /api/health` | Liveness. |
 | `POST /api/words/daily` | One call per daily set: a real-life moment per word to produce it in. |
+| `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
+| `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
+| `POST /api/respond/sharpen` | One harder question about the answer they just gave. |
+| `POST /api/respond/ideas` | Are these angles theirs, or the source restated? |
+| `POST /api/respond/polish` | Encouragement-first feedback on a finished piece. |
 | `GET /api/news/mission` | Today's planned News Chat mission, cached per (day, level). |
 | `POST /api/converse` | News Chat turn — the scene-partner engine (state merged in code). |
 | `POST /api/converse/bridge` | "Say it your way": intent (any language) → keywords + gapped frame. |
@@ -141,7 +153,8 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
 the director prompt, stall assist, recap — are documented in detail in
 [`NEWS_CHAT.md`](NEWS_CHAT.md); the daily-word contract in
-[`DAILY_WORDS.md`](DAILY_WORDS.md).
+[`DAILY_WORDS.md`](DAILY_WORDS.md) and the Respond contract in
+[`RESPOND.md`](RESPOND.md).
 
 ## Prompt-injection posture
 
@@ -195,6 +208,9 @@ Two postures, chosen per mode by what the mode is *for*.
   moments personal, and a failure downgrades to local moments silently.
 - **The Phrasebook degrades.** Its Mixed mode wants the round-builder; Recall,
   Sprint and Study run on stored material alone.
+- **Respond degrades to its local ladder.** With no AI key the questions are
+  generic but real, the borrowing check is local anyway, and pasting needs no
+  network at all — only link-fetching does.
 - **News Chat requires the network** and deliberately has no offline fallback
   subject — it fails honestly rather than faking today's news.
 

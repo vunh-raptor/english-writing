@@ -48,14 +48,15 @@ Three surfaces, one pool of language and one spaced schedule underneath:
 | Mode | Route | What it is |
 | --- | --- | --- |
 | **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. Works fully offline. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
+| **Respond** | `/respond` | You bring the English: paste a post, an article, a newsletter, or hand over a link. The app gives you **questions and never answers** until you have an angle of your own — then you write it. Undrafted angles wait in an idea bank. See [`docs/RESPOND.md`](docs/RESPOND.md). |
 | **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
 | **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted, practiced four ways (Mixed · Recall · Sprint · Study — one per strand of a balanced program). See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
 | **Settings** | `/settings` | Words a day, your level, finish sound, theme (light/dark). |
 
 **They feed each other.** A word met in Daily words lands in the Phrasebook on
-its schedule. A phrase highlighted mid-conversation in News Chat lands there
-too. Anything the schedule says is ripe comes back in tomorrow's set. One
-curriculum, three ways in.
+its schedule. A phrase highlighted while reading in Respond, or mid-conversation
+in News Chat, lands there too. Anything the schedule says is ripe comes back in
+tomorrow's set. One curriculum, four ways in.
 
 ## The curriculum: frequency first, and deliberately unrelated
 
@@ -85,6 +86,9 @@ Two rules govern how a day is drawn:
 | Desirable difficulties | The drill rung hardens as the word's box rises |
 | Personally meaningful cues | `echo` gaps a sentence *you* wrote, weeks later |
 | Elaborative encoding | The bridge: two unrelated words, one sentence |
+| Reading feeds phraseology | Respond: you always write *after* reading a real source |
+| Elaborative interrogation | Respond asks questions and never supplies answers |
+| Source-based writing borrows | Every angle is checked against the source's wording |
 | Involvement load / generation | The round that earns an interval is the one you compose |
 | Avoid semantic interference | A day's words never share a semantic field |
 | Spacing beats massing | Leitner boxes; every day mixes reviews with new |
@@ -120,7 +124,8 @@ pattern compares to module-driven and feature-driven architectures.
 
 ### Status
 
-The **daily words, news chat, and phrasebook** flows are built and run today.
+The **daily words, respond, news chat, and phrasebook** flows are built and run
+today.
 All AI is server-side. **Your pool, schedule, streak, and vocabulary live in
 `localStorage`** (learn as a guest, no account needed). **Supabase auth is the
 remaining phase** — the Postgres schema and a typed data-access layer are in the
@@ -188,7 +193,7 @@ src/
     (main)/                    # the app shell: desktop rail / mobile tab bar
       layout.tsx
       page.tsx                 #  "/"  → redirect to /words
-      words/  news/  phrasebook/  settings/     (page.tsx each)
+      words/  news/  respond/  phrasebook/  settings/   (page.tsx each)
     api/
       health/route.ts
       words/daily/route.ts     # POST → a real-life moment per word in today's set
@@ -196,15 +201,16 @@ src/
       converse/route.ts        # POST → News Chat turn (the production engine)
       converse/{bridge,continue,ask,debrief}/route.ts
       phrasebook/{enrich,drill,judge}/route.ts
+      respond/{source,questions,sharpen,ideas,polish}/route.ts
   components/
-    DailyWords, NewsChat, NewsDashboard, News, Phrasebook,
+    DailyWords, NewsChat, NewsDashboard, News, Phrasebook, Respond,
     SelectionCapture, Settings, app-nav, page-container, theme-*
     ui/                        # shadcn/ui primitives
   lib/
-    shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases
+    shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases, respond
     client/   # browser-only: storage, sound, clientApi, supabase
     server/   # server-only ("server-only"): ai gateway, words, news, mission,
-              #   phrasebook, supabase + db/
+              #   phrasebook, respond, extract, supabase + db/
     utils.ts
   store/
     StoreContext.tsx           # persisted on-device state (localStorage today)
@@ -213,7 +219,7 @@ src/
 supabase/
   migrations/                  # Postgres schema + RLS (ready to wire)
 docs/
-  DAILY_WORDS.md   NEWS_CHAT.md   NEWS_CHAT_V2.md   PHRASEBOOK.md
+  DAILY_WORDS.md   RESPOND.md   NEWS_CHAT.md   NEWS_CHAT_V2.md   PHRASEBOOK.md
   ARCHITECTURE.md  DESIGN_SYSTEM.md  PATTERNS.md
 ```
 

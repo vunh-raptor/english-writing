@@ -38,6 +38,7 @@ export function defaultStore(): Store {
     wordDays: {},
     myLines: {},
     newsSessions: [],
+    respondSessions: [],
     newsLevel: "B1",
     hasWritten: false,
   };
@@ -67,6 +68,7 @@ export function loadStore(): Store {
       wordDays: parsed.wordDays ?? {},
       myLines: parsed.myLines ?? {},
       newsSessions: parsed.newsSessions ?? [],
+      respondSessions: parsed.respondSessions ?? [],
       newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(
         parsed.newsLevel as NewsLevel,
       )

@@ -54,6 +54,9 @@ export interface Store {
   myLines: Record<string, string>;
   /** Saved News Chat conversations — powers the /news dashboard (recent, stats, resume). */
   newsSessions: NewsSession[];
+  /** Saved Respond sessions — the reading, the thinking, and the idea bank
+   *  of angles the learner wrote but hasn't drafted yet. */
+  respondSessions: RespondSession[];
   /** Rolling CEFR-ish level — the band daily words are drawn at and missions
    *  are planned at. */
   newsLevel: NewsLevel;
@@ -434,6 +437,97 @@ export interface WordRound {
 
 /** How one word's turn ended — drives the debrief and the schedule. */
 export type WordOutcome = "clean" | "helped" | "missed";
+
+// --- Respond: bring a source, think against it, produce your own ------------
+//
+// The learner supplies the English (an article, a post, a newsletter) and the
+// app supplies only *questions* (docs/RESPOND.md). The AI never contributes an
+// idea, a summary, or an angle — if it did, the learner would leave with the
+// model's thinking instead of their own. Source → think → three angles of their
+// own → draft one → polish.
+
+/** Where a source came from. Attribution is kept honestly, always shown. */
+export interface SourceRef {
+  title: string;
+  /** Publication or site name, when we can tell. */
+  site?: string;
+  url?: string;
+  /** Words in the extracted text — so the read feels bounded before it starts. */
+  words: number;
+}
+
+/**
+ * The rungs the thinking phase climbs — Bloom's revised taxonomy compressed to
+ * four, ending at the level that produces something new:
+ *   grasp  (understand) say it back in your own words
+ *   assume (analyse)    name what it takes for granted
+ *   push   (evaluate)   weigh it against what you've actually seen
+ *   extend (create)     find what it left out — the doorway to a fresh angle
+ */
+export type ThinkRung = "grasp" | "assume" | "push" | "extend";
+
+export interface ThinkQuestion {
+  rung: ThinkRung;
+  question: string;
+}
+
+/** A question and what the learner answered. Their answers are the raw
+ *  material the angle screen hands back to them — never an AI suggestion. */
+export interface ThinkTurn extends ThinkQuestion {
+  answer: string;
+  /** A sharper follow-up they asked for, and how they answered it. */
+  followUp?: { question: string; answer: string };
+}
+
+/** One content idea, written entirely by the learner — the idea bank's unit. */
+export interface ContentIdea {
+  id: string;
+  /** The hook: a headline or opening line, one sentence. */
+  hook: string;
+  /** The spine — up to three bullets. */
+  bullets: string[];
+  /**
+   * Is this the learner's own angle, or a restatement of the source? Novice
+   * source-based writers borrow heavily, and that's the one failure mode this
+   * mode exists to catch, so every idea is checked.
+   */
+  own?: boolean;
+  /** One short note on the angle — what makes it theirs, or what doesn't. */
+  note?: string;
+  /** The longest run of words lifted verbatim from the source, if notable. */
+  borrowed?: string;
+  /** Set once this idea has been drafted into a piece. */
+  drafted?: boolean;
+}
+
+/** Post-hoc polish on a finished piece: what landed first, then at most two
+ *  upgrades. The same stance as everywhere else — never a red pen. */
+export interface Polish {
+  celebration: string;
+  /** Specific things that worked, quoting the learner's own words. */
+  landed: string[];
+  upgrades: Upgrade[];
+  /** Phrases from their draft worth keeping — they join the Phrasebook pool. */
+  keep: { text: string; meaning: string }[];
+}
+
+/** One pass through the mode, saved so the idea bank survives the session. */
+export interface RespondSession {
+  id: string;
+  day: DayKey;
+  createdAt: number;
+  updatedAt: number;
+  source: SourceRef;
+  /** A bounded copy of the extracted text, so a session can be reopened. */
+  text: string;
+  turns: ThinkTurn[];
+  ideas: ContentIdea[];
+  /** Which idea they took to a draft, if any. */
+  chosenId?: string;
+  draft: string;
+  polish?: Polish;
+  status: "thinking" | "ideas" | "drafting" | "done";
+}
 
 /**
  * A saved News Chat conversation — persisted so the /news dashboard can show
