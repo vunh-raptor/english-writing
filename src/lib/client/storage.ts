@@ -36,6 +36,7 @@ export function defaultStore(): Store {
     phraseApplied: {},
     minedPhrases: [],
     wordDays: {},
+    myLines: {},
     newsSessions: [],
     newsLevel: "B1",
     hasWritten: false,
@@ -64,6 +65,7 @@ export function loadStore(): Store {
       phraseApplied: parsed.phraseApplied ?? {},
       minedPhrases: parsed.minedPhrases ?? [],
       wordDays: parsed.wordDays ?? {},
+      myLines: parsed.myLines ?? {},
       newsSessions: parsed.newsSessions ?? [],
       newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(
         parsed.newsLevel as NewsLevel,

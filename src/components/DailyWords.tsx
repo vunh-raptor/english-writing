@@ -4,15 +4,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Eye, Send } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
-import type { DrillJudgment, NewsLevel, WordOutcome, WordPos, WordSeed } from "@/types";
+import type {
+  DrillJudgment,
+  NewsLevel,
+  WordDrill,
+  WordOutcome,
+  WordPos,
+  WordRound,
+  WordSeed,
+} from "@/types";
 import { fetchWordRounds, judgePhrase } from "@/lib/client/clientApi";
 import {
   CURRICULUM_SIZE,
   LOCAL_WORD_SETUPS,
   LOCAL_WORD_TASKS,
+  bridgePair,
   buildDaySet,
+  gapPartner,
+  gapSentence,
   isDailyWord,
+  judgeBridge,
+  judgeFit,
+  judgeRepair,
   maskCollocation,
+  pickDrill,
   recallMatches,
   usesWord,
   wordSeedById,
@@ -35,13 +50,19 @@ import { PageContainer } from "@/components/page-container";
  * few brand-new high-frequency words. Every item walks the same arc, and the
  * arc is the method:
  *
- *   MEET      (new words only) the card, once — form, meaning, a real example,
- *             the partners it travels with. The best first encounter we can give.
- *   RETRIEVE  the word disappears and they write it from its meaning. Recall,
- *             not recognition: pulling it back is what builds the memory.
- *   USE       a real-life moment that calls for it → they write their own
- *             sentence. Generating your own use in a new context is the single
- *             biggest lever on whether a word survives the week.
+ *   MEET   (new words only) the card, once — form, meaning, a real example,
+ *          the partners it travels with. The best first encounter we can give.
+ *   DRILL  one rung of the ladder, chosen by the word's Leitner box — recall ·
+ *          fit · partner · repair · echo (`pickDrill`). The ask hardens as the
+ *          memory does, and each rung tests something the others can't.
+ *   USE    a real-life moment that calls for it → they write their own
+ *          sentence. Generating your own use in a new context is the single
+ *          biggest lever on whether a word survives the week, so it is the
+ *          round every word ends on and the only one that earns an interval.
+ *
+ * Then a BRIDGE bonus closes the day: one sentence using two of today's words,
+ * which — because a set is drawn from different semantic fields — is a real
+ * creative stretch. It never touches the schedule.
  *
  * Clean all the way through earns a longer interval; anything with help stays
  * due. Then the word joins the same pool the Phrasebook practices — one
@@ -52,7 +73,36 @@ import { PageContainer } from "@/components/page-container";
  *  enough not to nag, long enough that nobody skips the encounter blind. */
 const MEET_SECONDS = 4;
 
-type Beat = "meet" | "retrieve" | "use";
+type Beat = "meet" | "drill" | "use";
+
+/** How each rung introduces itself: the kicker, and the ask above the input. */
+const DRILL_META: Record<WordDrill, { kicker: string; prompt: string; hint: string }> = {
+  recall: {
+    kicker: "from memory",
+    prompt: "Which word means",
+    hint: "Any normal ending is fine — this is about the word, not the spelling.",
+  },
+  fit: {
+    kicker: "fill the gap",
+    prompt: "One word is missing — and it has to be the right form",
+    hint: "Mind the ending: tense, plural, comparative.",
+  },
+  partner: {
+    kicker: "its partner",
+    prompt: "Which word goes in front of it?",
+    hint: "The word itself is fine — it's the company it keeps we're after.",
+  },
+  repair: {
+    kicker: "make it natural",
+    prompt: "Someone wrote this. It's close — fix the one thing that's off",
+    hint: "Rewrite the whole sentence the way you'd actually say it.",
+  },
+  echo: {
+    kicker: "your own words",
+    prompt: "You wrote this yourself. Which word did you use?",
+    hint: "Your sentence, from a while back.",
+  },
+};
 
 interface SessionItem {
   id: string;
@@ -74,6 +124,12 @@ interface SessionItem {
   offline: boolean;
   /** Leitner box before today — the debrief computes "returns in…" from it. */
   prevBox: number;
+  /** Which rung this word drills today, and the material it runs on. */
+  drill: WordDrill;
+  /** For fit / echo / partner: the gapped text and the answer it expects. */
+  gap: { gapped: string; answer: string } | null;
+  /** For repair: the near-miss to fix and the natural version to reveal after. */
+  repair?: { wrong: string; right: string };
 }
 
 interface ItemResult {
@@ -85,6 +141,7 @@ interface ItemResult {
 type View =
   | { kind: "home" }
   | { kind: "session" }
+  | { kind: "bridge" }
   | { kind: "done" };
 
 const OUTCOME_TILE: Record<WordOutcome, { mark: string; cls: string }> = {
@@ -153,7 +210,9 @@ export function DailyWords() {
   const [beat, setBeat] = useState<Beat>("meet");
   const [meetLeft, setMeetLeft] = useState<number | null>(null);
   const [guess, setGuess] = useState("");
-  const [recalled, setRecalled] = useState<null | boolean>(null);
+  /** null while unanswered; then how the drill went. "form" = right word,
+   *  wrong ending — worth its own feedback, and it counts as help. */
+  const [drillVerdict, setDrillVerdict] = useState<null | "exact" | "form" | "wrong">(null);
   const [helped, setHelped] = useState(false);
   const [answer, setAnswer] = useState("");
   const [examplesOpen, setExamplesOpen] = useState(false);
@@ -161,7 +220,11 @@ export function DailyWords() {
   const [result, setResult] = useState<DrillJudgment | null>(null);
   const [results, setResults] = useState<ItemResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [bridge, setBridge] = useState("");
+  const [bridgeDone, setBridgeDone] = useState<null | boolean>(null);
   const startedAt = useRef<number>(0);
+  /** The sentence kept per item for a future `echo`. */
+  const lines = useRef<Record<string, string>>({});
 
   const today = todayKey();
 
@@ -218,7 +281,44 @@ export function DailyWords() {
       examples: [],
       offline: true,
       prevBox: srs[seed.id]?.box ?? 0,
+      drill: "recall",
+      gap: null,
     };
+  }
+
+  /**
+   * Give an item its rung. A brand-new word always drills `recall` — the
+   * form-meaning link has to exist before anything can be asked of it. Reviews
+   * climb by box, degrading whenever the material for the ideal rung is missing
+   * (offline, no partner chunks, nothing written yet).
+   *
+   * The offline `fit` sentence is the word's own stored example. That's only
+   * ever reached at box ≥ 1, i.e. at least a day after they met it — spaced
+   * retrieval of a sentence they saw once, not a memory trick.
+   */
+  function withDrill(item: SessionItem, round?: { cloze?: string; repair?: { wrong: string; right: string } }): SessionItem {
+    const myLine = store.myLines[item.id];
+    const cloze = round?.cloze ?? item.example;
+    const drill: WordDrill = item.isNew
+      ? "recall"
+      : pickDrill(item.prevBox, {
+          word: item.word,
+          myLine,
+          cloze,
+          repair: round?.repair,
+          collocations: item.collocations,
+        });
+
+    let gap: SessionItem["gap"] = null;
+    if (drill === "fit") gap = gapSentence(cloze, item.word);
+    else if (drill === "echo" && myLine) gap = gapSentence(myLine, item.word);
+    else if (drill === "partner") gap = gapPartner(item.collocations, item.word);
+    // A gap that couldn't be cut drops the item back to recall rather than
+    // rendering an empty round.
+    if (drill !== "recall" && drill !== "repair" && !gap) {
+      return { ...item, drill: "recall", gap: null };
+    }
+    return { ...item, drill, gap, ...(drill === "repair" ? { repair: round?.repair } : {}) };
   }
 
   async function start() {
@@ -234,7 +334,7 @@ export function DailyWords() {
       ...remainingNew.map((s) => itemFromSeed(s, true)),
     ];
 
-    let byId = new Map<string, { setup: string; task: string; examples: string[] }>();
+    let byId = new Map<string, WordRound>();
     try {
       const rounds = await fetchWordRounds(
         level,
@@ -257,13 +357,16 @@ export function DailyWords() {
         .filter((e) => e && e.trim())
         .filter((e, n, arr) => arr.findIndex((x) => x.trim() === e.trim()) === n)
         .slice(0, 3);
-      return {
-        ...item,
-        setup: r?.setup ?? LOCAL_WORD_SETUPS[i % LOCAL_WORD_SETUPS.length],
-        task: r?.task ?? item.task,
-        examples,
-        offline: !r,
-      };
+      return withDrill(
+        {
+          ...item,
+          setup: r?.setup ?? LOCAL_WORD_SETUPS[i % LOCAL_WORD_SETUPS.length],
+          task: r?.task ?? item.task,
+          examples,
+          offline: !r,
+        },
+        r,
+      );
     });
 
     // Fix today's set now, so a reload mid-session shows the same words.
@@ -271,15 +374,18 @@ export function DailyWords() {
 
     setItems(built);
     setIdx(0);
-    setBeat(built[0].isNew ? "meet" : "retrieve");
+    setBeat(built[0].isNew ? "meet" : "drill");
     setMeetLeft(null);
     setGuess("");
-    setRecalled(null);
+    setDrillVerdict(null);
     setHelped(false);
     setAnswer("");
     setExamplesOpen(false);
     setResult(null);
     setResults([]);
+    setBridge("");
+    setBridgeDone(null);
+    lines.current = {};
     setLoading(false);
     startedAt.current = Date.now();
     setView({ kind: "session" });
@@ -301,17 +407,42 @@ export function DailyWords() {
 
   // ---- the beats ------------------------------------------------------------
 
+  /** Answer the drill rung. Each rung judges its own thing, but they all land
+   *  on the same three verdicts so the rest of the session stays uniform. */
   function submitGuess() {
     const item = items[idx];
-    if (!item || recalled !== null) return;
-    const ok = recallMatches(item.word, guess);
-    setRecalled(ok);
-    if (!ok) setHelped(true);
+    if (!item || drillVerdict !== null || !guess.trim()) return;
+
+    let verdict: "exact" | "form" | "wrong";
+    switch (item.drill) {
+      case "recall":
+        verdict = recallMatches(item.word, guess) ? "exact" : "wrong";
+        break;
+      case "fit":
+      case "echo":
+        // `fit` is the rung that cares about the ending, so a right word in the
+        // wrong form is its own verdict rather than a flat miss.
+        verdict = item.gap ? judgeFit(item.word, item.gap.answer, guess) : "wrong";
+        break;
+      case "partner":
+        verdict =
+          item.gap && item.gap.answer.toLowerCase() === guess.trim().toLowerCase()
+            ? "exact"
+            : "wrong";
+        break;
+      case "repair":
+        verdict =
+          item.repair && judgeRepair(item.repair, item.word, guess) ? "exact" : "wrong";
+        break;
+    }
+
+    setDrillVerdict(verdict);
+    if (verdict !== "exact") setHelped(true);
   }
 
   function peek() {
-    if (recalled !== null) return;
-    setRecalled(false);
+    if (drillVerdict !== null) return;
+    setDrillVerdict("wrong");
     setHelped(true);
   }
 
@@ -356,24 +487,40 @@ export function DailyWords() {
     if (clean) reviewPhrases([item.id], true);
     else if (outcome === "missed" && !item.isNew) reviewPhrases([item.id], false);
 
+    // Keep their sentence for a future `echo` — only when the word is actually
+    // in it, or the gap would have no answer.
+    if (j.used) lines.current[item.id] = sentence;
+
     setResults((rs) => [...rs, { outcome, sentence, prevBox: item.prevBox }]);
     setResult(j);
     setJudging(false);
   }
 
+  /** Close the day: streak, totals, vocabulary, and the lines kept for echo. */
+  function finish(extraSentences: string[] = []) {
+    const sentences = [...results.map((r) => r.sentence), ...extraSentences].filter(Boolean);
+    finishWordSession({
+      sentences,
+      lines: lines.current,
+      durationMs: Date.now() - startedAt.current,
+    });
+    if (store.settings.sound) playChime();
+    setView({ kind: "done" });
+  }
+
   function next() {
     if (idx + 1 >= items.length) {
-      const sentences = results.map((r) => r.sentence).filter(Boolean);
-      finishWordSession({ sentences, durationMs: Date.now() - startedAt.current });
-      if (store.settings.sound) playChime();
-      setView({ kind: "done" });
+      // The bridge is a bonus, so it only appears when there are two words to
+      // join; otherwise the day closes here.
+      if (bridgePair(items)) setView({ kind: "bridge" });
+      else finish();
       return;
     }
     const nextItem = items[idx + 1];
     setIdx((i) => i + 1);
-    setBeat(nextItem.isNew ? "meet" : "retrieve");
+    setBeat(nextItem.isNew ? "meet" : "drill");
     setGuess("");
-    setRecalled(null);
+    setDrillVerdict(null);
     setHelped(false);
     setAnswer("");
     setExamplesOpen(false);
@@ -388,6 +535,9 @@ export function DailyWords() {
     const cue = item.collocations
       .map((c) => maskCollocation(c, item.word))
       .filter((c) => c.includes("___"))[0];
+    // The partner chunk with its gap filled back in — "nothing to worry about",
+    // not "nothing worry". The whole chunk is the thing worth showing.
+    const filledChunk = item.gap ? item.gap.gapped.replace("___", item.gap.answer) : "";
 
     return (
       <PageContainer width="narrow">
@@ -428,7 +578,7 @@ export function DailyWords() {
             {item.isNew ? "New word" : "Coming back"} · {idx + 1} of {items.length}
           </span>
           <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-            {beat === "meet" ? "meet it" : beat === "retrieve" ? "from memory" : "use it"}
+            {beat === "meet" ? "meet it" : beat === "drill" ? DRILL_META[item.drill].kicker : "use it"}
           </span>
         </div>
 
@@ -446,79 +596,157 @@ export function DailyWords() {
               size="lg"
               className="mt-3 w-full"
               disabled={meetLeft !== null}
-              onClick={() => setBeat("retrieve")}
+              onClick={() => setBeat("drill")}
             >
               {meetLeft !== null ? `Got it (${meetLeft})` : "Got it — hide it"}
             </Button>
           </>
         )}
 
-        {/* 2 — RETRIEVE. Recall, not recognition: they type it themselves. */}
-        {beat === "retrieve" && (
+        {/* 2 — DRILL. One rung of the ladder, chosen by the word's box. */}
+        {beat === "drill" && (
           <>
             <div className="mt-3 border border-border bg-card p-5">
               <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                Which word means
-              </div>
-              <p className="mt-1.5 font-serif text-[19px] leading-snug text-foreground">
-                {item.meaning}
-              </p>
-              <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
-                <span className="uppercase tracking-wide">{item.pos}</span>
-                {cue && <span>· it goes in “{cue}”</span>}
+                {DRILL_META[item.drill].prompt}
               </div>
 
-              {recalled === null ? (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <input
-                    autoFocus
-                    value={guess}
-                    onChange={(e) => setGuess(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        submitGuess();
-                      }
-                    }}
-                    placeholder="type the word…"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    className="min-w-[180px] flex-1 border-b-2 border-input bg-transparent py-1.5 font-serif text-[18px] text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
-                  />
-                  <Button size="sm" onClick={submitGuess} disabled={!guess.trim()}>
-                    Check
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={peek}
-                    title="Peeking is fine — the word just stays due for a clean try next time"
-                  >
-                    <Eye /> Show me
-                  </Button>
+              {/* The material each rung puts in front of them. */}
+              {item.drill === "recall" && (
+                <>
+                  <p className="mt-1.5 font-serif text-[19px] leading-snug text-foreground">
+                    {item.meaning}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
+                    <span className="uppercase tracking-wide">{item.pos}</span>
+                    {cue && <span>· it goes in “{cue}”</span>}
+                  </div>
+                </>
+              )}
+
+              {(item.drill === "fit" || item.drill === "echo") && item.gap && (
+                <>
+                  <p className="mt-1.5 font-serif text-[19px] leading-relaxed text-foreground">
+                    {item.gap.gapped}
+                  </p>
+                  <div className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    {item.meaning}
+                  </div>
+                </>
+              )}
+
+              {item.drill === "partner" && item.gap && (
+                <>
+                  <p className="mt-1.5 font-serif text-[22px] leading-snug text-foreground">
+                    {item.gap.gapped}
+                  </p>
+                  <div className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    starts with “{item.gap.answer[0]}”
+                  </div>
+                </>
+              )}
+
+              {/* Repair leans on ochre — the tutor's pencil, never a red pen,
+                  and it's someone else's sentence being marked, not theirs. */}
+              {item.drill === "repair" && item.repair && (
+                <p className="mt-1.5 border-l-2 border-ochre-line bg-ochre-tint py-2 pl-3 pr-2 font-serif text-[17px] leading-relaxed text-gold">
+                  “{item.repair.wrong}”
+                </p>
+              )}
+
+              {drillVerdict === null ? (
+                <div className="mt-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.drill === "repair" ? (
+                      <textarea
+                        autoFocus
+                        rows={2}
+                        value={guess}
+                        onChange={(e) => setGuess(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            submitGuess();
+                          }
+                        }}
+                        placeholder="write it the natural way…"
+                        autoComplete="off"
+                        className="min-w-[200px] flex-1 resize-none border-b-2 border-input bg-transparent py-1.5 font-serif text-[16px] leading-relaxed text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
+                      />
+                    ) : (
+                      <input
+                        autoFocus
+                        value={guess}
+                        onChange={(e) => setGuess(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            submitGuess();
+                          }
+                        }}
+                        placeholder={
+                          item.drill === "partner" ? "the missing word…" : "type the word…"
+                        }
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        className="min-w-[180px] flex-1 border-b-2 border-input bg-transparent py-1.5 font-serif text-[18px] text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
+                      />
+                    )}
+                    <Button size="sm" onClick={submitGuess} disabled={!guess.trim()}>
+                      Check
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={peek}
+                      title="Peeking is fine — the word just stays due for a clean try next time"
+                    >
+                      <Eye /> Show me
+                    </Button>
+                  </div>
+                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
+                    {DRILL_META[item.drill].hint}
+                  </p>
                 </div>
               ) : (
                 <div
                   className={cn(
                     "mt-4 border p-3",
-                    recalled
+                    drillVerdict === "exact"
                       ? "border-brand bg-brand-muted text-brand-ink"
                       : "border-ochre-line bg-ochre-tint text-gold",
                   )}
                 >
                   <div className="text-sm font-medium">
-                    {recalled ? "✓ That's the one." : `It was “${item.word}”.`}
+                    {drillVerdict === "exact"
+                      ? item.drill === "partner"
+                        ? `✓ “${filledChunk}” — that's the pairing.`
+                        : item.drill === "repair"
+                          ? "✓ You caught it."
+                          : "✓ That's the one."
+                      : drillVerdict === "form"
+                        ? `Right word, wrong ending — this sentence wants “${item.gap?.answer}”.`
+                        : item.drill === "partner"
+                          ? `It's “${filledChunk}”.`
+                          : item.drill === "repair"
+                            ? "Here's the natural version."
+                            : `It was “${item.gap?.answer || item.word}”.`}
                   </div>
+                  {item.drill === "repair" && item.repair && (
+                    <div className="mt-1.5 font-serif text-[15px] italic">
+                      “{item.repair.right}”
+                    </div>
+                  )}
                   <div className="mt-1 text-sm opacity-90">
-                    {recalled
-                      ? "Pulling it back from memory is what makes it stick. Now go use it."
+                    {drillVerdict === "exact"
+                      ? "Pulling it back yourself is what makes it stick. Now go use it."
                       : "No cost — you'll see it again. Use it now and it starts settling in."}
                   </div>
                 </div>
               )}
             </div>
-            {recalled !== null && (
+            {drillVerdict !== null && (
               <Button size="lg" className="mt-3 w-full" onClick={() => setBeat("use")}>
                 Use it in your own sentence <ArrowRight />
               </Button>
@@ -642,6 +870,122 @@ export function DailyWords() {
               </div>
             )}
           </>
+        )}
+      </PageContainer>
+    );
+  }
+
+  // ---- the bridge — the day's closing bonus ----------------------------------
+  //
+  // Two of today's words, one sentence. The day's set is drawn from different
+  // semantic fields on purpose, so joining them is a genuine stretch — and
+  // elaborating a link between unrelated things is exactly the processing that
+  // makes memories durable. It's a bonus: it never moves the schedule, because
+  // a bonus that could lapse a word would make the honest scheduling a lie.
+
+  if (view.kind === "bridge") {
+    const pair = bridgePair(items);
+    if (!pair) return null;
+    const [a, b] = pair;
+    const ok = bridgeDone === true;
+
+    return (
+      <PageContainer width="narrow">
+        <div className="flex items-center justify-between gap-3">
+          <span className="kicker">The bridge · bonus round</span>
+          <button
+            type="button"
+            onClick={() => finish(bridge.trim() && ok ? [bridge.trim()] : [])}
+            className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
+          >
+            Skip →
+          </button>
+        </div>
+
+        <h2 className="mt-4 text-[22px] leading-snug">
+          One sentence. Both words.
+        </h2>
+        <p className="mt-1.5 text-[14px] text-muted-foreground">
+          They have nothing to do with each other — that&apos;s the point. Making
+          the link is what makes them stick.
+        </p>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {[a, b].map((w) => (
+            <div key={w.id} className="border border-border bg-card p-3.5">
+              <div className="font-serif text-[19px] font-semibold text-foreground">{w.word}</div>
+              <div className="mt-1 text-[13px] text-muted-foreground">{w.meaning}</div>
+            </div>
+          ))}
+        </div>
+
+        {bridgeDone === null ? (
+          <div className="mt-4">
+            <div className="flex items-baseline justify-between">
+              <span className="kicker text-gold">You — writing</span>
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                ⏎ send
+              </span>
+            </div>
+            <div className="mt-1.5 bg-oxford-tint px-3 py-2">
+              <textarea
+                autoFocus
+                rows={2}
+                value={bridge}
+                onChange={(e) => setBridge(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    setBridgeDone(judgeBridge(a.word, b.word, bridge));
+                  }
+                }}
+                placeholder={`Use “${a.word}” and “${b.word}” in one sentence…`}
+                autoComplete="off"
+                className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
+              />
+            </div>
+            <div className="mt-2.5 flex items-center justify-end">
+              <Button
+                size="sm"
+                onClick={() => setBridgeDone(judgeBridge(a.word, b.word, bridge))}
+                disabled={!bridge.trim()}
+              >
+                <Send /> Send
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "mt-4 border p-3.5",
+              ok ? "border-brand bg-brand-muted text-brand-ink" : "border-border bg-secondary/50",
+            )}
+          >
+            <div className="text-sm font-medium">
+              {ok ? "✓ Both, in one sentence. That's the hard version." : "Not quite both of them."}
+            </div>
+            <div className="mt-1 text-sm opacity-90">
+              {ok
+                ? "Nothing to schedule here — this one was purely for the joins it made."
+                : `Have another go, or move on — the bridge never costs you anything.`}
+            </div>
+            <div className="mt-3 flex gap-2">
+              {!ok && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setBridgeDone(null);
+                  }}
+                >
+                  Try again
+                </Button>
+              )}
+              <Button size="sm" onClick={() => finish(ok ? [bridge.trim()] : [])}>
+                See your day <ArrowRight />
+              </Button>
+            </div>
+          </div>
         )}
       </PageContainer>
     );
@@ -790,7 +1134,7 @@ export function DailyWords() {
             {loading ? "Setting up…" : `Start today's words (${sessionSize})`}
           </Button>
           <p className="mt-2.5 text-center font-mono text-[10.5px] text-muted-foreground">
-            ≈ {minutes} {minutes === 1 ? "minute" : "minutes"} · meet · from memory · your sentence
+            ≈ {minutes} {minutes === 1 ? "minute" : "minutes"} · meet · drill · your sentence
           </p>
         </>
       )}
@@ -828,12 +1172,12 @@ export function DailyWords() {
                   "The card, once: the word, what it means, a real sentence, and the words it travels with. One good encounter beats five distracted ones.",
                 ],
                 [
-                  "Write it from memory",
-                  "The word disappears and you type it back from its meaning. Recalling is what builds the memory — recognizing it in a list doesn't.",
+                  "Drill it, harder each time",
+                  "Type it from its meaning. Then fill it into a real sentence in the right form, supply its missing partner word, repair a sentence that uses it almost right — and eventually echo a sentence you wrote yourself weeks ago. The rung follows how well you already know it.",
                 ],
                 [
                   "Use it for real",
-                  "A moment from ordinary life that needs the word, answered in your own sentence. Making your own use is the strongest predictor that a word survives the week.",
+                  "A moment from ordinary life that needs the word, answered in your own sentence. Making your own use is the strongest predictor that a word survives the week — so every word ends there.",
                 ],
                 [
                   "Meet it again, later",

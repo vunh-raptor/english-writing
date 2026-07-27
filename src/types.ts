@@ -48,6 +48,10 @@ export interface Store {
   /** Which curated words each local day introduced — keeps today's set stable
    *  across reloads and reopenings. Pruned to recent days. */
   wordDays: Record<DayKey, string[]>;
+  /** The last sentence the learner wrote with each item, keyed by item id.
+   *  Their own words are the best retrieval cue we have, so weeks later the
+   *  `echo` drill gaps this back to them (docs/DAILY_WORDS.md). */
+  myLines: Record<string, string>;
   /** Saved News Chat conversations — powers the /news dashboard (recent, stats, resume). */
   newsSessions: NewsSession[];
   /** Rolling CEFR-ish level — the band daily words are drawn at and missions
@@ -388,10 +392,29 @@ export interface WordSeed {
   field: string;
 }
 
-/** The beats a new word walks in a daily session. Review words skip to `use`. */
-export type WordBeat = "meet" | "retrieve" | "use";
+/** The beats a new word walks in a daily session. Review words skip `meet`. */
+export type WordBeat = "meet" | "drill" | "use";
 
-/** One "use it" round: the real-life moment that calls for the word. */
+/**
+ * The middle beat — what a word is asked to do between being met and being
+ * used. The rung is chosen by the word's Leitner box, so the ask gets harder
+ * as the memory gets stronger (expanding difficulty alongside the expanding
+ * interval). Each rung tests something the others can't:
+ *
+ *   recall  — the form-meaning link itself: type the word from its meaning.
+ *   fit     — the classic gap-fill: the right word AND the right form in a
+ *             real sentence. Grammar knowledge production alone doesn't isolate.
+ *   partner — the collocate is gapped, not the word ("___ a decision"). Which
+ *             words travel together is the last thing to arrive and the most
+ *             persistent marker of non-nativeness.
+ *   repair  — a near-miss sentence to fix. Noticing the gap between almost and
+ *             natural, on someone else's sentence so nobody's being corrected.
+ *   echo    — a sentence THEY wrote days ago, gapped. Personally meaningful,
+ *             which is the strongest encoding context there is.
+ */
+export type WordDrill = "recall" | "fit" | "partner" | "repair" | "echo";
+
+/** One word's round pack for a session: the material every rung needs. */
 export interface WordRound {
   /** The word id this round elicits. */
   id: string;
@@ -401,6 +424,12 @@ export interface WordRound {
   task: string;
   /** Up to 2 worked examples using the word elsewhere — inert input, never an answer. */
   examples: string[];
+  /** A natural sentence USING the word; the gap is cut in code, so the answer
+   *  is always exactly the form the sentence needs. Feeds the `fit` rung. */
+  cloze?: string;
+  /** A near-miss and its natural version — the `repair` rung. `wrong` is what
+   *  the learner fixes; `right` is revealed after, never before. */
+  repair?: { wrong: string; right: string };
 }
 
 /** How one word's turn ended — drives the debrief and the schedule. */

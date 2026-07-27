@@ -23,12 +23,20 @@ every mode, ends with a sentence **you** wrote.
 2. **Meet it once, properly.** The card: the word, plain meaning, a real
    example, the words it travels with. Held for a few seconds so nobody skips
    the encounter.
-3. **Write it back from memory.** The word disappears; you type it from its
-   meaning. Recall, not recognition — pulling it back is what builds the memory.
+3. **Then a drill pitched at how well you know it.** Five rungs, and the one a
+   word gets is decided by its spaced-repetition box, so the ask hardens as the
+   memory does: type it from its meaning → fill it into a real sentence in the
+   right form → supply its missing partner word (`___ a decision`) → repair a
+   sentence that uses it *almost* right → and eventually **echo**: a sentence
+   *you* wrote weeks ago, with the word cut out. Every rung is typed, never
+   picked from a list.
 4. **Use it for real.** An ordinary moment that calls for it, answered in your
    own sentence. Composing your own use is the strongest predictor a word
-   survives the week.
-5. **Habit engine.** Streaks **with forgiveness** (freeze tokens cover a missed
+   survives the week — so it's the round every word ends on, and the only one
+   that earns a longer interval.
+5. **The bridge.** One bonus sentence using two of today's words. They're
+   unrelated on purpose; making the link is the point.
+6. **Habit engine.** Streaks **with forgiveness** (freeze tokens cover a missed
    day) and rewards that show **real growth** — words met, "+12 new words this
    week", a vocabulary counted only from sentences you actually wrote —
    instead of hollow points.
@@ -39,7 +47,7 @@ Three surfaces, one pool of language and one spaced schedule underneath:
 
 | Mode | Route | What it is |
 | --- | --- | --- |
-| **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → write it from memory → use it in a real moment**, then handed to spaced repetition. Works fully offline. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
+| **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. Works fully offline. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
 | **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
 | **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted, practiced four ways (Mixed · Recall · Sprint · Study — one per strand of a balanced program). See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
 | **Settings** | `/settings` | Words a day, your level, finish sound, theme (light/dark). |
@@ -72,8 +80,11 @@ Two rules govern how a day is drawn:
 | Output builds competence | Every round in every mode ends in your own sentence |
 | High-frequency words first | A frequency-ordered curriculum, drawn at your band |
 | Deliberate beats incidental | A chosen daily set, not "read more and hope" |
-| Retrieval beats re-study | The word is hidden and typed back from its meaning |
+| Retrieval beats re-study | Every drill rung is a retrieval, never a re-read |
 | Recall beats recognition | You type it — never pick it from four options |
+| Desirable difficulties | The drill rung hardens as the word's box rises |
+| Personally meaningful cues | `echo` gaps a sentence *you* wrote, weeks later |
+| Elaborative encoding | The bridge: two unrelated words, one sentence |
 | Involvement load / generation | The round that earns an interval is the one you compose |
 | Avoid semantic interference | A day's words never share a semantic field |
 | Spacing beats massing | Leitner boxes; every day mixes reviews with new |

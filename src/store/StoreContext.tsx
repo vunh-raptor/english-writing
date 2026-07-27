@@ -30,6 +30,8 @@ import { reviewCard } from "@/lib/shared/srs";
 interface WordSessionInput {
   /** Every sentence the learner produced this session — the day's real output. */
   sentences: string[];
+  /** The keeper per item: the sentence they wrote with it, for a later `echo`. */
+  lines: Record<string, string>;
   durationMs: number;
 }
 
@@ -171,12 +173,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const text = input.sentences.join("\n");
       const words = countWords(text);
 
+      // Their sentences are kept per item, newest wins: weeks from now the
+      // `echo` drill gaps their own words back to them, which beats any
+      // sentence we could generate as a retrieval cue.
+      const myLines = { ...prev.myLines };
+      for (const [id, line] of Object.entries(input.lines)) {
+        if (line.trim()) myLines[id] = line.trim().slice(0, 300);
+      }
+
       // The streak lives on the daily words: showing up and producing IS the
       // habit. Vocabulary grows from the learner's own sentences, so "your
       // words" always means words they actually wrote.
       const streakFields = applyWrite(prev.profile, day);
       commit({
         ...prev,
+        myLines,
         vocab: mergeVocab(prev.vocab, tokenize(text), day),
         hasWritten: true,
         profile: {
@@ -320,10 +331,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!prev.minedPhrases.some((p) => p.id === id)) return;
       const phraseSrs = { ...prev.phraseSrs };
       delete phraseSrs[id];
+      const myLines = { ...prev.myLines };
+      delete myLines[id];
       commit({
         ...prev,
         minedPhrases: prev.minedPhrases.filter((p) => p.id !== id),
         phraseSrs,
+        myLines,
       });
     },
     [commit],

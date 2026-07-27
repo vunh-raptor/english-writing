@@ -12,24 +12,25 @@ Route `/words` (and `/`, because the day starts here).
 ## The research, and what we concluded from it
 
 The question was: *what is actually the best way to learn new words every day?*
-Five findings decided the design, and each one shows up as a mechanic you can
+Six findings decided the design, and each one shows up as a mechanic you can
 point at.
 
 | Finding | What it settles | Where it lives here |
 | --- | --- | --- |
 | **Frequency coverage.** ~2,800 high-frequency words give **>92% coverage** of general English text (the New General Service List; Browne, Culligan & Phillips 2013, in the General Service List tradition). | *Which* words. Rare words are a bad trade for a learner with 10 minutes a day. | A curated, **frequency-first curriculum** banded A2 → C1 (`lib/shared/words.ts`), drawn at the learner's level |
 | **Deliberate beats incidental.** Incidental pickup from reading nets only ~9–18% of target words per encounter set; intentional vocabulary activities are reliably effective. | Waiting to meet words in the wild is too slow to be the main engine. A daily deliberate set is right. | The daily set itself: chosen for you, not stumbled on |
-| **Retrieval practice.** Recalling beats re-studying for L2 vocabulary, and **recall formats beat recognition** for productive knowledge. | Flashcard *flips* and multiple choice test the wrong thing. | The **retrieve** beat: the word disappears and you type it back from its meaning |
+| **Retrieval practice.** Recalling beats re-studying for L2 vocabulary, and **recall formats beat recognition** for productive knowledge. | Flashcard *flips* and multiple choice test the wrong thing. Everything is typed. | The whole **drill** ladder — every rung ends with the learner typing, never picking |
 | **Involvement Load Hypothesis** (Laufer & Hulstijn) — retention rises with need + search + evaluation. In direct comparisons (e.g. Keating 2008), **writing your own sentence beats fill-in-the-gap, which beats reading**. Generative use in a *new* context beats repetition in a familiar one. | The round that decides whether a word survives is the one where you compose with it. | The **use** beat: a real-life moment, answered in your own sentence — the only beat that earns an interval |
 | **Semantic interference.** Words taught in a semantic set (synonyms, opposites, "five kinds of weather") are learned *more slowly* — cross-association (Tinkham 1993; Finkbeiner & Nicol 2003; Erten & Tekin 2008; the evidence is mixed but the downside is asymmetric). | Grouping a day's words by topic — what most apps do — actively hurts. | Every curriculum entry carries a **`field`**, and a day's set never repeats one |
 | **Spacing.** Spaced practice beats massed on delayed tests; equally-spaced retrieval is strong for long-term retention. | A word met once is a word lost. | Met words join the shared **Leitner** schedule; a day is *reviews + new*, never new alone |
+| **Desirable difficulties** (Bjork). A task that stays easy stops teaching; difficulty should track how strong the memory already is. | One fixed exercise is wrong for a word's whole life. | The **drill ladder** below: the ask hardens as the Leitner box rises, so difficulty expands alongside the interval |
 
 **The synthesis — the method this mode implements:**
 
 > A small daily set of frequency-first, *semantically unrelated* words. Each
-> one: one good encounter → retrieval from memory → your own sentence in a new
-> situation. Then spaced review, forever, in the same pool as everything else
-> you're learning.
+> one: one good encounter → a retrieval drill pitched at how well you already
+> know it → your own sentence in a new situation. Then spaced review, forever,
+> in the same pool as everything else you're learning.
 
 One honest caveat, stated the way the rest of the project states them: the
 semantic-clustering literature is genuinely mixed, and the involvement-load
@@ -51,28 +52,60 @@ Start  → POST /api/words/daily — ONE call: a real-life moment per word
          (fails → local moments, session runs anyway)
 
 per word:
-  1. MEET      (new words only) the card: word · part of speech · plain meaning
-               · a natural example · the partners it travels with.
-               "Got it" is held for a few seconds — nobody skips the encounter.
-  2. RETRIEVE  the card is replaced by its meaning + a masked partner cue
-               ("it goes in ‘can't ___ to’"). You type the word.
-               Any normal inflection counts — this tests the form-meaning
-               link, not spelling. "Show me" is always there and always honest.
-  3. USE       the moment + the card (visible now) → you write your own
-               sentence → POST /api/phrasebook/judge
-               model judgment ∪ our inflection-tolerant matcher, so a lazy
-               model can never erase a real production
+  1. MEET   (new words only) the card: word · part of speech · plain meaning
+            · a natural example · the partners it travels with.
+            "Got it" is held for a few seconds — nobody skips the encounter.
+  2. DRILL  one rung of the ladder below, chosen by the word's Leitner box.
+            "Show me" is always there and always honest.
+  3. USE    the moment + the card (visible now) → you write your own
+            sentence → POST /api/phrasebook/judge
+            model judgment ∪ our inflection-tolerant matcher, so a lazy
+            model can never erase a real production
+
+bridge:   the day's bonus — ONE sentence using two of today's words. Because a
+          set is drawn from different semantic fields, joining them is a real
+          stretch, and elaborating a link between unrelated things is exactly
+          the processing that makes memories durable. Skippable, and it never
+          touches the schedule: a bonus that could lapse a word would make the
+          honest scheduling everywhere else a lie.
 
 debrief:  "N of M went from memory into your own sentence" — every word, the
           sentence you wrote, and when each one comes back
 ```
 
+### The drill ladder
+
+The middle beat is not one exercise, it's five — and which one a word gets is
+decided by its Leitner box, so **the ask hardens as the memory does**. That's
+"desirable difficulties" applied to the task rather than only to the schedule.
+Each rung tests something the others structurally can't:
+
+| Box | Rung | What you see | What it tests that the others don't |
+| --- | --- | --- | --- |
+| new · 0 | **recall** | the meaning, the part of speech, a masked partner cue (`can't ___ to`) | the form-meaning link itself — the thing that has to exist before anything else can be asked |
+| 1 | **fit** | a natural sentence with the word cut out — the classic gap-fill | the **form**. `worry` where the sentence wants `worried` is its own verdict ("right word, wrong ending"), not a flat miss |
+| 2 | **partner** | the *collocate* gapped, not the word: `___ a decision`, first letter shown | which words travel together — the last thing to arrive in a second language, and the thing a free-writing round can't force, because a learner just avoids the chunk they're unsure of |
+| 3 | **repair** | a sentence using the word almost right (`I did a decision`) | noticing the gap between *almost* and *natural*. It's someone else's sentence being marked, never the learner's, and it's rendered in **ochre** — the tutor's pencil, per the design system's "never red" |
+| 4+ | **echo** | **a sentence you wrote yourself**, weeks ago, with the word gapped | nothing generic can match it: the retrieval cue is your own life. From box 2 up this outranks every other rung whenever a stored line exists |
+
+`echo` is the one rung no flashcard app can offer, because none of them ever had
+you compose the sentence in the first place. It costs one field on the store
+(`Store.myLines`) and no AI at all.
+
+**The ladder degrades, it doesn't break.** `pickDrill` walks *down* the ladder
+until it finds a rung whose material actually exists — checked by running the
+real gap functions, not by proxies. With no AI key there is no `repair` pair and
+often no AI `cloze`, so a box-3 word drops to `partner`, and a word whose every
+partner chunk starts with the word itself (`borrow money`, `borrow it from
+someone`) drops again to `fit` on its own stored example. `recall` always works,
+so the ladder can't fail.
+
 ### Honest scheduling
 
 | How it went | Schedule | Why |
 | --- | --- | --- |
-| Retrieved clean **and** used it | `reviewCard(true)` — box up, longer rest | The whole arc, unaided |
-| Used it after a peek or a wrong recall | no change — stays due | Help is free; the interval isn't |
+| Drilled clean **and** used it | `reviewCard(true)` — box up, longer rest | The whole arc, unaided |
+| Used it after a peek, a wrong answer, or the wrong form | no change — stays due | Help is free; the interval isn't |
 | Didn't use it, **new word** | no change — stays due | A first meeting is never punished |
 | Didn't use it, **review word** | `reviewCard(false)` — lapse, due now | It was supposed to be there |
 
@@ -99,12 +132,19 @@ vocabulary count (so "your vocabulary" only ever counts words they **wrote**).
 
 | Route | In → out |
 | --- | --- |
-| `POST /api/words/daily` | `{ level, words[{id,word,pos,meaning,collocations}] }` → `{ rounds[{id,setup,task,examples[]}] }` |
+| `POST /api/words/daily` | `{ level, words[{id,word,pos,meaning,collocations}] }` → `{ rounds[{id,setup,task,examples[],cloze?,repair?{wrong,right}}] }` |
 | `POST /api/phrasebook/judge` | reused as-is — a word is a lexical item like any other |
 
 Server module `src/lib/server/words.ts` (mission.ts robustness pattern:
 first-`{…}` extraction, per-field coercion, hard code guards — a setup that
-leaks its word is dropped, an example that doesn't contain it is dropped).
+leaks its word is dropped, an example or cloze that doesn't contain it is
+dropped, and a repair pair whose halves differ by more than a word-level fix is
+dropped).
+
+One deliberate choice worth calling out: the model is asked for a **complete
+sentence**, never one with a blank in it. The gap is cut in code
+(`gapSentence`), so it can't land in the wrong place and the expected answer can
+never disagree with the sentence around it.
 
 ## Data
 
@@ -112,7 +152,8 @@ leaks its word is dropped, an example that doesn't contain it is dropped).
   entries with `kind: "word"`, `captured: { module: "Daily words", … }`, and
   their schedule in `Store.phraseSrs` — the same pool and scheduler the
   Phrasebook and News Chat share. `Store.wordDays` records each day's issued
-  set. Clean uses tally into `Store.phraseApplied`; the streak and vocabulary
+  set; `Store.myLines` keeps the last sentence the learner wrote with each item,
+  which is what `echo` gaps back to them weeks later. Clean uses tally into `Store.phraseApplied`; the streak and vocabulary
   land on `Store.profile` / `Store.vocab` via `finishWordSession`.
 - **DB (ready-to-wire)**: migration `0005_daily_words.sql` adds the `daily`
   value to `phrase_source`; `saveDailyWord()` in `src/lib/server/db/phrases.ts`
@@ -124,7 +165,7 @@ leaks its word is dropped, an example that doesn't contain it is dropped).
 
 | Piece | File |
 | --- | --- |
-| Curriculum, day-set rules, matchers | `src/lib/shared/words.ts` |
+| Curriculum, day-set rules, the drill ladder, matchers | `src/lib/shared/words.ts` |
 | Round builder (the one AI job) | `src/lib/server/words.ts` |
 | Route | `src/app/api/words/daily/route.ts` |
 | UI (home · session · debrief) | `src/components/DailyWords.tsx`, `/words` |

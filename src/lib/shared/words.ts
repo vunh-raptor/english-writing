@@ -1,4 +1,12 @@
-import type { DayKey, NewsLevel, Phrase, SrsRecord, WordPos, WordSeed } from "@/types";
+import type {
+  DayKey,
+  NewsLevel,
+  Phrase,
+  SrsRecord,
+  WordDrill,
+  WordPos,
+  WordSeed,
+} from "@/types";
 import { todayKey } from "./date";
 import { isDue } from "./srs";
 
@@ -689,6 +697,171 @@ export function recallMatches(word: string, typed: string): boolean {
  *  without giving the answer away ("make a ___" for "decision"). */
 export function maskCollocation(chunk: string, word: string): string {
   return chunk.replace(new RegExp(wordMatcher(word).source, "gi"), "___");
+}
+
+// --- The drill ladder --------------------------------------------------------
+//
+// The middle beat of a word's arc. Which rung it gets is decided by its Leitner
+// box, so the ask hardens as the memory does — expanding difficulty next to the
+// expanding interval, which is the "desirable difficulties" idea applied to the
+// task instead of the schedule. See docs/DAILY_WORDS.md.
+
+/** The rung each box reaches for, before availability is checked. */
+const LADDER: WordDrill[] = ["recall", "fit", "partner", "repair", "echo"];
+
+export interface DrillMaterial {
+  /** The word being drilled — every availability check depends on it. */
+  word: string;
+  /** A sentence they wrote with this word before (the `echo` rung). */
+  myLine?: string;
+  /** A natural sentence using the word (the `fit` rung). */
+  cloze?: string;
+  /** A near-miss and its natural version (the `repair` rung). */
+  repair?: { wrong: string; right: string };
+  collocations: string[];
+}
+
+/**
+ * Pick the rung for a word at `box`, degrading to a lower one when the material
+ * for the ideal rung isn't there (no AI, no partner chunk that makes a good
+ * gap, nothing written yet). `recall` always works, so this can't fail.
+ *
+ * Availability is decided by running the real gap functions, not by proxies
+ * like "has collocations" — a word whose every chunk leads with the word itself
+ * (`borrow money`, `borrow it from someone`) has no partner round in it, and
+ * only trying tells you that.
+ *
+ * One override: from box 2 up, a sentence the learner wrote themselves beats
+ * anything we could generate, so `echo` takes priority whenever it's available.
+ */
+export function pickDrill(box: number, material: DrillMaterial): WordDrill {
+  const { word } = material;
+  const ideal = LADDER[Math.min(Math.max(box, 0), LADDER.length - 1)];
+  const ok = (d: WordDrill): boolean => {
+    switch (d) {
+      case "recall":
+        return true;
+      case "fit":
+        return !!material.cloze && !!gapSentence(material.cloze, word);
+      case "partner":
+        return !!gapPartner(material.collocations, word);
+      case "repair":
+        return !!material.repair;
+      case "echo":
+        return !!material.myLine && !!gapSentence(material.myLine, word);
+    }
+  };
+  if (box >= 2 && ok("echo")) return "echo";
+  // Walk back down the ladder until something is actually available.
+  for (let i = LADDER.indexOf(ideal); i >= 0; i--) {
+    if (ok(LADDER[i])) return LADDER[i];
+  }
+  return "recall";
+}
+
+/**
+ * Cut the gap out of a sentence: the first occurrence of the word (in any
+ * inflection) becomes `___`, and the surface form it replaced is the answer.
+ *
+ * Doing this in code rather than asking a model for a sentence "with ___ in it"
+ * is deliberate — the gap can't land in the wrong place and the answer can't
+ * disagree with the sentence. Returns null when the word isn't in there at all.
+ */
+export function gapSentence(
+  sentence: string,
+  word: string,
+): { gapped: string; answer: string } | null {
+  if (!sentence.trim() || !word) return null;
+  const m = sentence.match(wordMatcher(word));
+  if (!m || m.index === undefined) return null;
+  return {
+    gapped: sentence.slice(0, m.index) + "___" + sentence.slice(m.index + m[0].length),
+    answer: m[0],
+  };
+}
+
+/**
+ * Gap the *partner*, not the word: "___ a decision". Which words travel
+ * together is the last thing to arrive in a second language, and it's the thing
+ * a "write your own sentence" round can't isolate — the learner just avoids the
+ * chunk they're unsure of.
+ *
+ * Only chunks that lead with the partner make a good round, so chunks starting
+ * with the target word are skipped rather than gapped awkwardly.
+ */
+export function gapPartner(
+  collocations: string[],
+  word: string,
+): { gapped: string; answer: string } | null {
+  const matcher = wordMatcher(word);
+  for (const chunk of collocations) {
+    const tokens = chunk.trim().split(/\s+/);
+    if (tokens.length < 2) continue;
+    if (matcher.test(tokens[0])) continue; // leads with the word — a weak gap
+    return { gapped: ["___", ...tokens.slice(1)].join(" "), answer: tokens[0] };
+  }
+  return null;
+}
+
+/** How a typed answer measured up. `form` is right word, wrong ending — worth
+ *  distinguishing, because it's a different thing to teach than not knowing. */
+export type FitVerdict = "exact" | "form" | "wrong";
+
+/**
+ * Judge a gap answer. `answer` is the surface form the sentence needs
+ * ("worried"); `word` is the headword it inflects from ("worry"). The
+ * distinction matters: "right word, wrong ending" has to be measured against
+ * the headword, because the surface form can't inflect back to its own lemma.
+ */
+export function judgeFit(word: string, answer: string, typed: string): FitVerdict {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z'’-]/g, "");
+  const a = norm(answer);
+  const t = norm(typed);
+  if (!t) return "wrong";
+  if (a && a === t) return "exact";
+  return recallMatches(word, typed) ? "form" : "wrong";
+}
+
+/**
+ * Did their repair actually land? The fix is whatever `right` has that `wrong`
+ * doesn't — so we check for exactly those words rather than trying to diff
+ * whole sentences. Lenient by design: this rung is about noticing, and the
+ * natural version is always revealed afterwards either way.
+ */
+export function judgeRepair(
+  repair: { wrong: string; right: string },
+  word: string,
+  typed: string,
+): boolean {
+  const words = (s: string) => s.toLowerCase().match(/[a-z'’-]+/g) ?? [];
+  const before = new Set(words(repair.wrong));
+  const added = words(repair.right).filter((w) => !before.has(w));
+  const theirs = new Set(words(typed));
+  if (!usesWord(word, typed)) return false;
+  if (added.length === 0) return typed.trim().toLowerCase() !== repair.wrong.trim().toLowerCase();
+  return added.some((w) => theirs.has(w));
+}
+
+// --- The bridge: one sentence, two of today's words --------------------------
+
+/**
+ * The day's closing bonus. Because a set is drawn from *different* semantic
+ * fields by construction, joining two of its words in one sentence is a real
+ * creative stretch — and elaborating a link between unrelated items is exactly
+ * the processing that builds durable memory.
+ *
+ * It never touches the schedule. A bonus that could lapse a word would make
+ * the honest scheduling elsewhere a lie.
+ */
+export function bridgePair<T extends { id: string; word: string }>(items: T[]): [T, T] | null {
+  if (items.length < 2) return null;
+  return [items[items.length - 2], items[items.length - 1]];
+}
+
+/** Both words present, in a sentence long enough to have joined them. */
+export function judgeBridge(a: string, b: string, sentence: string): boolean {
+  const words = sentence.trim().split(/\s+/).length;
+  return words >= 5 && usesWord(a, sentence) && usesWord(b, sentence);
 }
 
 // --- Offline round material --------------------------------------------------
