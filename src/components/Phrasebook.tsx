@@ -336,7 +336,7 @@ function PhraseRow({
             <div className="min-w-0 font-mono text-[10px] uppercase tracking-wide text-muted-foreground/80">
               {phrase.captured ? (
                 <>
-                  Saved from {phrase.captured.module} · {prettyDay(phrase.captured.day)}
+                  From {phrase.captured.module} · {prettyDay(phrase.captured.day)}
                   {ctx && (
                     <span className="font-serif normal-case italic tracking-normal">
                       {" "}
@@ -1008,7 +1008,7 @@ export function Phrasebook() {
           </div>
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-input pt-5">
             <p className="text-pretty text-[13.5px] text-muted-foreground">
-              Your Phrase Coach picks up anything still due — same pool, in conversation.
+              Anything still due comes back in tomorrow&apos;s words — same pool, same schedule.
             </p>
             <Button className="flex-none" onClick={() => setView({ kind: "library" })}>
               Back to your Phrasebook
@@ -1071,7 +1071,8 @@ export function Phrasebook() {
       </div>
       {pool.length === 0 ? (
         <p className="mt-2.5 text-pretty font-serif text-[16px] italic text-muted-foreground">
-          Your first save unlocks a session — highlight anything in a News Chat.
+          Your first word unlocks a session — meet today&apos;s, or highlight
+          anything in a News Chat.
         </p>
       ) : (
         <>
@@ -1224,12 +1225,16 @@ export function Phrasebook() {
             <div className="mt-10 bg-card px-8 py-12 text-center">
               <div className="kicker">Nothing collected yet</div>
               <p className="mx-auto mt-3 max-w-md font-serif text-lg leading-snug text-muted-foreground">
-                Highlight any word, phrase, or sentence in a{" "}
+                Two ways in. Meet{" "}
+                <Link href="/words" className="border-b border-input text-brand hover:border-brand">
+                  today&apos;s words
+                </Link>{" "}
+                and they land here on their schedule — or highlight any word,
+                phrase, or sentence in a{" "}
                 <Link href="/news" className="border-b border-input text-brand hover:border-brand">
                   News Chat
                 </Link>{" "}
-                — the briefing, your partner&apos;s replies, even the Ask margin —
-                and save it here. It joins your practice rotation the same day.
+                and save it yourself. Either way it joins the rotation the same day.
               </p>
             </div>
           ) : visible.length === 0 ? (
@@ -1265,11 +1270,10 @@ export function Phrasebook() {
           )}
 
           <p className="mt-6 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-            Your{" "}
-            <Link href="/coach" className="border-b border-input text-brand hover:border-brand">
-              Phrase Coach
+            <Link href="/words" className="border-b border-input text-brand hover:border-brand">
+              Daily words
             </Link>{" "}
-            practices this same pool in conversation.
+            keeps feeding this book — same pool, same schedule.
           </p>
         </div>
 

@@ -40,9 +40,9 @@ const fontMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Flowrite — write English freely",
+  title: "Flowrite — learn it today, say it today",
   description:
-    "Write English freely, polish it later. A calm, trend-driven freewriting habit for language learners.",
+    "A few new English words every day — met properly, recalled from memory, then used in a sentence you wrote yourself.",
   icons: { icon: "/favicon.svg" },
 };
 

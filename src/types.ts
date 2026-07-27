@@ -9,60 +9,13 @@
 /** A calendar day in the learner's local time, formatted `YYYY-MM-DD`. */
 export type DayKey = string;
 
-/** Difficulty calibrates prompt challenge to the learner's level (flow theory:
- *  too hard = anxiety, too easy = boredom). */
-export type Difficulty = 1 | 2 | 3;
-
-/** The success goal reframes a session as "don't stop", not "be good". */
-export type GoalType = "time" | "words";
-
 export interface Settings {
   /** Optional first name, only used to greet warmly. */
   name: string;
-  goalType: GoalType;
-  /** Seconds when goalType is "time"; word count when "words". */
-  goalValue: number;
-  difficulty: Difficulty;
-  /** Real-life theme ids to draw prompts from. Empty = a bit of everything. */
-  focuses: string[];
-  /** Gentle "keep going" pulse when the writer pauses mid-session. */
-  gentleNudge: boolean;
-  /** Juicy completion sound on the celebrate screen. */
+  /** How many brand-new words a daily set introduces (the deliberate dose). */
+  wordsPerDay: number;
+  /** Juicy completion sound when a session lands. */
   sound: boolean;
-  ai: AiSettings;
-}
-
-/** Which service powers the optional AI feedback. */
-export type AiProvider = "anthropic" | "gemini" | "groq" | "openai";
-
-export interface AiProviderConfig {
-  /** Stored only in this browser's localStorage. Sent only to the chosen provider. */
-  apiKey: string;
-  model: string;
-  /** Only for the OpenAI-compatible provider (OpenRouter, a local server, …). */
-  baseUrl?: string;
-}
-
-export interface AiSettings {
-  enabled: boolean;
-  provider: AiProvider;
-  /** Each provider remembers its own key + model so switching is friction-free. */
-  providers: Record<AiProvider, AiProviderConfig>;
-}
-
-export interface Entry {
-  id: string;
-  day: DayKey;
-  createdAt: number;
-  promptId: string;
-  promptText: string;
-  text: string;
-  words: number;
-  chars: number;
-  sentences: number;
-  /** Unique words in this entry the learner had never written before. */
-  newWords: number;
-  durationMs: number;
 }
 
 export interface Profile {
@@ -81,92 +34,27 @@ export type Vocab = Record<string, { firstSeen: DayKey; count: number }>;
 
 export interface Store {
   version: number;
-  entries: Entry[];
   profile: Profile;
   settings: Settings;
   vocab: Vocab;
-  /** A growing local library of AI-generated prompts (kept bounded). */
-  aiPrompts: Prompt[];
-  /** Spaced-repetition schedule per phrase id. */
+  /** Spaced-repetition schedule per lexical item id (phrases and daily words). */
   phraseSrs: Record<string, SrsRecord>;
-  /** Clean phrase applications per local day (drill, Coach, News Chat missions)
-   *  — powers the Phrasebook's "This week" card. Pruned to recent days. */
+  /** Clean applications per local day (Daily Words, Phrasebook drills, News Chat
+   *  missions) — powers the "this week" cards. Pruned to recent days. */
   phraseApplied: Record<DayKey, number>;
-  /** The learner's phrase pool — mission targets/keeps from News Chat plus
-   *  captured highlights. The Phrasebook's library; the Coach practices it too. */
+  /** The learner's lexical pool — daily words they've met, mission targets/keeps
+   *  from News Chat, and captured highlights. The Phrasebook's library. */
   minedPhrases: Phrase[];
+  /** Which curated words each local day introduced — keeps today's set stable
+   *  across reloads and reopenings. Pruned to recent days. */
+  wordDays: Record<DayKey, string[]>;
   /** Saved News Chat conversations — powers the /news dashboard (recent, stats, resume). */
   newsSessions: NewsSession[];
-  /** Rolling CEFR-ish level from News Chat missions — tomorrow's mission is planned at it. */
+  /** Rolling CEFR-ish level — the band daily words are drawn at and missions
+   *  are planned at. */
   newsLevel: NewsLevel;
-  /** Whether the learner has finished the first session (we defer "settings" nudges). */
+  /** Whether the learner has finished their first session (we defer nudges). */
   hasWritten: boolean;
-}
-
-/** A real-life domain the learner practices English for — the syllabus axis. */
-export interface Theme {
-  id: string;
-  label: string;
-  /** What real-life skill this theme builds. */
-  blurb: string;
-}
-
-/** A leveled, personal writing prompt. Never a blank page. */
-export interface Prompt {
-  id: string;
-  /** Which real-life theme this belongs to. */
-  themeId: string;
-  level: Difficulty;
-  text: string;
-  /** An optional sentence-starter to break the ice. */
-  starter?: string;
-  /** Where it came from — the curated syllabus or AI generation. */
-  source: "curated" | "ai";
-}
-
-/** Feedback is always opt-in and after writing — leading with what went well. */
-export interface Feedback {
-  source: "local" | "ai";
-  encouragement: string;
-  strengths: string[];
-  /** Gentle, framed-as-suggestions notes. Never red squiggles. */
-  suggestions: { note: string; example?: string }[];
-  oneThingToTry: string;
-}
-
-/** A trending subject surfaced from the web (fetched server-side). */
-export interface Trend {
-  id: string;
-  title: string;
-  source: string;
-  platform: string;
-  url?: string;
-  blurb?: string;
-}
-
-/** The flavor of a scenario step — used for light UI cues. */
-export type BeatKind = "react" | "opinion" | "reply" | "imagine" | "describe" | "open";
-
-/** One small, interactive step of a scenario. */
-export interface ScenarioStep {
-  id: string;
-  kind: BeatKind;
-  prompt: string;
-  starter?: string;
-  hint?: string;
-}
-
-/**
- * A trending subject turned into a sectioned, interactive writing flow — small
- * beats that build on each other instead of one big essay.
- */
-export interface Scenario {
-  id: string;
-  subject: string;
-  source: "trend" | "ai" | "curated";
-  platform?: string;
-  intro: string;
-  steps: ScenarioStep[];
 }
 
 /** A common alternative way natives express the same idea. */
@@ -222,41 +110,10 @@ export interface SrsRecord {
   last: DayKey;
 }
 
-/** A message in the coaching chat. */
+/** A message in a scene-partner chat. */
 export interface ChatMessage {
   role: "coach" | "user";
   content: string;
-}
-
-/** Per-phrase production status the coach reports each turn. */
-export interface CoachProgress {
-  id: string;
-  /** True once the learner has produced it correctly and unprompted. */
-  produced: boolean;
-}
-
-/** One coach response: what to say, phrase progress, and whether the lesson is done. */
-export interface CoachTurn {
-  reply: string;
-  progress: CoachProgress[];
-  done: boolean;
-}
-
-/** One beat of a writing session (a single prompt, or a scenario step). */
-export interface WriteBeat {
-  id: string;
-  prompt: string;
-  starter?: string;
-  hint?: string;
-}
-
-/** What the writing screen works on: a subject + one or more beats. */
-export interface WriteSession {
-  promptId: string;
-  subject: string;
-  /** Display label for the subject's source, e.g. a platform name. */
-  platform?: string;
-  beats: WriteBeat[];
 }
 
 // --- News Chat v2: today's real news → one planned "mission" ---
@@ -501,6 +358,53 @@ export interface AskHelp {
   /** An English phrase the learner can drop straight into their reply, if any. */
   insert?: string;
 }
+
+// --- Daily words: a frequency-first curriculum, met → retrieved → used -------
+//
+// The one mode that DELIVERS language instead of waiting for the learner to
+// meet it (docs/DAILY_WORDS.md): a small set of high-frequency words a day,
+// each walked from first meeting to the learner's own sentence, then handed to
+// the same Leitner pool the Phrasebook and News Chat share.
+
+/** Part of speech — shown on the card, and what the round asks them to do with it. */
+export type WordPos = "verb" | "noun" | "adjective" | "adverb";
+
+/** One entry in the curated, frequency-ordered curriculum (lib/shared/words.ts). */
+export interface WordSeed {
+  /** Stable content id (`w-<word>`) — also this item's id in the phrase pool. */
+  id: string;
+  word: string;
+  pos: WordPos;
+  /** The band that meets this word; a day's set is drawn at the learner's level. */
+  band: NewsLevel;
+  /** Plain-words gloss, at the band's level. */
+  meaning: string;
+  /** One natural example — the first encounter's context. */
+  example: string;
+  /** 2-4 natural partner chunks: words are learned in company, not alone. */
+  collocations: string[];
+  /** Semantic field. A day's set never repeats one — semantically clustered
+   *  sets interfere with each other (Tinkham; Finkbeiner & Nicol; Erten & Tekin). */
+  field: string;
+}
+
+/** The beats a new word walks in a daily session. Review words skip to `use`. */
+export type WordBeat = "meet" | "retrieve" | "use";
+
+/** One "use it" round: the real-life moment that calls for the word. */
+export interface WordRound {
+  /** The word id this round elicits. */
+  id: string;
+  /** A concrete everyday moment addressed to "you". Never contains the word. */
+  setup: string;
+  /** One short instruction — they always answer in their own sentence. */
+  task: string;
+  /** Up to 2 worked examples using the word elsewhere — inert input, never an answer. */
+  examples: string[];
+}
+
+/** How one word's turn ended — drives the debrief and the schedule. */
+export type WordOutcome = "clean" | "helped" | "missed";
 
 /**
  * A saved News Chat conversation — persisted so the /news dashboard can show

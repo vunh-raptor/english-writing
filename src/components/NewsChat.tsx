@@ -834,7 +834,7 @@ export function NewsChat({
   const verdictLabel = {
     produced: "produced on your own",
     assisted: "produced with a little help",
-    missed: "waiting in your Phrase Coach",
+    missed: "waiting in your Phrasebook",
   } as const;
 
   /** The metadata HUD — reused in the desktop margin and the mobile header. */
@@ -1423,7 +1423,7 @@ export function NewsChat({
                   </div>
                 )}
                 <div className="mt-2.5 text-xs opacity-70">
-                  Today&apos;s phrases are saved to your Phrase Coach to practice later.
+                  Today&apos;s phrases are saved to your Phrasebook to practice later.
                 </div>
                 {onExit && (
                   <Button variant="secondary" className="mt-3.5" onClick={onExit}>

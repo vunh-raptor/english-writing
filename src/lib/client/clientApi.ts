@@ -1,9 +1,5 @@
 import type {
-  Trend,
-  Scenario,
-  Phrase,
   ChatMessage,
-  CoachTurn,
   Mission,
   MissionProgress,
   MissionTurn,
@@ -16,6 +12,8 @@ import type {
   DrillRoundSetup,
   DrillJudgment,
   LexKind,
+  WordRound,
+  WordSeed,
 } from "@/types";
 
 /** Client calls to our own API routes (server does the crawling + AI). */
@@ -40,45 +38,22 @@ function toApiMessages(messages: ChatMessage[]) {
   }));
 }
 
-export async function fetchTrends(): Promise<Trend[]> {
-  const res = await fetch("/api/trends");
-  if (!res.ok) return [];
-  const data = await res.json().catch(() => ({}));
-  return Array.isArray(data.trends) ? (data.trends as Trend[]) : [];
-}
+// --- Daily words: one call builds every "use it" round for today's set -------
 
-export async function createScenario(subject: string, platform?: string): Promise<Scenario> {
-  const res = await fetch("/api/scenarios", {
+/** The real-life moments today's words are needed in. Callers fall back to the
+ *  local packs in `lib/shared/words.ts`, so a session never blocks on this. */
+export async function fetchWordRounds(
+  level: NewsLevel,
+  words: Pick<WordSeed, "id" | "word" | "pos" | "meaning" | "collocations">[],
+): Promise<WordRound[]> {
+  const res = await fetch("/api/words/daily", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ subject, platform }),
-  });
-  if (!res.ok) {
-    let msg = String(res.status);
-    try {
-      const j = await res.json();
-      if (j?.error) msg = `${res.status} ${j.error}`;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg);
-  }
-  const data = await res.json();
-  return data.scenario as Scenario;
-}
-
-export async function coachTurn(phrases: Phrase[], messages: ChatMessage[]): Promise<CoachTurn> {
-  const apiMessages = messages.map((m) => ({
-    role: m.role === "coach" ? "assistant" : "user",
-    content: m.content,
-  }));
-  const res = await fetch("/api/coach", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phrases, messages: apiMessages }),
+    body: JSON.stringify({ level, words }),
   });
   if (!res.ok) throw await httpError(res);
-  return res.json() as Promise<CoachTurn>;
+  const data = await res.json();
+  return Array.isArray(data.rounds) ? (data.rounds as WordRound[]) : [];
 }
 
 // --- News Chat v2: today's planned mission, then the beat-by-beat delivery ---

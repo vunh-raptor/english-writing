@@ -12,33 +12,24 @@ import {
 } from "react";
 import type {
   ChatMessage,
-  Entry,
   Mission,
   MissionProgress,
   NewsLevel,
   NewsSession,
   Phrase,
-  Prompt,
   Settings,
   Store,
 } from "@/types";
 import { loadStore, saveStore, clearStore, defaultStore } from "@/lib/client/storage";
 import { daysBetween, todayKey } from "@/lib/shared/date";
-import {
-  countWords,
-  countChars,
-  countSentences,
-  tokenize,
-  newWordCount,
-  mergeVocab,
-} from "@/lib/shared/stats";
+import { countWords, tokenize, mergeVocab } from "@/lib/shared/stats";
 import { applyWrite } from "@/lib/shared/streak";
 import { reviewCard } from "@/lib/shared/srs";
 
-interface FinishInput {
-  promptId: string;
-  promptText: string;
-  text: string;
+/** What a finished Daily Words session hands the store (docs/DAILY_WORDS.md). */
+interface WordSessionInput {
+  /** Every sentence the learner produced this session — the day's real output. */
+  sentences: string[];
   durationMs: number;
 }
 
@@ -65,11 +56,13 @@ interface NewsSessionInput {
 
 interface StoreContextValue {
   store: Store;
-  /** Commit a completed session. Returns the created entry for the celebrate screen. */
-  finishSession(input: FinishInput): Entry;
   updateSettings(patch: Partial<Settings>): void;
-  /** Add freshly AI-generated prompts to the local library (deduped, bounded). */
-  addGeneratedPrompts(prompts: Prompt[]): void;
+  /** Set the working level by hand (missions also move it on their own). */
+  setLevel(level: NewsLevel): void;
+  /** Record which curated words today's set introduced, so it stays stable. */
+  issueWordDay(ids: string[]): void;
+  /** Commit a finished Daily Words session: streak, totals, vocabulary growth. */
+  finishWordSession(input: WordSessionInput): void;
   /** Update the spaced-repetition schedule for reviewed phrases. */
   reviewPhrases(ids: string[], success: boolean): void;
   /** Fold a finished News Chat mission into the Coach's pool + SRS. */
@@ -83,11 +76,12 @@ interface StoreContextValue {
   reset(): void;
 }
 
-/** Keep the on-device AI prompt library from growing without bound. */
-const MAX_AI_PROMPTS = 120;
-/** Keep the phrase pool bounded — it's the Phrasebook's library now, so
- *  roomier than the old mined-only pool, but still finite for localStorage. */
-const MAX_MINED_PHRASES = 100;
+/** Keep the lexical pool bounded — it's the Phrasebook's library and the daily
+ *  words' destination, so roomy, but still finite for localStorage. */
+const MAX_MINED_PHRASES = 400;
+/** How many days of issued word-sets to remember (only today's is ever read;
+ *  the rest are history the "this week" strips can lean on). */
+const WORD_DAYS_KEEP = 70;
 /** Keep saved News Chat conversations bounded — the dashboard only shows recent. */
 const MAX_NEWS_SESSIONS = 40;
 
@@ -154,43 +148,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setStore(next);
   }, []);
 
-  const finishSession = useCallback(
-    (input: FinishInput): Entry => {
+  const issueWordDay = useCallback(
+    (ids: string[]) => {
       const prev = storeRef.current;
       const day = todayKey();
-      const text = input.text;
-      const tokens = tokenize(text);
+      const existing = prev.wordDays[day];
+      // Today's set is drawn once and then fixed — reopening never reshuffles it.
+      if (existing && existing.length > 0) return;
+      const wordDays: Record<string, string[]> = { [day]: ids };
+      for (const [k, v] of Object.entries(prev.wordDays)) {
+        if (k !== day && daysBetween(k, day) < WORD_DAYS_KEEP) wordDays[k] = v;
+      }
+      commit({ ...prev, wordDays });
+    },
+    [commit],
+  );
 
-      const entry: Entry = {
-        id: makeId(),
-        day,
-        createdAt: Date.now(),
-        promptId: input.promptId,
-        promptText: input.promptText,
-        text,
-        words: countWords(text),
-        chars: countChars(text),
-        sentences: countSentences(text),
-        newWords: newWordCount(tokens, prev.vocab),
-        durationMs: input.durationMs,
-      };
+  const finishWordSession = useCallback(
+    (input: WordSessionInput) => {
+      const prev = storeRef.current;
+      const day = todayKey();
+      const text = input.sentences.join("\n");
+      const words = countWords(text);
 
+      // The streak lives on the daily words: showing up and producing IS the
+      // habit. Vocabulary grows from the learner's own sentences, so "your
+      // words" always means words they actually wrote.
       const streakFields = applyWrite(prev.profile, day);
       commit({
         ...prev,
-        entries: [...prev.entries, entry],
-        vocab: mergeVocab(prev.vocab, tokens, day),
+        vocab: mergeVocab(prev.vocab, tokenize(text), day),
         hasWritten: true,
         profile: {
           ...prev.profile,
           ...streakFields,
-          totalWords: prev.profile.totalWords + entry.words,
+          totalWords: prev.profile.totalWords + words,
           totalEntries: prev.profile.totalEntries + 1,
-          totalMs: prev.profile.totalMs + entry.durationMs,
+          totalMs: prev.profile.totalMs + input.durationMs,
         },
       });
-
-      return entry;
     },
     [commit],
   );
@@ -198,25 +194,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
       const prev = storeRef.current;
-      commit({
-        ...prev,
-        settings: {
-          ...prev.settings,
-          ...patch,
-          ai: { ...prev.settings.ai, ...patch.ai },
-        },
-      });
+      commit({ ...prev, settings: { ...prev.settings, ...patch } });
     },
     [commit],
   );
 
-  const addGeneratedPrompts = useCallback(
-    (prompts: Prompt[]) => {
-      if (prompts.length === 0) return;
+  const setLevel = useCallback(
+    (level: NewsLevel) => {
       const prev = storeRef.current;
-      const seen = new Set(prev.aiPrompts.map((p) => p.id));
-      const merged = [...prev.aiPrompts, ...prompts.filter((p) => !seen.has(p.id))];
-      commit({ ...prev, aiPrompts: merged.slice(-MAX_AI_PROMPTS) });
+      if (prev.newsLevel === level) return;
+      commit({ ...prev, newsLevel: level });
     },
     [commit],
   );
@@ -350,9 +337,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       store,
-      finishSession,
       updateSettings,
-      addGeneratedPrompts,
+      setLevel,
+      issueWordDay,
+      finishWordSession,
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
@@ -362,9 +350,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }),
     [
       store,
-      finishSession,
       updateSettings,
-      addGeneratedPrompts,
+      setLevel,
+      issueWordDay,
+      finishWordSession,
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,

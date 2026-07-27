@@ -1,19 +1,9 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useRouter } from "next/navigation";
-import { Home } from "@/components/Home";
-import { useSessionFlow } from "@/store/SessionFlowContext";
-
-export default function HomePage() {
-  const router = useRouter();
-  const { beginWriting } = useSessionFlow();
-
-  return (
-    <Home
-      onStart={(prompt) => {
-        beginWriting(prompt);
-        router.push("/write");
-      }}
-    />
-  );
+/**
+ * The day starts with today's words — that's the habit everything else hangs
+ * off, so "/" is simply the way in to it.
+ */
+export default function RootPage() {
+  redirect("/words");
 }

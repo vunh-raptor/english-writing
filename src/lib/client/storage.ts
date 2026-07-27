@@ -1,77 +1,26 @@
-import type { Store, Settings, AiSettings, AiProvider, NewsLevel } from "@/types";
+import type { Store, Settings, NewsLevel } from "@/types";
 import { STARTING_FREEZES } from "@/lib/shared/streak";
 
 /**
- * Local-first persistence. Private by default: the learner's writing lives only
- * in this browser. No account, no server, no audience.
+ * Local-first persistence. Private by default: the learner's practice lives
+ * only in this browser. No account, no server, no audience.
  */
 
 const STORAGE_KEY = "flowrite.v1";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+
+/** Five a day: enough to be real progress, few enough to always finish. */
+export const DEFAULT_WORDS_PER_DAY = 5;
 
 export const defaultSettings: Settings = {
   name: "",
-  goalType: "time",
-  goalValue: 300, // 5 minutes — momentum, not marathon
-  difficulty: 1,
-  focuses: [], // empty = a bit of everything
-  gentleNudge: true,
+  wordsPerDay: DEFAULT_WORDS_PER_DAY,
   sound: true,
-  ai: {
-    enabled: false,
-    provider: "anthropic",
-    providers: {
-      // Haiku is the cheap default — fractions of a cent per session.
-      anthropic: { apiKey: "", model: "claude-haiku-4-5" },
-      gemini: { apiKey: "", model: "gemini-2.0-flash" },
-      groq: { apiKey: "", model: "llama-3.3-70b-versatile" },
-      openai: { apiKey: "", model: "gpt-4o-mini", baseUrl: "https://api.openai.com/v1" },
-    },
-  },
 };
-
-/**
- * Merge a stored AI settings blob onto the current defaults, tolerating the
- * older single-key shape (`{ enabled, apiKey, model }`) by folding it into the
- * Anthropic provider slot.
- */
-function migrateAi(stored: unknown): AiSettings {
-  const base = defaultSettings.ai;
-  if (!stored || typeof stored !== "object") return base;
-  const s = stored as Record<string, unknown>;
-
-  const providers = { ...base.providers };
-  if (s.providers && typeof s.providers === "object") {
-    for (const key of Object.keys(providers) as AiProvider[]) {
-      const p = (s.providers as Record<string, unknown>)[key];
-      if (p && typeof p === "object") {
-        providers[key] = { ...providers[key], ...(p as object) };
-      }
-    }
-  } else if (typeof s.apiKey === "string" || typeof s.model === "string") {
-    // Legacy shape → Anthropic slot.
-    providers.anthropic = {
-      apiKey: typeof s.apiKey === "string" ? s.apiKey : "",
-      model: typeof s.model === "string" ? s.model : base.providers.anthropic.model,
-    };
-  }
-
-  const provider =
-    typeof s.provider === "string" && s.provider in providers
-      ? (s.provider as AiProvider)
-      : base.provider;
-
-  return {
-    enabled: typeof s.enabled === "boolean" ? s.enabled : base.enabled,
-    provider,
-    providers,
-  };
-}
 
 export function defaultStore(): Store {
   return {
     version: SCHEMA_VERSION,
-    entries: [],
     profile: {
       streak: 0,
       longestStreak: 0,
@@ -83,10 +32,10 @@ export function defaultStore(): Store {
     },
     settings: defaultSettings,
     vocab: {},
-    aiPrompts: [],
     phraseSrs: {},
     phraseApplied: {},
     minedPhrases: [],
+    wordDays: {},
     newsSessions: [],
     newsLevel: "B1",
     hasWritten: false,
@@ -101,22 +50,20 @@ export function loadStore(): Store {
     if (!raw) return defaultStore();
     const parsed = JSON.parse(raw) as Partial<Store>;
     const base = defaultStore();
-    // Shallow-merge so new fields added in future versions get sane defaults.
+    // Shallow-merge so new fields added in future versions get sane defaults,
+    // and fields dropped in v2 (entries, aiPrompts, the writing-goal settings)
+    // simply fall away.
     return {
       ...base,
       ...parsed,
+      version: SCHEMA_VERSION,
       profile: { ...base.profile, ...parsed.profile },
-      settings: {
-        ...base.settings,
-        ...parsed.settings,
-        ai: migrateAi(parsed.settings?.ai),
-      },
-      entries: parsed.entries ?? [],
+      settings: { ...base.settings, ...parsed.settings },
       vocab: parsed.vocab ?? {},
-      aiPrompts: parsed.aiPrompts ?? [],
       phraseSrs: parsed.phraseSrs ?? {},
       phraseApplied: parsed.phraseApplied ?? {},
       minedPhrases: parsed.minedPhrases ?? [],
+      wordDays: parsed.wordDays ?? {},
       newsSessions: parsed.newsSessions ?? [],
       newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(
         parsed.newsLevel as NewsLevel,
