@@ -21,7 +21,7 @@ import type {
 export type NewsSessionStatus = "active" | "complete";
 /** Matches the DB enum after migration 0004 — the same set as `LexKind`. */
 export type PhraseKind = LexKind;
-export type PhraseSource = "news" | "coach" | "captured";
+export type PhraseSource = "news" | "coach" | "captured" | "daily";
 
 /** `YYYY-MM-DD`, the learner's local calendar day (Postgres `date`). */
 type DateStr = string;

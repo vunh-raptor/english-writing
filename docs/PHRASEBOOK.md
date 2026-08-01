@@ -29,9 +29,9 @@ findings that shape the mechanics:
 - **Honest scheduling, one pool.** Clean application → `reviewCard(true)`
   (interval earned). Applied after a peek/flash → no change (stays due).
   Missed → lapse (due now). Study never touches the schedule; Sprint never
-  punishes. Captures share the pool and SRS with News Chat's mission targets,
-  so the **Phrase Coach** recycles everything too — one curriculum, two
-  practice surfaces.
+  punishes. Captures share the pool and SRS with News Chat's mission targets
+  **and the words met in [Daily words](DAILY_WORDS.md)** — one pool, one
+  scheduler, three surfaces.
 
 ## The four modes — the learner chooses
 
@@ -135,7 +135,7 @@ hard code guards).
   `'captured'` + `captured_context`; migration `0004_lexical_kinds.sql`
   extends `phrase_kind` to the full `LexKind` set and adds `collocations`;
   `src/lib/server/db/phrases.ts` mirrors `collectPhrase` for when Supabase
-  Auth lands. See [`DATA_MODEL.md`](DATA_MODEL.md).
+  Auth lands. See [`../supabase/README.md`](../supabase/README.md).
 
 ## UI pieces
 

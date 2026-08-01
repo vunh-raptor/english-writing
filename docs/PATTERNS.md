@@ -107,8 +107,8 @@ src/
       components/          NewsChat.tsx, SubjectCard.tsx …
       server/              news.ts, newsChat.ts (converse/assist/recap)
       hooks/  api.ts  types.ts
-    coach/                 # Phrase Coach, end to end
-    trending/  writing/  progress/  settings/
+    words/                 # Daily words, end to end
+    phrasebook/  settings/
   shared/                  cross-feature: ai gateway, ui/ primitives,
                            date/stats/streak/srs, store contexts
 ```
@@ -150,7 +150,7 @@ Score the app against what each alternative pays off for:
 | **Domain invariants** | Light — stats/streak/SRS are pure functions in `lib/shared`; no transactional workflow. | Fullstack (not module) |
 | **Background work** | Only periodic cache warming → Vercel Cron. No queues/long jobs. | Fullstack (not module) |
 | **UI ↔ AI coupling** | Very tight — prompt, response shape, and UX iterate together. | Fullstack + feature |
-| **Feature count & churn** | A handful of distinct modes (write, trending, coach, news) that each span UI + API + server. | Leans **feature** |
+| **Feature count & churn** | A handful of distinct modes (daily words, news chat, phrasebook) that each span UI + API + server. | Leans **feature** |
 | **Team size / cost** | Small; free-tier target. | Fullstack |
 | **Data layer** | Not even wired (localStorage today; Supabase next). | Fullstack (not module) |
 

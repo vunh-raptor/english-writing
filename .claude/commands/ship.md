@@ -15,8 +15,8 @@ failure rather than pushing past it.
    placeholders only. If you find one, stop and tell the user — a committed
    secret needs rotating, not just deleting.
 
-3. **Run the gate.** `npm run verify`, plus `npm run e2e` if the write →
-   celebrate path changed. It must be green. If it isn't, fix it; if the failure
+3. **Run the gate.** `npm run verify`, plus `npm run e2e` if the daily-words
+   path changed. It must be green. If it isn't, fix it; if the failure
    is genuinely pre-existing on the base branch, verify that claim before making
    it.
 

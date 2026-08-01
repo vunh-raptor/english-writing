@@ -1,10 +1,11 @@
-import type { Entry, Vocab, DayKey } from "@/types";
+import type { Vocab, DayKey } from "@/types";
 import { daysBetween } from "./date";
 
 /**
  * Text measurements and vocabulary growth. These power the "reward real growth,
- * not hollow points" idea — we surface new words used, sentence length trends,
- * and total output rather than empty score numbers.
+ * not hollow points" idea — we surface new words used and total output rather
+ * than empty score numbers. The vocabulary is built from sentences the learner
+ * actually wrote, so its size is never inflated by words they only *saw*.
  */
 
 const WORD_RE = /[A-Za-z][A-Za-z'-]*/g;
@@ -72,36 +73,3 @@ export function newWordsThisWeek(vocab: Vocab, today: DayKey): number {
   return n;
 }
 
-export interface ProgressSummary {
-  totalWords: number;
-  totalEntries: number;
-  totalMinutes: number;
-  vocabulary: number;
-  newWordsThisWeek: number;
-  avgWordsPerEntry: number;
-  avgSentenceLength: number;
-  /** Avg words per session, oldest→newest, for a tiny trend sparkline. */
-  recentLengths: number[];
-}
-
-export function summarize(
-  entries: Entry[],
-  vocab: Vocab,
-  today: DayKey,
-): ProgressSummary {
-  const totalWords = entries.reduce((s, e) => s + e.words, 0);
-  const totalMs = entries.reduce((s, e) => s + e.durationMs, 0);
-  const totalSentences = entries.reduce((s, e) => s + e.sentences, 0);
-  const n = entries.length;
-  const ordered = [...entries].sort((a, b) => a.createdAt - b.createdAt);
-  return {
-    totalWords,
-    totalEntries: n,
-    totalMinutes: Math.round(totalMs / 60_000),
-    vocabulary: vocabSize(vocab),
-    newWordsThisWeek: newWordsThisWeek(vocab, today),
-    avgWordsPerEntry: n ? Math.round(totalWords / n) : 0,
-    avgSentenceLength: totalSentences ? Math.round(totalWords / totalSentences) : 0,
-    recentLengths: ordered.slice(-10).map((e) => e.words),
-  };
-}

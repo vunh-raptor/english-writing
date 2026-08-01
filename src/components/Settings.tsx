@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Trash2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useStore } from "@/store/StoreContext";
-import { THEMES } from "@/lib/shared/prompts";
-import type { Difficulty, GoalType } from "@/types";
+import type { NewsLevel } from "@/types";
+import { WORDS_PER_DAY_OPTIONS } from "@/lib/shared/words";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,18 +12,14 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { PageContainer } from "@/components/page-container";
 
-const TIME_OPTIONS = [120, 180, 300, 600]; // seconds
-const WORD_OPTIONS = [50, 100, 150, 250];
+const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
 
-const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-  1: "Gentle",
-  2: "Steady",
-  3: "Stretch",
+const LEVEL_BLURB: Record<NewsLevel, string> = {
+  A2: "Everyday basics — short, concrete sentences.",
+  B1: "Comfortable with familiar topics; still building range.",
+  B2: "Fluent on most subjects; reaching for precision.",
+  C1: "Confident and nuanced; hunting the exact word.",
 };
-
-function timeLabel(sec: number): string {
-  return `${Math.round(sec / 60)} min`;
-}
 
 type SegOption = { value: string | number; label: string };
 
@@ -94,35 +90,19 @@ function Row({
 }
 
 export function Settings() {
-  const { store, updateSettings, reset } = useStore();
+  const { store, updateSettings, setLevel, reset } = useStore();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const s = store.settings;
 
-  function setGoalType(goalType: GoalType) {
-    updateSettings({
-      goalType,
-      goalValue: goalType === "time" ? 300 : 100,
-    });
-  }
-
-  function toggleFocus(id: string) {
-    const set = new Set(s.focuses);
-    if (set.has(id)) set.delete(id);
-    else set.add(id);
-    updateSettings({ focuses: [...set] });
-  }
-
   function handleReset() {
     const ok = window.confirm(
-      "Erase all your writing, streak, and settings from this browser? This can't be undone.",
+      "Erase your words, streak, and settings from this browser? This can't be undone.",
     );
     if (ok) reset();
   }
-
-  const ai = s.ai;
 
   return (
     <PageContainer width="narrow">
@@ -156,109 +136,55 @@ export function Settings() {
         </Row>
 
         <Row
-          label="Session goal"
-          desc="A goal reframes success as momentum. The point is to not stop — not to be perfect."
+          label="New words a day"
+          desc="Your daily dose. A small set you always finish beats a long one you abandon — and reviews are added on top automatically."
         >
           <Seg
-            options={[
-              { value: "time", label: "Time" },
-              { value: "words", label: "Words" },
-            ]}
-            value={s.goalType}
-            onChange={(v) => setGoalType(v as GoalType)}
-          />
-        </Row>
-
-        <Row label={s.goalType === "time" ? "How long" : "How many words"}>
-          <Seg
-            options={(s.goalType === "time" ? TIME_OPTIONS : WORD_OPTIONS).map(
-              (v) => ({
-                value: v,
-                label: s.goalType === "time" ? timeLabel(v) : String(v),
-              }),
-            )}
-            value={s.goalValue}
-            onChange={(v) => updateSettings({ goalValue: v as number })}
-          />
-        </Row>
-
-        <Row
-          label="Prompt difficulty"
-          desc="Match the challenge to your level — too hard brings anxiety, too easy brings boredom."
-        >
-          <Seg
-            options={([1, 2, 3] as Difficulty[]).map((d) => ({
-              value: d,
-              label: DIFFICULTY_LABELS[d],
-            }))}
-            value={s.difficulty}
-            onChange={(v) => updateSettings({ difficulty: v as Difficulty })}
+            options={WORDS_PER_DAY_OPTIONS.map((v) => ({ value: v, label: String(v) }))}
+            value={s.wordsPerDay}
+            onChange={(v) => updateSettings({ wordsPerDay: v as number })}
           />
         </Row>
 
         <Row
           block
-          label="What are you practicing for?"
-          desc="Pick the real-life areas you want prompts from — your prompts (and any you generate with AI) come from these. Leave all off for a bit of everything."
+          label="Your level"
+          desc="Which band your daily words are drawn from, and how News Chat plans its missions. It moves on its own as you produce more — set it here if it feels off."
         >
           <div className="mt-3 flex flex-wrap gap-2">
-            {THEMES.map((t) => {
-              const on = s.focuses.includes(t.id);
+            {LEVELS.map((l) => {
+              const on = store.newsLevel === l;
               return (
                 <button
-                  key={t.id}
-                  onClick={() => toggleFocus(t.id)}
+                  key={l}
+                  onClick={() => setLevel(l)}
                   aria-pressed={on}
-                  title={t.blurb}
+                  title={LEVEL_BLURB[l]}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-none border px-3 py-2 text-sm transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-none border px-3 py-2 font-mono text-sm transition-colors",
                     on
                       ? "border-brand bg-brand/10 font-semibold text-brand"
                       : "border-input bg-card text-muted-foreground hover:border-brand/60 hover:text-foreground",
                   )}
                 >
-                  {t.label}
+                  {l}
                 </button>
               );
             })}
           </div>
-        </Row>
-
-        <Row
-          label={<>&quot;Keep going&quot; nudge</>}
-          desc="A gentle pulse if you pause mid-session. Never deletes anything."
-        >
-          <Switch
-            checked={s.gentleNudge}
-            onCheckedChange={(v) => updateSettings({ gentleNudge: v })}
-            aria-label="Toggle keep-going nudge"
-          />
+          <p className="mt-2 text-sm text-muted-foreground">
+            {LEVEL_BLURB[store.newsLevel]}
+          </p>
         </Row>
 
         <Row
           label="Finish sound"
-          desc="A little chime when you complete a session."
+          desc="A little chime when you land a session."
         >
           <Switch
             checked={s.sound}
             onCheckedChange={(v) => updateSettings({ sound: v })}
             aria-label="Toggle finish sound"
-          />
-        </Row>
-      </Card>
-
-      <h2 className="mb-3 mt-8 text-lg font-semibold">AI feedback</h2>
-      <Card className="px-5 py-1 sm:px-6">
-        <Row
-          label="Use AI for feedback & fresh prompts"
-          desc="Optional. Warmer, more personal feedback after you write, plus “generate fresh” prompts. Runs on our server using free-tier AI — no key needed here. The app works fully without it."
-        >
-          <Switch
-            checked={ai.enabled}
-            onCheckedChange={(v) =>
-              updateSettings({ ai: { ...ai, enabled: v } })
-            }
-            aria-label="Toggle AI feedback"
           />
         </Row>
       </Card>
@@ -269,7 +195,8 @@ export function Settings() {
         <div>
           <div className="font-medium text-destructive">Erase everything</div>
           <div className="mt-0.5 max-w-[46ch] text-sm text-muted-foreground">
-            Remove all writing, stats, and settings from this browser.
+            Remove every word you&apos;ve collected, your streak, and your
+            settings from this browser.
           </div>
         </div>
         <Button

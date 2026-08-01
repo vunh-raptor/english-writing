@@ -6,12 +6,13 @@ lives in `docs/` and is linked from here.
 
 ## What this product is
 
-A calm freewriting app for people learning English, built around one goal:
+A calm English-learning app for people who can read far more than they can
+produce, built around one goal:
 
 > **Maximize production, minimize the anxiety that makes people quit.**
 
 Every change is judged against that sentence. A feature that adds friction,
-correction, or judgement to the *writing* moment is wrong even if it is
+correction, or judgement to the *producing* moment is wrong even if it is
 well-built. Read `README.md` for the full product argument.
 
 ## Non-negotiables
@@ -19,15 +20,26 @@ well-built. Read `README.md` for the full product argument.
 Break these and the change is a regression, however green the tests are.
 
 **Product**
-- **No correction mid-flow.** The editor keeps `spellCheck={false}`, no
+- **No correction mid-flow.** Writing surfaces keep `spellCheck={false}`, no
   autocorrect, no grammar UI, no red squiggles. Feedback is opt-in and always
-  *after* writing, and always leads with what went well.
-- **Never a blank page.** Every entry point offers a prompt and a starter.
+  *after* producing, and always leads with what went well.
+- **Never a blank page.** Every entry point supplies the material to work from —
+  a word card, a real-life moment, a question, a source. The learner is never
+  asked to produce from nothing.
+- **Nothing completes the learner's turn.** Hints unlock ideas or language,
+  never a finished sentence: setups never contain the item they elicit, worked
+  examples and outlines are inert, and Respond asks questions but never supplies
+  a summary, an opinion or an angle. A session someone can finish without
+  producing is a broken session.
 - **Guest-first.** The core loop works with no account, no network, and no AI
   keys. Sign-up is invited *after* a win, never before one.
 - **AI degrades, never breaks.** With no provider key the app falls back to the
-  curated syllabus and on-device feedback. AI-only modes say so honestly rather
-  than faking content.
+  bundled curriculum, local moments, and deterministic judging. AI-only modes
+  say so honestly rather than faking content.
+- **Code can rescue a production, never invent one.** Where a model judges the
+  learner's output, deterministic checks are unioned in so a lazy model can't
+  erase real work — and where a model judges originality, the deterministic
+  check is the floor the model may tighten but never loosen.
 
 **Architecture** (details in `docs/ARCHITECTURE.md`)
 - **The `lib` split is a hard boundary.** `lib/shared` is pure and isomorphic
@@ -68,7 +80,7 @@ Full version with the reasoning: **`docs/WORKFLOW.md`**. The short form:
 A change is done when **all** of these hold:
 
 - [ ] `npm run verify` passes (lint · typecheck · unit tests · build).
-- [ ] `npm run e2e` passes if anything on the write → celebrate path changed.
+- [ ] `npm run e2e` passes if anything on the daily-words path changed.
 - [ ] New pure logic in `lib/shared` has Vitest tests covering the happy path,
       the empty/zero case, and the boundary the code actually cares about.
 - [ ] No new secret, key, or personal data in tracked files.
@@ -83,7 +95,7 @@ A change is done when **all** of these hold:
 npm run dev         # local dev, http://localhost:3000
 npm run verify      # THE GATE: lint + typecheck + test + build
 npm test            # Vitest (pure logic in lib/shared)
-npm run e2e         # build + Playwright smoke of the core loop
+npm run e2e         # build + Playwright smoke of the core loop (no keys)
 ```
 
 - Imports use `@/*` → `src/*`. Unit tests live in `src/**/__tests__/*.test.ts`;
@@ -96,7 +108,8 @@ npm run e2e         # build + Playwright smoke of the core loop
 ## Verifying for real
 
 Tests are the gate; they are not proof the feature works. For AI-dependent
-surfaces (Trending, Coach, News Chat, Phrasebook) drive the real thing — the
+surfaces (News Chat, Phrasebook, and the tailored halves of Daily Words and
+Respond) drive the real thing — the
 **`verify` skill** (`.claude/skills/verify/`) has the launch commands, the API
 payloads, and the gotchas that have bitten before. Free-tier rate limits produce
 real 502s that are not bugs; retry like a user would.
@@ -109,6 +122,9 @@ real 502s that are not bugs; retry like a user would.
 | How the system fits together | `docs/ARCHITECTURE.md` |
 | The delivery cycle in full | `docs/WORKFLOW.md` |
 | UI rules and tokens | `docs/DESIGN_SYSTEM.md` |
-| Database schema and RLS | `docs/DATA_MODEL.md` |
+| Database schema and RLS | `supabase/README.md` |
+| The daily-word method | `docs/DAILY_WORDS.md` |
+| Respond's one rule + the SSRF guards | `docs/RESPOND.md` |
+| Phrasebook practice modes | `docs/PHRASEBOOK.md` |
 | News Chat contracts | `docs/NEWS_CHAT.md`, `docs/NEWS_CHAT_V2.md` |
 | Why this architecture over alternatives | `docs/PATTERNS.md` |

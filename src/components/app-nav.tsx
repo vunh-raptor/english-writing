@@ -10,30 +10,31 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   BookMarked,
   ChevronsLeft,
   ChevronsRight,
-  MessageCircle,
+  GraduationCap,
   Newspaper,
   PenLine,
   Settings as SettingsIcon,
-  SquarePen,
-  TrendingUp,
   User,
   type LucideIcon,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { Entry, NewsSession, Settings } from "@/types";
+import type { NewsSession, Store } from "@/types";
 import { parseDayKey, todayKey } from "@/lib/shared/date";
 import { MAX_FREEZES, streakInfo, type StreakInfo } from "@/lib/shared/streak";
 import { dueTodayCount } from "@/lib/shared/phrases";
+import { buildDaySet } from "@/lib/shared/words";
 import { useStore } from "@/store/StoreContext";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 // ---- nav model ------------------------------------------------------------
+
+/** Which live count a nav item surfaces as a badge. */
+type BadgeKind = "words" | "phrases";
 
 interface NavItem {
   href: string;
@@ -42,31 +43,23 @@ interface NavItem {
   /** Compact label, used in the collapsed icon rail. */
   short: string;
   icon: LucideIcon;
-  /** A live count to surface as a badge (only the coach's due count for now). */
-  badge?: "coach";
+  badge?: BadgeKind;
 }
 
 /** Grouped primary nav — the expanded rail reads as sectioned prose. */
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
-    label: "Write",
+    label: "Every day",
     items: [
-      { href: "/", label: "Freewrite", short: "Write", icon: PenLine },
-      { href: "/trending", label: "Trending", short: "Trends", icon: TrendingUp },
-    ],
-  },
-  {
-    label: "Practice",
-    items: [
-      { href: "/coach", label: "Phrase coach", short: "Coach", icon: MessageCircle, badge: "coach" },
+      { href: "/words", label: "Daily words", short: "Words", icon: GraduationCap, badge: "words" },
       { href: "/news", label: "News chat", short: "News", icon: Newspaper },
-      { href: "/phrasebook", label: "Phrasebook", short: "Phrases", icon: BookMarked },
+      { href: "/respond", label: "Respond", short: "Respond", icon: PenLine },
     ],
   },
   {
-    label: "You",
+    label: "Your language",
     items: [
-      { href: "/progress", label: "Writing stats", short: "Stats", icon: BarChart3 },
+      { href: "/phrasebook", label: "Phrasebook", short: "Phrases", icon: BookMarked, badge: "phrases" },
       { href: "/settings", label: "Settings", short: "Settings", icon: SettingsIcon },
     ],
   },
@@ -76,7 +69,9 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
 const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  // "/" redirects to /words, so the words item owns the root too.
+  if (href === "/words") return pathname === "/" || pathname.startsWith("/words");
+  return pathname.startsWith(href);
 }
 
 // ---- collapse state -------------------------------------------------------
@@ -131,27 +126,28 @@ export function useSidebar(): SidebarState {
 interface TodayProgress {
   current: number;
   target: number;
-  unit: string;
   pct: number;
 }
 
-/** Progress toward today's goal — words written, or minutes spent. */
-function todayProgress(entries: Entry[], settings: Settings, today: string): TodayProgress {
-  const todays = entries.filter((e) => e.day === today);
-  let current: number;
-  let target: number;
-  let unit: string;
-  if (settings.goalType === "words") {
-    current = todays.reduce((s, e) => s + e.words, 0);
-    target = settings.goalValue;
-    unit = "words";
-  } else {
-    current = Math.round(todays.reduce((s, e) => s + e.durationMs, 0) / 60_000);
-    target = Math.max(1, Math.round(settings.goalValue / 60));
-    unit = "min";
-  }
-  const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
-  return { current, target, unit, pct };
+/** Progress through today's word set — the day's one goal. */
+function todayProgress(done: number, total: number): TodayProgress {
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  return { current: done, target: total, pct };
+}
+
+/** The two live counts the nav shows: what today still asks for, and what the
+ *  Phrasebook has ripe. Both derived, never stored. */
+function navBadges(store: Store): Record<BadgeKind, number> {
+  return {
+    words: buildDaySet({
+      wordDays: store.wordDays,
+      pool: store.minedPhrases,
+      srs: store.phraseSrs,
+      level: store.newsLevel,
+      perDay: store.settings.wordsPerDay,
+    }).remaining,
+    phrases: dueTodayCount(store.phraseSrs, store.minedPhrases),
+  };
 }
 
 function initialOf(name: string): string {
@@ -159,53 +155,27 @@ function initialOf(name: string): string {
   return n ? n[0].toUpperCase() : "";
 }
 
-/** A short glimpse of a piece — its opening line, falling back to the prompt. */
-function entryTitle(e: Entry): string {
-  const firstLine = e.text.split("\n").map((l) => l.trim()).find(Boolean);
-  const base = (firstLine || e.promptText || "Untitled").replace(/\s+/g, " ").trim();
-  return base.length > 32 ? `${base.slice(0, 32).trimEnd()}…` : base;
-}
-
-// ---- recent, across modules (Sidebar Redesign §6b) ------------------------
-
-/** Which module a recent piece came from — a small tag says where it lives. */
-type RecentModule = "free" | "news";
+// ---- recent conversations -------------------------------------------------
 
 interface RecentItem {
   key: string;
-  module: RecentModule;
   title: string;
   day: string;
   createdAt: number;
-  /** Where clicking jumps — back into that mode. */
+  /** Where clicking jumps — back into that conversation's mode. */
   href: string;
 }
 
-/** Per-module tag: label + tint. Oxford for News, ochre for Freewrite. */
-const MODULE_TAG: Record<RecentModule, { label: string; className: string }> = {
-  news: { label: "News", className: "bg-oxford-tint text-brand" },
-  free: { label: "Free", className: "bg-ochre-tint text-gold" },
-};
-
-/** One list across all modules, newest first — the mixed, tagged Recent. */
-function recentItems(entries: Entry[], sessions: NewsSession[], limit: number): RecentItem[] {
-  const fromEntries: RecentItem[] = entries.map((e) => ({
-    key: `e-${e.id}`,
-    module: "free",
-    title: entryTitle(e),
-    day: e.day,
-    createdAt: e.createdAt,
-    href: "/",
-  }));
-  const fromNews: RecentItem[] = sessions.map((s) => ({
-    key: `n-${s.id}`,
-    module: "news",
-    title: s.title,
-    day: s.day,
-    createdAt: s.createdAt,
-    href: "/news",
-  }));
-  return [...fromEntries, ...fromNews]
+/** The last few News Chat conversations, newest first. */
+function recentItems(sessions: NewsSession[], limit: number): RecentItem[] {
+  return sessions
+    .map((s) => ({
+      key: `n-${s.id}`,
+      title: s.title,
+      day: s.day,
+      createdAt: s.createdAt,
+      href: "/news",
+    }))
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, limit);
 }
@@ -256,7 +226,7 @@ function RailToggle({
   );
 }
 
-/** The "Today" streak + goal panel (expanded rail only). */
+/** The "Today" streak + day-set panel (expanded rail only). */
 function TodayPanel({ info, progress }: { info: StreakInfo; progress: TodayProgress }) {
   return (
     <div>
@@ -287,7 +257,7 @@ function TodayPanel({ info, progress }: { info: StreakInfo; progress: TodayProgr
           <div className="h-1 bg-gold" style={{ width: `${progress.pct}%` }} />
         </div>
         <div className="mt-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-          {progress.current}/{progress.target} {progress.unit}
+          {progress.current}/{progress.target} words today
         </div>
       </div>
     </div>
@@ -306,31 +276,23 @@ function RecentList({ recent }: { recent: RecentItem[] }) {
         Recent
       </p>
       <div className="flex flex-col gap-px">
-        {recent.map((item) => {
-          const tag = MODULE_TAG[item.module];
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className="group flex items-baseline gap-2 px-2.5 py-1 leading-tight transition-colors hover:bg-sidebar-accent/60"
-            >
-              <span
-                className={cn(
-                  "flex-none px-1 py-px font-mono text-[9px] font-medium uppercase tracking-wide",
-                  tag.className,
-                )}
-              >
-                {tag.label}
-              </span>
-              <span className="flex-1 truncate font-serif text-[13px] italic text-sidebar-foreground group-hover:text-foreground">
-                {item.title}
-              </span>
-              <span className="flex-none font-mono text-[10px] tabular-nums text-muted-foreground">
-                {parseDayKey(item.day).getDate()}
-              </span>
-            </Link>
-          );
-        })}
+        {recent.map((item) => (
+          <Link
+            key={item.key}
+            href={item.href}
+            className="group flex items-baseline gap-2 px-2.5 py-1 leading-tight transition-colors hover:bg-sidebar-accent/60"
+          >
+            <span className="flex-none bg-oxford-tint px-1 py-px font-mono text-[9px] font-medium uppercase tracking-wide text-brand">
+              News
+            </span>
+            <span className="flex-1 truncate font-serif text-[13px] italic text-sidebar-foreground group-hover:text-foreground">
+              {item.title}
+            </span>
+            <span className="flex-none font-mono text-[10px] tabular-nums text-muted-foreground">
+              {parseDayKey(item.day).getDate()}
+            </span>
+          </Link>
+        ))}
       </div>
     </div>
   );
@@ -343,13 +305,21 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { collapsed, toggle } = useSidebar();
   const { store } = useStore();
-  const { settings, profile, entries, phraseSrs, minedPhrases, newsSessions } = store;
+  const { settings, profile, phraseSrs, minedPhrases, newsSessions } = store;
 
   const today = todayKey();
   const info = streakInfo(profile, today);
-  const due = dueTodayCount(phraseSrs, minedPhrases);
-  const progress = todayProgress(entries, settings, today);
-  const recent = recentItems(entries, newsSessions, 4);
+  const badges = navBadges(store);
+  const day = buildDaySet({
+    wordDays: store.wordDays,
+    pool: minedPhrases,
+    srs: phraseSrs,
+    level: store.newsLevel,
+    perDay: settings.wordsPerDay,
+    today,
+  });
+  const progress = todayProgress(day.done, day.todaysNew.length);
+  const recent = recentItems(newsSessions, 4);
   const name = settings.name.trim();
 
   return (
@@ -358,7 +328,7 @@ export function AppSidebar() {
         <CollapsedRail
           pathname={pathname}
           onToggle={toggle}
-          due={due}
+          badges={badges}
           streak={info.streak}
           progress={progress}
           name={name}
@@ -367,7 +337,7 @@ export function AppSidebar() {
         <ExpandedRail
           pathname={pathname}
           onToggle={toggle}
-          due={due}
+          badges={badges}
           info={info}
           progress={progress}
           recent={recent}
@@ -381,7 +351,7 @@ export function AppSidebar() {
 function ExpandedRail({
   pathname,
   onToggle,
-  due,
+  badges,
   info,
   progress,
   recent,
@@ -389,7 +359,7 @@ function ExpandedRail({
 }: {
   pathname: string;
   onToggle: () => void;
-  due: number;
+  badges: Record<BadgeKind, number>;
   info: StreakInfo;
   progress: TodayProgress;
   recent: RecentItem[];
@@ -400,14 +370,14 @@ function ExpandedRail({
       <div className="relative flex-none px-5 pt-5">
         <Brand className="text-[22px]" />
         <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-          Write freely · Polish later
+          Learn it today · Say it today
         </p>
         <RailToggle collapsed={false} onClick={onToggle} className="absolute right-3 top-3" />
       </div>
 
       <div className="flex-none px-4 pt-4">
         <Button asChild className="h-10 w-full text-[15px] font-semibold">
-          <Link href="/">New story</Link>
+          <Link href="/words">Today&apos;s words</Link>
         </Button>
       </div>
 
@@ -420,7 +390,7 @@ function ExpandedRail({
             <div className="flex flex-col gap-px">
               {group.items.map((item) => {
                 const active = isActive(pathname, item.href);
-                const count = item.badge === "coach" ? due : 0;
+                const count = item.badge ? badges[item.badge] : 0;
                 return (
                   <Link
                     key={item.href}
@@ -436,7 +406,7 @@ function ExpandedRail({
                     <span>{item.label}</span>
                     {count > 0 && (
                       <span className="ml-2 whitespace-nowrap bg-gold px-1.5 py-px font-mono text-[11px] font-medium text-gold-foreground">
-                        {count} due
+                        {count} {item.badge === "words" ? "today" : "due"}
                       </span>
                     )}
                   </Link>
@@ -471,14 +441,14 @@ function ExpandedRail({
 function CollapsedRail({
   pathname,
   onToggle,
-  due,
+  badges,
   streak,
   progress,
   name,
 }: {
   pathname: string;
   onToggle: () => void;
-  due: number;
+  badges: Record<BadgeKind, number>;
   streak: number;
   progress: TodayProgress;
   name: string;
@@ -495,20 +465,11 @@ function CollapsedRail({
 
       <RailToggle collapsed onClick={onToggle} className="mt-3 flex-none" />
 
-      <Link
-        href="/"
-        title="New story"
-        className="mt-3 grid size-[42px] flex-none place-items-center bg-brand text-brand-foreground transition-colors hover:bg-oxford-deep"
-      >
-        <SquarePen className="size-[18px]" />
-        <span className="sr-only">New story</span>
-      </Link>
-
       <nav className="mt-4 flex flex-1 flex-col items-center gap-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
-          const count = item.badge === "coach" ? due : 0;
+          const count = item.badge ? badges[item.badge] : 0;
           return (
             <Link
               key={item.href}
@@ -573,14 +534,14 @@ export function MobileTopBar() {
 export function MobileTabBar() {
   const pathname = usePathname();
   const { store } = useStore();
-  const due = dueTodayCount(store.phraseSrs, store.minedPhrases);
+  const badges = navBadges(store);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background/92 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
       {NAV_ITEMS.map((item) => {
         const active = isActive(pathname, item.href);
         const Icon = item.icon;
-        const count = item.badge === "coach" ? due : 0;
+        const count = item.badge ? badges[item.badge] : 0;
         return (
           <Link
             key={item.href}

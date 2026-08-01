@@ -1,9 +1,16 @@
 # `supabase/` — database schema
 
 SQL migrations for Flowrite's Postgres schema (the Supabase phase — see
-[`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)). The data model and the
-`Store → Postgres` mapping are documented in
-[`../docs/DATA_MODEL.md`](../docs/DATA_MODEL.md).
+[`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)). Each table mirrors a
+slice of the localStorage `Store` (`src/types.ts`); the mapping for a given
+feature is documented in that feature's doc — [`DAILY_WORDS.md`](../docs/DAILY_WORDS.md),
+[`PHRASEBOOK.md`](../docs/PHRASEBOOK.md), [`NEWS_CHAT_V2.md`](../docs/NEWS_CHAT_V2.md)
+— under "Data".
+
+Two rules hold across all of them: every table is per-user with Row-Level
+Security, and domain logic is never re-implemented here — the data-access layer
+imports the isomorphic `src/lib/shared/*` helpers (e.g. `reviewCard`) so client
+and server can't drift.
 
 ## Migrations
 
@@ -16,6 +23,7 @@ assume a standard Supabase project (the `auth` schema and `auth.uid()` exist).
 | `migrations/0002_news_learning.sql` | `news_session_status` / `phrase_kind` / `phrase_source` enums; **`news_sessions`** and **`phrases`** (the `/news` learning data) with indexes and RLS. |
 | `migrations/0003_phrasebook.sql` | Phrasebook capture: `phrase_source` value `'captured'` + `phrases.captured_context` (the highlighted passage). |
 | `migrations/0004_lexical_kinds.sql` | General lexical units: `phrase_kind` values `word`/`idiom`/`collocation`/`sentence` + `phrases.collocations` (partner chunks). |
+| `migrations/0005_daily_words.sql` | Daily words: `phrase_source` value `'daily'`, so a met curriculum word is distinguishable from a highlight or a mission target. |
 
 Everything is per-user and protected by Row-Level Security: a signed-in user can
 only read or write their own rows.

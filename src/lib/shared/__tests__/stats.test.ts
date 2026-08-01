@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Entry, Vocab } from "@/types";
+import type { Vocab } from "@/types";
 import {
   countChars,
   countSentences,
@@ -7,29 +7,11 @@ import {
   mergeVocab,
   newWordCount,
   newWordsThisWeek,
-  summarize,
   tokenize,
   vocabSize,
 } from "../stats";
 
 const TODAY = "2026-06-10";
-
-function entry(over: Partial<Entry> = {}): Entry {
-  return {
-    id: "e1",
-    day: TODAY,
-    createdAt: 1,
-    promptId: "p1",
-    promptText: "Tell me about your day",
-    text: "Hello world.",
-    words: 2,
-    chars: 12,
-    sentences: 1,
-    newWords: 2,
-    durationMs: 60_000,
-    ...over,
-  };
-}
 
 describe("countWords", () => {
   it("counts words, not punctuation", () => {
@@ -126,44 +108,5 @@ describe("vocabSize", () => {
   it("counts distinct words", () => {
     expect(vocabSize({})).toBe(0);
     expect(vocabSize({ a: { firstSeen: TODAY, count: 9 } })).toBe(1);
-  });
-});
-
-describe("summarize", () => {
-  it("returns an all-zero summary with no entries (no NaN in the UI)", () => {
-    expect(summarize([], {}, TODAY)).toEqual({
-      totalWords: 0,
-      totalEntries: 0,
-      totalMinutes: 0,
-      vocabulary: 0,
-      newWordsThisWeek: 0,
-      avgWordsPerEntry: 0,
-      avgSentenceLength: 0,
-      recentLengths: [],
-    });
-  });
-
-  it("totals words, minutes and averages across entries", () => {
-    const entries = [
-      entry({ id: "a", words: 100, sentences: 10, durationMs: 300_000, createdAt: 1 }),
-      entry({ id: "b", words: 50, sentences: 5, durationMs: 300_000, createdAt: 2 }),
-    ];
-    expect(summarize(entries, {}, TODAY)).toMatchObject({
-      totalWords: 150,
-      totalEntries: 2,
-      totalMinutes: 10,
-      avgWordsPerEntry: 75,
-      avgSentenceLength: 10,
-    });
-  });
-
-  it("returns the last 10 sessions oldest→newest for the trend sparkline", () => {
-    const entries = Array.from({ length: 12 }, (_, i) =>
-      entry({ id: `e${i}`, createdAt: 100 - i, words: i }),
-    );
-    // createdAt descends as i grows, so oldest→newest is i=11 down to i=0.
-    expect(summarize(entries, {}, TODAY).recentLengths).toEqual([
-      9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-    ]);
   });
 });

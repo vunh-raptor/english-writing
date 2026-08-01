@@ -9,60 +9,13 @@
 /** A calendar day in the learner's local time, formatted `YYYY-MM-DD`. */
 export type DayKey = string;
 
-/** Difficulty calibrates prompt challenge to the learner's level (flow theory:
- *  too hard = anxiety, too easy = boredom). */
-export type Difficulty = 1 | 2 | 3;
-
-/** The success goal reframes a session as "don't stop", not "be good". */
-export type GoalType = "time" | "words";
-
 export interface Settings {
   /** Optional first name, only used to greet warmly. */
   name: string;
-  goalType: GoalType;
-  /** Seconds when goalType is "time"; word count when "words". */
-  goalValue: number;
-  difficulty: Difficulty;
-  /** Real-life theme ids to draw prompts from. Empty = a bit of everything. */
-  focuses: string[];
-  /** Gentle "keep going" pulse when the writer pauses mid-session. */
-  gentleNudge: boolean;
-  /** Juicy completion sound on the celebrate screen. */
+  /** How many brand-new words a daily set introduces (the deliberate dose). */
+  wordsPerDay: number;
+  /** Juicy completion sound when a session lands. */
   sound: boolean;
-  ai: AiSettings;
-}
-
-/** Which service powers the optional AI feedback. */
-export type AiProvider = "anthropic" | "gemini" | "groq" | "openai";
-
-export interface AiProviderConfig {
-  /** Stored only in this browser's localStorage. Sent only to the chosen provider. */
-  apiKey: string;
-  model: string;
-  /** Only for the OpenAI-compatible provider (OpenRouter, a local server, …). */
-  baseUrl?: string;
-}
-
-export interface AiSettings {
-  enabled: boolean;
-  provider: AiProvider;
-  /** Each provider remembers its own key + model so switching is friction-free. */
-  providers: Record<AiProvider, AiProviderConfig>;
-}
-
-export interface Entry {
-  id: string;
-  day: DayKey;
-  createdAt: number;
-  promptId: string;
-  promptText: string;
-  text: string;
-  words: number;
-  chars: number;
-  sentences: number;
-  /** Unique words in this entry the learner had never written before. */
-  newWords: number;
-  durationMs: number;
 }
 
 export interface Profile {
@@ -81,92 +34,34 @@ export type Vocab = Record<string, { firstSeen: DayKey; count: number }>;
 
 export interface Store {
   version: number;
-  entries: Entry[];
   profile: Profile;
   settings: Settings;
   vocab: Vocab;
-  /** A growing local library of AI-generated prompts (kept bounded). */
-  aiPrompts: Prompt[];
-  /** Spaced-repetition schedule per phrase id. */
+  /** Spaced-repetition schedule per lexical item id (phrases and daily words). */
   phraseSrs: Record<string, SrsRecord>;
-  /** Clean phrase applications per local day (drill, Coach, News Chat missions)
-   *  — powers the Phrasebook's "This week" card. Pruned to recent days. */
+  /** Clean applications per local day (Daily Words, Phrasebook drills, News Chat
+   *  missions) — powers the "this week" cards. Pruned to recent days. */
   phraseApplied: Record<DayKey, number>;
-  /** The learner's phrase pool — mission targets/keeps from News Chat plus
-   *  captured highlights. The Phrasebook's library; the Coach practices it too. */
+  /** The learner's lexical pool — daily words they've met, mission targets/keeps
+   *  from News Chat, and captured highlights. The Phrasebook's library. */
   minedPhrases: Phrase[];
+  /** Which curated words each local day introduced — keeps today's set stable
+   *  across reloads and reopenings. Pruned to recent days. */
+  wordDays: Record<DayKey, string[]>;
+  /** The last sentence the learner wrote with each item, keyed by item id.
+   *  Their own words are the best retrieval cue we have, so weeks later the
+   *  `echo` drill gaps this back to them (docs/DAILY_WORDS.md). */
+  myLines: Record<string, string>;
   /** Saved News Chat conversations — powers the /news dashboard (recent, stats, resume). */
   newsSessions: NewsSession[];
-  /** Rolling CEFR-ish level from News Chat missions — tomorrow's mission is planned at it. */
+  /** Saved Respond sessions — the reading, the thinking, and the idea bank
+   *  of angles the learner wrote but hasn't drafted yet. */
+  respondSessions: RespondSession[];
+  /** Rolling CEFR-ish level — the band daily words are drawn at and missions
+   *  are planned at. */
   newsLevel: NewsLevel;
-  /** Whether the learner has finished the first session (we defer "settings" nudges). */
+  /** Whether the learner has finished their first session (we defer nudges). */
   hasWritten: boolean;
-}
-
-/** A real-life domain the learner practices English for — the syllabus axis. */
-export interface Theme {
-  id: string;
-  label: string;
-  /** What real-life skill this theme builds. */
-  blurb: string;
-}
-
-/** A leveled, personal writing prompt. Never a blank page. */
-export interface Prompt {
-  id: string;
-  /** Which real-life theme this belongs to. */
-  themeId: string;
-  level: Difficulty;
-  text: string;
-  /** An optional sentence-starter to break the ice. */
-  starter?: string;
-  /** Where it came from — the curated syllabus or AI generation. */
-  source: "curated" | "ai";
-}
-
-/** Feedback is always opt-in and after writing — leading with what went well. */
-export interface Feedback {
-  source: "local" | "ai";
-  encouragement: string;
-  strengths: string[];
-  /** Gentle, framed-as-suggestions notes. Never red squiggles. */
-  suggestions: { note: string; example?: string }[];
-  oneThingToTry: string;
-}
-
-/** A trending subject surfaced from the web (fetched server-side). */
-export interface Trend {
-  id: string;
-  title: string;
-  source: string;
-  platform: string;
-  url?: string;
-  blurb?: string;
-}
-
-/** The flavor of a scenario step — used for light UI cues. */
-export type BeatKind = "react" | "opinion" | "reply" | "imagine" | "describe" | "open";
-
-/** One small, interactive step of a scenario. */
-export interface ScenarioStep {
-  id: string;
-  kind: BeatKind;
-  prompt: string;
-  starter?: string;
-  hint?: string;
-}
-
-/**
- * A trending subject turned into a sectioned, interactive writing flow — small
- * beats that build on each other instead of one big essay.
- */
-export interface Scenario {
-  id: string;
-  subject: string;
-  source: "trend" | "ai" | "curated";
-  platform?: string;
-  intro: string;
-  steps: ScenarioStep[];
 }
 
 /** A common alternative way natives express the same idea. */
@@ -222,41 +117,10 @@ export interface SrsRecord {
   last: DayKey;
 }
 
-/** A message in the coaching chat. */
+/** A message in a scene-partner chat. */
 export interface ChatMessage {
   role: "coach" | "user";
   content: string;
-}
-
-/** Per-phrase production status the coach reports each turn. */
-export interface CoachProgress {
-  id: string;
-  /** True once the learner has produced it correctly and unprompted. */
-  produced: boolean;
-}
-
-/** One coach response: what to say, phrase progress, and whether the lesson is done. */
-export interface CoachTurn {
-  reply: string;
-  progress: CoachProgress[];
-  done: boolean;
-}
-
-/** One beat of a writing session (a single prompt, or a scenario step). */
-export interface WriteBeat {
-  id: string;
-  prompt: string;
-  starter?: string;
-  hint?: string;
-}
-
-/** What the writing screen works on: a subject + one or more beats. */
-export interface WriteSession {
-  promptId: string;
-  subject: string;
-  /** Display label for the subject's source, e.g. a platform name. */
-  platform?: string;
-  beats: WriteBeat[];
 }
 
 // --- News Chat v2: today's real news → one planned "mission" ---
@@ -500,6 +364,169 @@ export interface AskHelp {
   answer: string;
   /** An English phrase the learner can drop straight into their reply, if any. */
   insert?: string;
+}
+
+// --- Daily words: a frequency-first curriculum, met → retrieved → used -------
+//
+// The one mode that DELIVERS language instead of waiting for the learner to
+// meet it (docs/DAILY_WORDS.md): a small set of high-frequency words a day,
+// each walked from first meeting to the learner's own sentence, then handed to
+// the same Leitner pool the Phrasebook and News Chat share.
+
+/** Part of speech — shown on the card, and what the round asks them to do with it. */
+export type WordPos = "verb" | "noun" | "adjective" | "adverb";
+
+/** One entry in the curated, frequency-ordered curriculum (lib/shared/words.ts). */
+export interface WordSeed {
+  /** Stable content id (`w-<word>`) — also this item's id in the phrase pool. */
+  id: string;
+  word: string;
+  pos: WordPos;
+  /** The band that meets this word; a day's set is drawn at the learner's level. */
+  band: NewsLevel;
+  /** Plain-words gloss, at the band's level. */
+  meaning: string;
+  /** One natural example — the first encounter's context. */
+  example: string;
+  /** 2-4 natural partner chunks: words are learned in company, not alone. */
+  collocations: string[];
+  /** Semantic field. A day's set never repeats one — semantically clustered
+   *  sets interfere with each other (Tinkham; Finkbeiner & Nicol; Erten & Tekin). */
+  field: string;
+}
+
+/** The beats a new word walks in a daily session. Review words skip `meet`. */
+export type WordBeat = "meet" | "drill" | "use";
+
+/**
+ * The middle beat — what a word is asked to do between being met and being
+ * used. The rung is chosen by the word's Leitner box, so the ask gets harder
+ * as the memory gets stronger (expanding difficulty alongside the expanding
+ * interval). Each rung tests something the others can't:
+ *
+ *   recall  — the form-meaning link itself: type the word from its meaning.
+ *   fit     — the classic gap-fill: the right word AND the right form in a
+ *             real sentence. Grammar knowledge production alone doesn't isolate.
+ *   partner — the collocate is gapped, not the word ("___ a decision"). Which
+ *             words travel together is the last thing to arrive and the most
+ *             persistent marker of non-nativeness.
+ *   repair  — a near-miss sentence to fix. Noticing the gap between almost and
+ *             natural, on someone else's sentence so nobody's being corrected.
+ *   echo    — a sentence THEY wrote days ago, gapped. Personally meaningful,
+ *             which is the strongest encoding context there is.
+ */
+export type WordDrill = "recall" | "fit" | "partner" | "repair" | "echo";
+
+/** One word's round pack for a session: the material every rung needs. */
+export interface WordRound {
+  /** The word id this round elicits. */
+  id: string;
+  /** A concrete everyday moment addressed to "you". Never contains the word. */
+  setup: string;
+  /** One short instruction — they always answer in their own sentence. */
+  task: string;
+  /** Up to 2 worked examples using the word elsewhere — inert input, never an answer. */
+  examples: string[];
+  /** A natural sentence USING the word; the gap is cut in code, so the answer
+   *  is always exactly the form the sentence needs. Feeds the `fit` rung. */
+  cloze?: string;
+  /** A near-miss and its natural version — the `repair` rung. `wrong` is what
+   *  the learner fixes; `right` is revealed after, never before. */
+  repair?: { wrong: string; right: string };
+}
+
+/** How one word's turn ended — drives the debrief and the schedule. */
+export type WordOutcome = "clean" | "helped" | "missed";
+
+// --- Respond: bring a source, think against it, produce your own ------------
+//
+// The learner supplies the English (an article, a post, a newsletter) and the
+// app supplies only *questions* (docs/RESPOND.md). The AI never contributes an
+// idea, a summary, or an angle — if it did, the learner would leave with the
+// model's thinking instead of their own. Source → think → three angles of their
+// own → draft one → polish.
+
+/** Where a source came from. Attribution is kept honestly, always shown. */
+export interface SourceRef {
+  title: string;
+  /** Publication or site name, when we can tell. */
+  site?: string;
+  url?: string;
+  /** Words in the extracted text — so the read feels bounded before it starts. */
+  words: number;
+}
+
+/**
+ * The rungs the thinking phase climbs — Bloom's revised taxonomy compressed to
+ * four, ending at the level that produces something new:
+ *   grasp  (understand) say it back in your own words
+ *   assume (analyse)    name what it takes for granted
+ *   push   (evaluate)   weigh it against what you've actually seen
+ *   extend (create)     find what it left out — the doorway to a fresh angle
+ */
+export type ThinkRung = "grasp" | "assume" | "push" | "extend";
+
+export interface ThinkQuestion {
+  rung: ThinkRung;
+  question: string;
+}
+
+/** A question and what the learner answered. Their answers are the raw
+ *  material the angle screen hands back to them — never an AI suggestion. */
+export interface ThinkTurn extends ThinkQuestion {
+  answer: string;
+  /** A sharper follow-up they asked for, and how they answered it. */
+  followUp?: { question: string; answer: string };
+}
+
+/** One content idea, written entirely by the learner — the idea bank's unit. */
+export interface ContentIdea {
+  id: string;
+  /** The hook: a headline or opening line, one sentence. */
+  hook: string;
+  /** The spine — up to three bullets. */
+  bullets: string[];
+  /**
+   * Is this the learner's own angle, or a restatement of the source? Novice
+   * source-based writers borrow heavily, and that's the one failure mode this
+   * mode exists to catch, so every idea is checked.
+   */
+  own?: boolean;
+  /** One short note on the angle — what makes it theirs, or what doesn't. */
+  note?: string;
+  /** The longest run of words lifted verbatim from the source, if notable. */
+  borrowed?: string;
+  /** Set once this idea has been drafted into a piece. */
+  drafted?: boolean;
+}
+
+/** Post-hoc polish on a finished piece: what landed first, then at most two
+ *  upgrades. The same stance as everywhere else — never a red pen. */
+export interface Polish {
+  celebration: string;
+  /** Specific things that worked, quoting the learner's own words. */
+  landed: string[];
+  upgrades: Upgrade[];
+  /** Phrases from their draft worth keeping — they join the Phrasebook pool. */
+  keep: { text: string; meaning: string }[];
+}
+
+/** One pass through the mode, saved so the idea bank survives the session. */
+export interface RespondSession {
+  id: string;
+  day: DayKey;
+  createdAt: number;
+  updatedAt: number;
+  source: SourceRef;
+  /** A bounded copy of the extracted text, so a session can be reopened. */
+  text: string;
+  turns: ThinkTurn[];
+  ideas: ContentIdea[];
+  /** Which idea they took to a draft, if any. */
+  chosenId?: string;
+  draft: string;
+  polish?: Polish;
+  status: "thinking" | "ideas" | "drafting" | "done";
 }
 
 /**

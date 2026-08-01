@@ -14,10 +14,10 @@ module-driven backend), see [`PATTERNS.md`](PATTERNS.md).
 | Language | **TypeScript** throughout (`@/*` → `src/*`). |
 | UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives; **lucide-react** icons; **next-themes** for light/dark. |
 | Server AI | A **server-only gateway** (`src/lib/server/ai.ts`) fronting Groq · Google Gemini · Anthropic, chosen by which env key is present. Keys never leave the server. |
-| Content sources | Keyless server **adapters**: trends (Hacker News + operator `custom` feed) and news (Google News RSS, GDELT, Reddit). |
+| Content sources | A bundled, frequency-ordered **word curriculum** (no I/O at all) plus keyless server **news adapters** (Google News RSS, GDELT, Reddit). |
 | Client state (today) | Browser **`localStorage`**, guest-first (`src/lib/client/storage.ts`, `src/store/StoreContext.tsx`). |
-| Auth + DB (in progress) | **Supabase** (Postgres + Auth). The Postgres **schema exists** (`supabase/migrations/`, RLS) with a typed server data-access layer (`src/lib/server/db/`), landed News-Chat-first — see [`DATA_MODEL.md`](DATA_MODEL.md). Ready to wire; **Auth is not connected yet**, so the live app still runs guest-first on `localStorage`. |
-| Hosting | **Vercel** (Hobby). A Vercel Cron can warm the trend/news caches. |
+| Auth + DB (in progress) | **Supabase** (Postgres + Auth). The Postgres **schema exists** (`supabase/migrations/`, RLS) with a typed server data-access layer (`src/lib/server/db/`) — see [`../supabase/README.md`](../supabase/README.md). Ready to wire; **Auth is not connected yet**, so the live app still runs guest-first on `localStorage`. |
+| Hosting | **Vercel** (Hobby). A Vercel Cron can warm the news cache. |
 
 ---
 
@@ -28,8 +28,8 @@ The whole system is three layers inside one Next.js app.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Browser (React, "use client")                               │
-│  Home · Write · Celebrate · Feedback · Progress · Settings   │
-│  Trending · Coach · NewsChat        state: localStorage       │
+│  DailyWords · Respond · NewsChat · Phrasebook · Settings      │
+│                                     state: localStorage       │
 └───────────────┬──────────────────────────────────────────────┘
                 │  fetch() JSON  (src/lib/client/{clientApi,ai}.ts)
 ┌───────────────▼──────────────────────────────────────────────┐
@@ -39,13 +39,13 @@ The whole system is three layers inside one Next.js app.
                 │  import "server-only"
 ┌───────────────▼──────────────────────────────────────────────┐
 │  Server modules  (src/lib/server/*)                          │
-│  ai gateway · aiTasks · trends · news · scenario · coach ·    │
-│  newsChat                                                     │
+│  ai gateway · words · respond · extract · news · mission ·   │
+│  phrasebook                                                   │
 │      │                         │                              │
 │      ▼                         ▼                              │
 │  AI providers            Content adapters                     │
-│  Groq/Gemini/Anthropic   HN · custom · Google News · GDELT ·  │
-│  (env keys)              Reddit  (keyless)                    │
+│  Groq/Gemini/Anthropic   Google News · GDELT · Reddit         │
+│  (env keys)              (keyless)                            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,9 +60,9 @@ the browser:
 
 | Folder | Runs where | Contents |
 | --- | --- | --- |
-| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `prompts` (the syllabus), `phrases`, `sparks`, `feedback` (offline). No I/O, no keys. |
-| `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` + `ai` (fetch our own API). |
-| `lib/server` | server only (`"server-only"`) | `ai` gateway, `aiTasks` (prompt builders), `trends`, `news`, `scenario`, `coach`, `newsChat`. |
+| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers), `respond` (the think ladder + the borrowing check). No I/O, no keys. |
+| `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` (fetch our own API), `supabase` (browser client). |
+| `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `supabase` + `db/`. |
 
 Because the stats/streak/SRS logic lives in `lib/shared`, it runs on the client
 today and can move behind the API unchanged when Supabase lands.
@@ -71,16 +71,17 @@ today and can move behind the API unchanged when Supabase lands.
 
 Screens are real routes grouped by their chrome using App Router route groups:
 
-- `app/(main)` — the tab-navigated shell (Home, Trending, Coach, News,
-  Progress, Settings).
-- `app/(session)` — brand-only chrome for the post-write flow (Celebrate,
-  Feedback).
-- `app/write` — the full-screen, chrome-less writing surface.
+- `app/(main)` — the shell every screen lives in: a persistent left rail on
+  desktop (collapsing to a 72px icon strip), a top bar + bottom tab bar on
+  mobile. Holds Daily words, Respond, News chat, Phrasebook and Settings.
+- `/` redirects to `/words` — the day starts with today's words.
 
-Ephemeral write-session flow (which prompt, the draft, timing) is threaded
-through **`SessionFlowContext`**, not the URL. Durable on-device state (entries,
-vocab, streak, settings) lives in **`StoreContext`**, persisted to
-`localStorage`. `AppProviders` composes the providers plus the theme provider.
+A mode's own session state (which round, the draft, timing) is local component
+state, deliberately: a session is a single screen's concern and is never
+resumable from a URL. Durable on-device state (the lexical pool and its
+schedule, the day's issued words, streak, vocabulary, saved conversations,
+settings) lives in **`StoreContext`**, persisted to `localStorage`.
+`AppProviders` composes it with the theme provider.
 
 ---
 
@@ -98,25 +99,31 @@ vocab, streak, settings) lives in **`StoreContext`**, persisted to
   back to on-device feedback and the curated syllabus; AI modes announce
   themselves as unavailable.
 
-Higher-level prompt construction lives in `lib/server/aiTasks.ts` and the
-feature modules (`coach.ts`, `scenario.ts`, `newsChat.ts`).
+Higher-level prompt construction lives in the feature modules (`words.ts`,
+`respond.ts`, `mission.ts`, `phrasebook.ts`).
 
 ## Content adapters
 
 Fetching third-party content server-side is what a backend is *for* here (CORS,
-keys, caching, ToS isolation). Two adapter families, both keyless by default:
+keys, caching, ToS isolation). One adapter family, keyless by default:
 
-- **Trends** (`lib/server/trends.ts`): `fetchTrends()` fans out to Hacker News
-  (Algolia front-page API) and an optional operator **`custom`** feed
-  (`CUSTOM_TRENDS_URL`) — one interface, tolerant of individual failures. The
-  `custom` slot is deliberately the single place a compliant social feed or paid
-  trends API plugs in, isolating the ToS surface.
 - **News** (`lib/server/news.ts`): `fetchNewsHeadlines()` fans out to Google
   News RSS, GDELT, and Reddit (`r/worldnews` et al.), dedupes, and returns a
   ranked list for News Chat's curation step. No keys required.
 
 Route handlers cache these responses at the edge (`revalidate`), and a Vercel
 Cron can warm them so the first user load is instant.
+
+Daily words deliberately has **no** adapter: its curriculum is a curated,
+frequency-ordered list bundled in `lib/shared/words.ts`, so the mode that has
+to work every single day has nothing to fetch and nothing to fail
+([`DAILY_WORDS.md`](DAILY_WORDS.md)).
+
+`lib/server/extract.ts` is a different animal and is treated as one: it fetches
+a URL chosen by the **user**, not by us, so it carries full request-forgery
+guards — scheme allow-list, DNS resolution checked against private ranges,
+manually-followed redirects revalidated per hop, and hard caps on time, size and
+hops. See [`RESPOND.md`](RESPOND.md).
 
 ---
 
@@ -127,12 +134,12 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | Method & path | Purpose |
 | --- | --- |
 | `GET /api/health` | Liveness. |
-| `GET /api/trends` | Cached trends (HN + custom), edge-cached. |
-| `POST /api/scenarios` | `{ trendId \| subject }` → a sectioned interactive scenario. |
-| `POST /api/feedback` | Encouragement-first AI feedback for a finished entry. |
-| `POST /api/prompts/generate` | Fresh, theme+level-grounded writing prompts. |
-| `POST /api/sparks` | Tap-to-insert sentence starters for the writing surface. |
-| `POST /api/coach` | Phrase Coach turn (SRS-scheduled phrase drilling). |
+| `POST /api/words/daily` | One call per daily set: a real-life moment per word to produce it in. |
+| `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
+| `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
+| `POST /api/respond/sharpen` | One harder question about the answer they just gave. |
+| `POST /api/respond/ideas` | Are these angles theirs, or the source restated? |
+| `POST /api/respond/polish` | Encouragement-first feedback on a finished piece. |
 | `GET /api/news/mission` | Today's planned News Chat mission, cached per (day, level). |
 | `POST /api/converse` | News Chat turn — the scene-partner engine (state merged in code). |
 | `POST /api/converse/bridge` | "Say it your way": intent (any language) → keywords + gapped frame. |
@@ -145,7 +152,9 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 
 The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
 the director prompt, stall assist, recap — are documented in detail in
-[`NEWS_CHAT.md`](NEWS_CHAT.md).
+[`NEWS_CHAT.md`](NEWS_CHAT.md); the daily-word contract in
+[`DAILY_WORDS.md`](DAILY_WORDS.md) and the Respond contract in
+[`RESPOND.md`](RESPOND.md).
 
 ## Prompt-injection posture
 
@@ -161,41 +170,49 @@ fails soft so a bad response never breaks the writing flow.
 ## State today, and the Supabase phase
 
 **Today:** all durable state is client-side in `localStorage`, guest-first —
-you can write, build a streak, and see progress with no account. This is the
-"defer signup until after a win" retention insight, and it means the core app
-has zero backend dependencies.
+you can learn words, build a streak, and watch your vocabulary grow with no
+account. This is the "defer signup until after a win" retention insight, and it
+means the core app has zero backend dependencies.
 
 **Next phase — Supabase:** real accounts and multi-device sync. Because the
 stats/streak/SRS logic already lives in `lib/shared`, the migration is mostly
 additive rather than a rewrite:
 
 1. Add Supabase Auth (email magic-link + Google OAuth) with `@supabase/ssr`;
-   keep the guest-first flow — a new visitor writes one session as a guest, then
-   the celebrate screen invites sign-up to *save your streak*, and the guest's
-   entry/vocab are claimed on signup.
-2. Add a Postgres schema (SQL migrations under `supabase/`, Row-Level Security)
-   for `entries`, `vocab`, streak/profile, and cached `trends`/`scenarios`.
-   `supabase-js` from the server — no ORM, to avoid serverless
-   connection-pool pain. **Landed News-Chat-first:** `profiles` (streak/profile
-   + rolling level), `news_sessions`, and `phrases` (library + SRS), with a
-   typed data-access layer in `src/lib/server/db/`. See
-   [`DATA_MODEL.md`](DATA_MODEL.md); `entries`/`vocab` are the next tables.
+   keep the guest-first flow — a new visitor does one day of words as a guest,
+   then the debrief invites sign-up to *save your streak*, and the guest's pool
+   and schedule are claimed on signup.
+2. The Postgres schema is **landed** (SQL migrations under `supabase/`, RLS):
+   `profiles` (streak/totals + rolling level), `news_sessions`, and `phrases`
+   (the shared library + its Leitner schedule, fed by all three surfaces), with
+   a typed data-access layer in `src/lib/server/db/`. `supabase-js` from the
+   server — no ORM, to avoid serverless connection-pool pain. See
+   [`../supabase/README.md`](../supabase/README.md); `vocab` and the day-keyed
+   tallies (`wordDays`, `phraseApplied`) are the next tables.
 3. Move the currently-client stats/streak/vocab merge behind the API so they're
    consistent across devices and can't be tampered with. The client keeps light
    display helpers and swaps `localStorage` reads for API calls.
 
 Caching stays table- and edge-based (`fetched_at`/TTL + `revalidate`), and
 scheduled work stays on **Vercel Cron** — no long-running worker or Redis on the
-free tier. Sharing generated scenarios/subjects across users (keyed by
-trend/subject) is the main cost lever.
+free tier. Sharing generated news subjects across users (keyed by day + level)
+is the main cost lever.
 
 ## Offline posture
 
-Online-first, with a thin grace path. The **freewriting** loop works fully
-offline (on-device feedback + curated syllabus). **Trending, Coach, and News
-Chat require the network** — News Chat deliberately has no offline fallback
-subject and fails honestly rather than faking content. Drafts live in
-`localStorage` so a dropped connection mid-session never loses writing.
+Two postures, chosen per mode by what the mode is *for*.
+
+- **Daily words works fully offline.** It's the daily habit, so it can't depend
+  on a network: the curriculum, the cards, the recall check, the judging
+  fallback and the schedule are all local. The AI call only makes the "use it"
+  moments personal, and a failure downgrades to local moments silently.
+- **The Phrasebook degrades.** Its Mixed mode wants the round-builder; Recall,
+  Sprint and Study run on stored material alone.
+- **Respond degrades to its local ladder.** With no AI key the questions are
+  generic but real, the borrowing check is local anyway, and pasting needs no
+  network at all — only link-fetching does.
+- **News Chat requires the network** and deliberately has no offline fallback
+  subject — it fails honestly rather than faking today's news.
 
 ## Ops notes
 
