@@ -2,11 +2,12 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * E2E runs against a **production build** with **no env keys at all** — that is
- * deliberate. The freewriting loop is the one flow that must work offline, with
- * no AI provider and no Supabase, so the smoke suite proves exactly that.
- * AI-dependent modes (Trending, Coach, News Chat) are verified by hand with the
- * `verify` skill, not here: they depend on live third-party responses and would
- * make CI flaky.
+ * deliberate. The daily-words loop is the one flow that must work offline, with
+ * no AI provider and no Supabase, so the smoke suite proves exactly that: the
+ * bundled curriculum, the local moments, the deterministic judging.
+ * AI-dependent modes (News Chat, and Respond's tailored questions) are verified
+ * by hand with the `verify` skill, not here: they depend on live third-party
+ * responses and would make CI flaky.
  */
 
 const PORT = Number(process.env.E2E_PORT ?? 3457);

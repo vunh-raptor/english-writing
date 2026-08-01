@@ -12,7 +12,7 @@
      response/transcript. "I verified it" is not evidence. -->
 
 - [ ] `npm run verify` (lint · typecheck · unit tests · build)
-- [ ] `npm run e2e` — required if the write → celebrate path changed
+- [ ] `npm run e2e` — required if the daily-words path changed
 - [ ] New pure logic has Vitest coverage (happy path, empty case, boundary)
 - [ ] A bug fix has a test that failed before the fix
 

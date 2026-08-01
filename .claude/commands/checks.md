@@ -6,8 +6,9 @@ allowed-tools: Bash(npm run verify), Bash(npm run lint), Bash(npm run typecheck)
 Run the quality gate for the current change.
 
 1. `npm run verify` — lint · typecheck · unit tests · build.
-2. If anything on the write → celebrate path changed (`src/components/{Home,Write,Celebrate}.tsx`,
-   `src/app/write/**`, `src/app/(main)/page.tsx`, `src/store/**`), also run
+2. If anything on the daily-words path changed (`src/components/DailyWords.tsx`,
+   `src/lib/shared/words.ts`, `src/app/(main)/{page,words}/**`, `src/store/**`),
+   also run
    `npm run e2e`.
 
 Then report:

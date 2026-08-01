@@ -68,8 +68,8 @@ build), plus `npm run e2e` when the core loop moved.
 | Layer | Tool | What belongs here |
 | --- | --- | --- |
 | Pure logic | **Vitest** (`src/**/__tests__/*.test.ts`) | `lib/shared`: streak, SRS, stats, date. Fast, deterministic, no I/O. |
-| Core loop | **Playwright** (`e2e/*.spec.ts`) | The guest write → celebrate path, offline, no keys. The product's one non-negotiable journey. |
-| AI surfaces | **`verify` skill**, by hand | Trending, Coach, News Chat, Phrasebook — live third-party responses; automating them buys flakiness, not confidence. |
+| Core loop | **Playwright** (`e2e/*.spec.ts`) | The guest daily-words path — meet → drill → their own sentence — offline, no keys. The product's one non-negotiable journey. |
+| AI surfaces | **`verify` skill**, by hand | News Chat, Phrasebook, and the tailored halves of Daily Words and Respond — live third-party responses; automating them buys flakiness, not confidence. |
 
 Two rules keep this honest:
 
@@ -124,7 +124,7 @@ changes.
 | If you changed… | Update… |
 | --- | --- |
 | An API route's contract | `docs/ARCHITECTURE.md` (API surface table) |
-| The database schema | `docs/DATA_MODEL.md` + a migration in `supabase/migrations/` |
+| The database schema | a migration in `supabase/migrations/` + `supabase/README.md`, and the feature's own doc under "Data" |
 | A News Chat contract | `docs/NEWS_CHAT_V2.md` |
 | UI tokens, motifs, or rules | `docs/DESIGN_SYSTEM.md` |
 | What actually ships today | `README.md` → **Status** |
