@@ -31,11 +31,24 @@ Break these and the change is a regression, however green the tests are.
   examples and outlines are inert, and Respond asks questions but never supplies
   a summary, an opinion or an angle. A session someone can finish without
   producing is a broken session.
-- **Guest-first.** The core loop works with no account, no network, and no AI
-  keys. Sign-up is invited *after* a win, never before one.
+- **Account-only, server-owned state.** Every durable thing a learner
+  accumulates — streak, vocabulary, phrase library and its schedule, saved
+  sessions — lives in Postgres under RLS and is reached through `/api/state`.
+  **Nothing durable is written to the device**: no `localStorage`, no
+  `sessionStorage`, not even a layout preference. A signed-out request gets a
+  redirect (pages) or a 401 (API), never an empty store that looks like a new
+  learner.
+
+  > This replaced the previous **guest-first** rule, which said the core loop
+  > had to work with no account and no network. That was a deliberate product
+  > decision, not a drift — see `docs/ARCHITECTURE.md`. The cost is real and
+  > should be weighed before anyone reverses it again: sign-up now precedes the
+  > first win, which is exactly the friction the old rule existed to avoid.
 - **AI degrades, never breaks.** With no provider key the app falls back to the
   bundled curriculum, local moments, and deterministic judging. AI-only modes
-  say so honestly rather than faking content.
+  say so honestly rather than faking content. (This still holds — it is the
+  *AI* that degrades. Supabase is now a hard dependency: with no project
+  configured there is no app, and `/sign-in` says so plainly.)
 - **Code can rescue a production, never invent one.** Where a model judges the
   learner's output, deterministic checks are unioned in so a lazy model can't
   erase real work — and where a model judges originality, the deterministic

@@ -148,7 +148,7 @@ never disagree with the sentence around it.
 
 ## Data
 
-- **Live (guest-first)**: met words join `Store.minedPhrases` as `Phrase`
+- **Live**: met words join `Store.minedPhrases` as `Phrase`
   entries with `kind: "word"`, `captured: { module: "Daily words", … }`, and
   their schedule in `Store.phraseSrs` — the same pool and scheduler the
   Phrasebook and News Chat share. `Store.wordDays` records each day's issued

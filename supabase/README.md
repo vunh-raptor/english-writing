@@ -64,3 +64,34 @@ data-access layer for these tables lives in `src/lib/server/db/`.
 There's no ORM. When you change a migration, update the hand-authored `Database`
 type in `src/lib/server/db/types.ts` to match (or regenerate it with
 `supabase gen types typescript`), and run `npm run typecheck`.
+
+
+## Migration 0006 — the rest of the learner's state
+
+`0001`-`0005` covered the account anchor, News Chat conversations and the shared
+phrase library. `0006` lands everything else, which is what let `localStorage`
+be deleted outright:
+
+| Table / column | Holds |
+| --- | --- |
+| `profiles.words_per_day`, `.sound`, `.has_written` | the Settings dials, and whether a first session has landed |
+| `phrases.my_line` | the learner's own sentence per item — the `echo` drill's cue |
+| `phrases.captured_module`, `.captured_day` | the two thirds of `CaptureSource` 0003 left out |
+| `vocab` | words they have **written**, and when they first did |
+| `word_days` | which curated ids each local day issued, so today's set never reshuffles |
+| `phrase_applied` | clean applications per day — the "this week" strips |
+| `respond_sessions` | the source, the thinking ladder, the idea bank, the draft |
+| `transcribe_sessions` | the frozen clip + transcript, per-chunk outcomes, the resume cursor |
+
+Plus a `transcribe` value on `phrase_source`, and the `respond_status` /
+`transcribe_status` enums.
+
+Every table follows the same RLS shape: `to authenticated` **and** an ownership
+predicate in `using`, with `with check` on insert and update so a row can never
+be written or reassigned to another account. All access goes through the
+request-scoped client, so RLS — not application code — is what enforces it.
+
+**Not yet applied anywhere.** These migrations were authored without a Supabase
+project attached, so they are unrun: no `supabase db advisors`, no live query,
+no verification beyond review. Apply them to a scratch project and run the
+advisors before trusting them.

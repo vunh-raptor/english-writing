@@ -74,8 +74,8 @@ text and the clock, and the clock is what the chunk cut trusts.
 A curated clip with no `videoId` is read aloud by the browser's own speech
 synthesis, and the pane says so. This is honestly a compromise — a synthesized
 voice has none of the elision and connected speech that make real narration
-worth transcribing — but it is what keeps the guest-first non-negotiable intact:
-the mode works on a train, with no account and no keys. Filling in a `videoId`
+worth transcribing — but it is what keeps the mode running with no provider
+key at all: the transcript is bundled, so the score never depends on a model. Filling in a `videoId`
 switches a clip to the real YouTube player and is a one-field change.
 
 **Pasted links** use the real video and its real captions. `fetchTranscript()`
@@ -133,10 +133,10 @@ rule the mission and drill engines follow.
 
 ## Data
 
-Client-side, `localStorage`, guest-first — like every other mode.
-
-`Store.transcribeSessions: TranscribeSession[]` (bounded to 12, since each
-freezes a whole clip and its transcript). Progress is **chunk-granular** because
+Postgres, per account, behind RLS — like every other mode. The
+`transcribe_sessions` table (migration 0006) is unique on `(user_id, clip_id)`,
+so resuming a clip updates one row in place, and is bounded to 12 per learner
+since each freezes a whole clip and its transcript. Progress is **chunk-granular** because
 that is the unit a learner resumes at; a twenty-minute clip has to survive being
 closed.
 
@@ -154,8 +154,9 @@ retrieval cue than any sentence we could generate.
 - **Never a blank page** — the audio is the material.
 - **Nothing completes the learner's turn** — scaffolds cost a miss and never
   reveal the line; the milestone asks for *their* sentence.
-- **Guest-first / AI degrades** — curated clips run with no account, no network
-  and no keys.
+- **AI degrades** — curated clips run with no provider key at all; the score,
+  the diff and the offline milestone are all deterministic. (Progress itself is
+  server-owned — the app is account-only.)
 - **Never red** — every correction is ochre, and every control is Oxford.
 
 ## Files

@@ -164,4 +164,4 @@ the reviewer's trust.
 | --- | --- |
 | Per change | The 7 stages above |
 | Per merge | Delete the branch; `README.md` **Status** reflects reality |
-| Per phase (e.g. Supabase auth) | A spec in `docs/`, then changes small enough to merge behind the guest-first path |
+| Per phase (e.g. server-owned state) | A spec in `docs/`, then changes small enough to review in one sitting |

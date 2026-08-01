@@ -15,8 +15,8 @@ module-driven backend), see [`PATTERNS.md`](PATTERNS.md).
 | UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives; **lucide-react** icons; **next-themes** for light/dark. |
 | Server AI | A **server-only gateway** (`src/lib/server/ai.ts`) fronting Groq · Google Gemini · Anthropic, chosen by which env key is present. Keys never leave the server. |
 | Content sources | A bundled, frequency-ordered **word curriculum** (no I/O at all) plus keyless server **news adapters** (Google News RSS, GDELT, Reddit). |
-| Client state (today) | Browser **`localStorage`**, guest-first (`src/lib/client/storage.ts`, `src/store/StoreContext.tsx`). |
-| Auth + DB (in progress) | **Supabase** (Postgres + Auth). The Postgres **schema exists** (`supabase/migrations/`, RLS) with a typed server data-access layer (`src/lib/server/db/`) — see [`../supabase/README.md`](../supabase/README.md). Ready to wire; **Auth is not connected yet**, so the live app still runs guest-first on `localStorage`. |
+| Learner state | **Postgres, server-owned.** Read and written through `/api/state` as the signed-in user under RLS (`src/lib/server/db/state.ts`, `src/store/StoreContext.tsx`). Nothing durable on the device. |
+| Auth + DB | **Supabase** (Postgres + Auth), and a hard dependency. Passwordless sign-in (magic link + Google) with `@supabase/ssr`; the middleware gates every page and API route. Schema in `supabase/migrations/` with RLS on every table — see [`../supabase/README.md`](../supabase/README.md). |
 | Hosting | **Vercel** (Hobby). A Vercel Cron can warm the news cache. |
 
 ---
@@ -29,7 +29,7 @@ The whole system is three layers inside one Next.js app.
 ┌──────────────────────────────────────────────────────────────┐
 │  Browser (React, "use client")                               │
 │  DailyWords · Respond · NewsChat · Phrasebook · Settings      │
-│                                     state: localStorage       │
+│                       state: fetched from /api/state          │
 └───────────────┬──────────────────────────────────────────────┘
                 │  fetch() JSON  (src/lib/client/{clientApi,ai}.ts)
 ┌───────────────▼──────────────────────────────────────────────┐
@@ -61,11 +61,14 @@ the browser:
 | Folder | Runs where | Contents |
 | --- | --- | --- |
 | `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers), `respond` (the think ladder + the borrowing check), `transcribe` (dictation scoring, the word diff, chunking) + `clips` (the bundled listening curriculum). No I/O, no keys. |
-| `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` (fetch our own API), `supabase` (browser client), `player`/`speech` (chunk playback), `recorder` (shadow capture). |
+| `lib/client` | browser only | `sound`, `clientApi` (fetch our own API), `supabase` (browser client), `player`/`speech` (chunk playback), `recorder` (shadow capture). |
 | `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `transcribe` (captions + the milestone jobs), `supabase` + `db/`. |
 
-Because the stats/streak/SRS logic lives in `lib/shared`, it runs on the client
-today and can move behind the API unchanged when Supabase lands.
+Because the stats/streak/SRS logic lives in `lib/shared`, it moved behind the
+API **unchanged** when state went server-side — `lib/server/db/state.ts` calls
+the same `applyWrite`, `reviewCard` and `tokenize`. The Vitest suites over them
+still cover the real logic, which is why this migration was a change of storage
+rather than of behaviour.
 
 ### Routing & UI shells
 
@@ -78,10 +81,15 @@ Screens are real routes grouped by their chrome using App Router route groups:
 
 A mode's own session state (which round, the draft, timing) is local component
 state, deliberately: a session is a single screen's concern and is never
-resumable from a URL. Durable on-device state (the lexical pool and its
-schedule, the day's issued words, streak, vocabulary, saved conversations,
-settings) lives in **`StoreContext`**, persisted to `localStorage`.
-`AppProviders` composes it with the theme provider.
+resumable from a URL. Durable state (the lexical pool and its schedule, the
+day's issued words, streak, vocabulary, saved sessions, settings) is held in
+Postgres and reached through **`StoreContext`**, which loads it from
+`/api/state` and dispatches every mutation there. `AppProviders` composes it
+with the theme provider.
+
+- `/sign-in` lives outside `(main)` — no rail, one job. `/auth/callback`
+  exchanges the one-time code for a session (a route handler, because a Server
+  Component cannot write cookies); `/auth/sign-out` is POST-only.
 
 ---
 
@@ -134,6 +142,8 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | Method & path | Purpose |
 | --- | --- |
 | `GET /api/health` | Liveness. |
+| `GET /api/state` | The signed-in learner's whole durable state. |
+| `POST /api/state` | Apply one state action; returns the fresh whole store. |
 | `POST /api/words/daily` | One call per daily set: a real-life moment per word to produce it in. |
 | `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
 | `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
@@ -173,29 +183,46 @@ fails soft so a bad response never breaks the writing flow.
 
 ## State today, and the Supabase phase
 
-**Today:** all durable state is client-side in `localStorage`, guest-first —
-you can learn words, build a streak, and watch your vocabulary grow with no
-account. This is the "defer signup until after a win" retention insight, and it
-means the core app has zero backend dependencies.
+**Today:** all durable state lives in Postgres, per account, behind RLS. The
+app is **account-only**: `src/middleware.ts` bounces an unauthenticated page
+request to `/sign-in` and answers an unauthenticated API call with 401, and
+`src/lib/client/storage.ts` no longer exists.
 
-**Next phase — Supabase:** real accounts and multi-device sync. Because the
-stats/streak/SRS logic already lives in `lib/shared`, the migration is mostly
-additive rather than a rewrite:
+The trade this made, stated plainly: the app previously ran **guest-first**, on
+the "defer signup until after a win" retention insight, and the core loop worked
+with no account and no network. That is gone. Sign-up now precedes the first
+win. Multi-device sync, a learner not losing everything to a cleared browser,
+and state that can be trusted server-side were judged worth it — but the
+retention cost is real, and anyone revisiting this should weigh it rather than
+discover it.
 
-1. Add Supabase Auth (email magic-link + Google OAuth) with `@supabase/ssr`;
-   keep the guest-first flow — a new visitor does one day of words as a guest,
-   then the debrief invites sign-up to *save your streak*, and the guest's pool
-   and schedule are claimed on signup.
-2. The Postgres schema is **landed** (SQL migrations under `supabase/`, RLS):
-   `profiles` (streak/totals + rolling level), `news_sessions`, and `phrases`
-   (the shared library + its Leitner schedule, fed by all three surfaces), with
-   a typed data-access layer in `src/lib/server/db/`. `supabase-js` from the
-   server — no ORM, to avoid serverless connection-pool pain. See
-   [`../supabase/README.md`](../supabase/README.md); `vocab` and the day-keyed
-   tallies (`wordDays`, `phraseApplied`) are the next tables.
-3. Move the currently-client stats/streak/vocab merge behind the API so they're
-   consistent across devices and can't be tampered with. The client keeps light
-   display helpers and swaps `localStorage` reads for API calls.
+**How it is wired.** Migrations `0001`–`0006` under `supabase/` cover the whole
+of `Store`: `profiles` (streak, totals, rolling level, the two Settings dials),
+`phrases` (the shared library, its Leitner schedule, and the learner's own line
+per item), `news_sessions`, `respond_sessions`, `transcribe_sessions`, plus
+`vocab` and the day-keyed tallies `word_days` and `phrase_applied`. Every table
+has RLS with `to authenticated` **and** an ownership predicate, and `with check`
+on every insert and update so a row can never be written or reassigned to
+another account. `supabase-js` from the server, no ORM, to avoid serverless
+connection-pool pain. See [`../supabase/README.md`](../supabase/README.md).
+
+Reads and writes go through `src/lib/server/db/state.ts` using the
+**request-scoped** client (`supabaseServer()`), never the admin client — so RLS
+is what enforces ownership rather than a `where` clause someone has to remember.
+Every mutation returns the whole fresh store, because one clean production moves
+the schedule, the streak and the day's tally at once, and a client
+reconstructing that from a patch would eventually disagree with the database.
+
+**What is still open:**
+
+1. **News Chat conversations are not yet server-backed.** `news_sessions` exists
+   and is read on load, but `saveNewsSession` is currently a no-op rather than a
+   silent local write — the conversation writer still needs porting.
+2. **A guest-to-account import.** There is none: anyone with progress in an old
+   browser blob starts fresh. Adding a one-time read-and-upload on first sign-in
+   is small, and would cost nobody their streak.
+3. **E2E coverage of the learner journeys**, which needs a Supabase project or a
+   seeded local stack in CI — see `e2e/account-gate.spec.ts`.
 
 Caching stays table- and edge-based (`fetched_at`/TTL + `revalidate`), and
 scheduled work stays on **Vercel Cron** — no long-running worker or Redis on the
@@ -206,10 +233,10 @@ is the main cost lever.
 
 Two postures, chosen per mode by what the mode is *for*.
 
-- **Daily words works fully offline.** It's the daily habit, so it can't depend
-  on a network: the curriculum, the cards, the recall check, the judging
-  fallback and the schedule are all local. The AI call only makes the "use it"
-  moments personal, and a failure downgrades to local moments silently.
+- **Nothing works offline any more.** Learner state is server-owned, so every
+  mode needs the network. The *content* is still bundled (the word curriculum,
+  the Transcribe clips), and the AI still degrades to local material — but a
+  session cannot start, or be saved, without reaching the server.
 - **The Phrasebook degrades.** Its Mixed mode wants the round-builder; Recall,
   Sprint and Study run on stored material alone.
 - **Respond degrades to its local ladder.** With no AI key the questions are
@@ -217,10 +244,10 @@ Two postures, chosen per mode by what the mode is *for*.
   network at all — only link-fetching does.
 - **News Chat requires the network** and deliberately has no offline fallback
   subject — it fails honestly rather than faking today's news.
-- **Transcribe's curated clips work fully offline.** They ship their own
-  transcripts, so scoring, the diff, the gate and the milestone all run
-  on-device; only pasted links need the network. See
-  [`TRANSCRIBE.md`](TRANSCRIBE.md).
+- **Transcribe needs no AI, but does need the network.** Curated clips ship
+  their own transcripts, so scoring, the diff, the gate and the milestone all
+  run with no provider key — but progress is server-owned like everything else.
+  See [`TRANSCRIBE.md`](TRANSCRIBE.md).
 
 ## Ops notes
 

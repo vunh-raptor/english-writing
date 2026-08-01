@@ -78,8 +78,6 @@ function isActive(pathname: string, href: string): boolean {
 
 // ---- collapse state -------------------------------------------------------
 
-const COLLAPSE_KEY = "flowrite.sidebar.collapsed";
-
 interface SidebarState {
   collapsed: boolean;
   toggle: () => void;
@@ -88,27 +86,16 @@ interface SidebarState {
 const SidebarContext = createContext<SidebarState | null>(null);
 
 /**
- * Holds whether the desktop rail is collapsed to the 72px icon strip, and
- * remembers the choice across visits. Mounted inside the store's hydration gate,
- * so reading localStorage on init is client-only and never mismatches SSR.
+ * Holds whether the desktop rail is collapsed to the 72px icon strip.
+ *
+ * Session-only, in memory. Nothing about a learner is written to the device any
+ * more — not even a layout preference — so the rail opens expanded on each
+ * visit rather than leaving a trace in the browser.
  */
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
-  });
+  const [collapsed, setCollapsed] = useState(false);
 
-  const toggle = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        /* private mode — skip persistence, the toggle still works this session */
-      }
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(() => setCollapsed((prev) => !prev), []);
 
   return (
     <SidebarContext.Provider value={{ collapsed, toggle }}>

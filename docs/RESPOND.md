@@ -151,7 +151,7 @@ learner pastes instead — which always works and needs no network at all.
 
 ## Data
 
-- **Live (guest-first)**: `Store.respondSessions` — the source (with a bounded
+- **Live**: `Store.respondSessions` — the source (with a bounded
   copy of its text so a session reopens), the turns, the ideas, the draft and
   the polish. Bounded to 20, because each carries its source text. The **idea
   bank** is derived: every idea across every session with `drafted !== true`.
