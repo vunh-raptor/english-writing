@@ -122,12 +122,18 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture, an
 [`docs/PATTERNS.md`](docs/PATTERNS.md) for how this app's Next.js fullstack
 pattern compares to module-driven and feature-driven architectures.
 
+### How changes get made
+
+Flowrite is developed with **Claude as the coding agent**, on a fixed cycle:
+frame → plan → build → prove → ship → review → sync docs. The rules an agent
+must not break live in [`CLAUDE.md`](CLAUDE.md); the cycle itself, and who owns
+which stage, is in [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+
 ### Status
 
 The **daily words, respond, news chat, and phrasebook** flows are built and run
-today.
-All AI is server-side. **Your pool, schedule, streak, and vocabulary live in
-`localStorage`** (learn as a guest, no account needed). **Supabase auth is the
+today. All AI is server-side. **Your pool, schedule, streak, and vocabulary live
+in `localStorage`** (learn as a guest, no account needed). **Supabase auth is the
 remaining phase** — the Postgres schema and a typed data-access layer are in the
 repo (`supabase/`, `src/lib/server/db/`), ready to wire once Auth lands.
 
@@ -163,14 +169,22 @@ npm run dev                  # http://localhost:3000
 Other scripts:
 
 ```bash
+npm run verify               # THE GATE: lint + typecheck + unit tests + build
+npm test                     # Vitest — pure logic in src/lib/shared
+npm run e2e                  # build + Playwright smoke of the core writing loop
 npm run build && npm start   # production build + serve
 npm run lint                 # next lint
 npm run typecheck            # tsc --noEmit
 ```
 
+`npm run verify` is what CI runs on every pull request — deliberately with **no
+API keys**, since the claim that the core loop works without an AI provider is
+only worth anything if it's enforced.
+
 Daily words runs end to end with **no keys at all**. A provider key makes its
-moments personal and turns on News Chat and the Phrasebook's Mixed mode; News
-Chat also needs network access.
+moments personal and turns on Respond's tailored questions, News Chat, and the
+Phrasebook's Mixed mode; Respond's link-fetching and News Chat also need network
+access.
 
 ## Deploy (Vercel)
 
@@ -208,9 +222,10 @@ src/
     ui/                        # shadcn/ui primitives
   lib/
     shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases, respond
+      __tests__/  # Vitest specs for the pure logic
     client/   # browser-only: storage, sound, clientApi, supabase
-    server/   # server-only ("server-only"): ai gateway, words, news, mission,
-              #   phrasebook, respond, extract, supabase + db/
+    server/   # server-only ("server-only"): ai gateway, words, respond, extract,
+              #   news, mission, phrasebook, supabase + db/
     utils.ts
   store/
     StoreContext.tsx           # persisted on-device state (localStorage today)
@@ -218,9 +233,16 @@ src/
   types.ts
 supabase/
   migrations/                  # Postgres schema + RLS (ready to wire)
+e2e/                # Playwright smoke test for the core daily loop
 docs/
   DAILY_WORDS.md   RESPOND.md   NEWS_CHAT.md   NEWS_CHAT_V2.md   PHRASEBOOK.md
-  ARCHITECTURE.md  DESIGN_SYSTEM.md  PATTERNS.md
+  ARCHITECTURE.md  DESIGN_SYSTEM.md  PATTERNS.md  WORKFLOW.md
+.claude/
+  settings.json     # permissions + SessionStart hook
+  commands/         # /spec  /checks  /ship  /docsync
+  hooks/            # session-start.sh (installs deps in web sessions)
+  skills/verify/    # how to drive the real app to verify AI surfaces
+.github/workflows/ci.yml
 ```
 
 Imports use the `@/*` alias (mapped to `src/*`), e.g. `@/lib/shared/words`,
