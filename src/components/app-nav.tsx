@@ -14,6 +14,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   GraduationCap,
+  Headphones,
   Newspaper,
   PenLine,
   Settings as SettingsIcon,
@@ -34,7 +35,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 // ---- nav model ------------------------------------------------------------
 
 /** Which live count a nav item surfaces as a badge. */
-type BadgeKind = "words" | "phrases";
+type BadgeKind = "words" | "phrases" | "clips";
 
 interface NavItem {
   href: string;
@@ -54,6 +55,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { href: "/words", label: "Daily words", short: "Words", icon: GraduationCap, badge: "words" },
       { href: "/news", label: "News chat", short: "News", icon: Newspaper },
       { href: "/respond", label: "Respond", short: "Respond", icon: PenLine },
+      { href: "/transcribe", label: "Transcribe", short: "Hear", icon: Headphones, badge: "clips" },
     ],
   },
   {
@@ -135,8 +137,9 @@ function todayProgress(done: number, total: number): TodayProgress {
   return { current: done, target: total, pct };
 }
 
-/** The two live counts the nav shows: what today still asks for, and what the
- *  Phrasebook has ripe. Both derived, never stored. */
+/** The live counts the nav shows: what today still asks for, what the
+ *  Phrasebook has ripe, and which clips are still half-heard. All derived,
+ *  never stored. */
 function navBadges(store: Store): Record<BadgeKind, number> {
   return {
     words: buildDaySet({
@@ -147,8 +150,16 @@ function navBadges(store: Store): Record<BadgeKind, number> {
       perDay: store.settings.wordsPerDay,
     }).remaining,
     phrases: dueTodayCount(store.phraseSrs, store.minedPhrases),
+    clips: store.transcribeSessions.filter((s) => s.status === "active").length,
   };
 }
+
+/** What a badge's number is counting, in the expanded rail. */
+const BADGE_NOUN: Record<BadgeKind, (n: number) => string> = {
+  words: () => "today",
+  phrases: () => "due",
+  clips: (n) => (n === 1 ? "clip" : "clips"),
+};
 
 function initialOf(name: string): string {
   const n = name.trim();
@@ -406,7 +417,7 @@ function ExpandedRail({
                     <span>{item.label}</span>
                     {count > 0 && (
                       <span className="ml-2 whitespace-nowrap bg-gold px-1.5 py-px font-mono text-[11px] font-medium text-gold-foreground">
-                        {count} {item.badge === "words" ? "today" : "due"}
+                        {count} {BADGE_NOUN[item.badge!](count)}
                       </span>
                     )}
                   </Link>

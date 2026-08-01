@@ -60,9 +60,9 @@ the browser:
 
 | Folder | Runs where | Contents |
 | --- | --- | --- |
-| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers), `respond` (the think ladder + the borrowing check). No I/O, no keys. |
-| `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` (fetch our own API), `supabase` (browser client). |
-| `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `supabase` + `db/`. |
+| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers), `respond` (the think ladder + the borrowing check), `transcribe` (dictation scoring, the word diff, chunking) + `clips` (the bundled listening curriculum). No I/O, no keys. |
+| `lib/client` | browser only | `storage` (localStorage), `sound`, `clientApi` (fetch our own API), `supabase` (browser client), `player`/`speech` (chunk playback), `recorder` (shadow capture). |
+| `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `transcribe` (captions + the milestone jobs), `supabase` + `db/`. |
 
 Because the stats/streak/SRS logic lives in `lib/shared`, it runs on the client
 today and can move behind the API unchanged when Supabase lands.
@@ -149,6 +149,10 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `POST /api/phrasebook/enrich` | A captured highlight → reusable form + meaning + transfer example. |
 | `POST /api/phrasebook/drill` | One call per practice session: a real-life situation per due phrase. |
 | `POST /api/phrasebook/judge` | Honest per-answer judgment: applied in their own sentence, or not. |
+| `POST /api/transcribe/chunks` | A pasted YouTube link → its captions as timed cues. No AI. |
+| `POST /api/transcribe/explain` | The pattern behind a dictation's slips (the score itself is computed on-device). |
+| `POST /api/transcribe/milestone` | A passage → two comprehension questions + two phrases to reuse. |
+| `POST /api/transcribe/judge` | A milestone attempt, judged over a deterministic phrase-detection floor. |
 
 The News Chat contracts (`/api/news/*`, `/api/converse/*`) — subject curation,
 the director prompt, stall assist, recap — are documented in detail in
@@ -213,6 +217,10 @@ Two postures, chosen per mode by what the mode is *for*.
   network at all — only link-fetching does.
 - **News Chat requires the network** and deliberately has no offline fallback
   subject — it fails honestly rather than faking today's news.
+- **Transcribe's curated clips work fully offline.** They ship their own
+  transcripts, so scoring, the diff, the gate and the milestone all run
+  on-device; only pasted links need the network. See
+  [`TRANSCRIBE.md`](TRANSCRIBE.md).
 
 ## Ops notes
 

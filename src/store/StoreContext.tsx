@@ -20,6 +20,7 @@ import type {
   RespondSession,
   Settings,
   Store,
+  TranscribeSession,
 } from "@/types";
 import { loadStore, saveStore, clearStore, defaultStore } from "@/lib/client/storage";
 import { daysBetween, todayKey } from "@/lib/shared/date";
@@ -76,6 +77,13 @@ interface StoreContextValue {
   saveRespondSession(session: RespondSession): void;
   /** Drop a saved Respond session and the unwritten ideas it held. */
   removeRespondSession(id: string): void;
+  /** Create or update a Transcribe session — where in the clip the ear got to. */
+  saveTranscribeSession(session: TranscribeSession): void;
+  /** Drop a saved Transcribe session. */
+  removeTranscribeSession(id: string): void;
+  /** Fold a finished chunk into the pool: words misheard twice become tomorrow's
+   *  review, and the day's clean applications are tallied. */
+  keepMisheard(words: { text: string; heard: string }[]): void;
   /** Add a captured highlight to the phrase pool (deduped; new = due today). */
   collectPhrase(phrase: Phrase): void;
   /** Remove a phrase from the pool and drop its SRS schedule. */
@@ -93,6 +101,8 @@ const WORD_DAYS_KEEP = 70;
 const MAX_NEWS_SESSIONS = 40;
 /** Respond sessions carry a copy of their source text, so keep fewer of them. */
 const MAX_RESPOND_SESSIONS = 20;
+/** Transcribe sessions carry a whole frozen clip + transcript — keep fewer still. */
+const MAX_TRANSCRIBE_SESSIONS = 12;
 
 /** Count targets the learner produced or produced-with-help — the phrase tally. */
 function countProduced(progress: MissionProgress): number {
@@ -343,6 +353,70 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const saveTranscribeSession = useCallback(
+    (session: TranscribeSession) => {
+      const prev = storeRef.current;
+      const rest = prev.transcribeSessions.filter((s) => s.id !== session.id);
+      const transcribeSessions = [
+        { ...session, updatedAt: Date.now() },
+        ...rest,
+      ].slice(0, MAX_TRANSCRIBE_SESSIONS);
+      commit({ ...prev, transcribeSessions });
+    },
+    [commit],
+  );
+
+  const removeTranscribeSession = useCallback(
+    (id: string) => {
+      const prev = storeRef.current;
+      if (!prev.transcribeSessions.some((s) => s.id === id)) return;
+      commit({
+        ...prev,
+        transcribeSessions: prev.transcribeSessions.filter((s) => s.id !== id),
+      });
+    },
+    [commit],
+  );
+
+  const keepMisheard = useCallback(
+    (words: { text: string; heard: string }[]) => {
+      if (words.length === 0) return;
+      const prev = storeRef.current;
+      const day = todayKey();
+
+      // A word misheard once is a slip; misheard twice it is a gap, and only
+      // then does it earn a place in tomorrow's set. The first miss is recorded
+      // by adding the item; the second is what knocks its schedule back.
+      const known = new Map(prev.minedPhrases.map((p) => [p.id, p]));
+      const fresh: Phrase[] = [];
+      const phraseSrs = { ...prev.phraseSrs };
+
+      for (const { text, heard } of words) {
+        const id = `tr-${text.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 48)}`;
+        if (!id || id === "tr-") continue;
+        if (known.has(id) || fresh.some((p) => p.id === id)) {
+          // Heard wrong again — send it back to the front of the queue.
+          phraseSrs[id] = reviewCard(phraseSrs[id], false, day);
+          continue;
+        }
+        fresh.push({
+          id,
+          text,
+          meaning: "",
+          // The sentence it was missed in is the retrieval cue that actually
+          // works: their own moment of not hearing it.
+          example: heard,
+          kind: "word",
+          captured: { module: "Transcribe", context: heard, day },
+        });
+      }
+
+      const minedPhrases = [...prev.minedPhrases, ...fresh].slice(-MAX_MINED_PHRASES);
+      commit({ ...prev, minedPhrases, phraseSrs });
+    },
+    [commit],
+  );
+
   const collectPhrase = useCallback(
     (phrase: Phrase) => {
       if (!phrase.id || !phrase.text) return;
@@ -392,6 +466,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveNewsSession,
       saveRespondSession,
       removeRespondSession,
+      saveTranscribeSession,
+      removeTranscribeSession,
+      keepMisheard,
       collectPhrase,
       removePhrase,
       reset,
@@ -407,6 +484,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveNewsSession,
       saveRespondSession,
       removeRespondSession,
+      saveTranscribeSession,
+      removeTranscribeSession,
+      keepMisheard,
       collectPhrase,
       removePhrase,
       reset,

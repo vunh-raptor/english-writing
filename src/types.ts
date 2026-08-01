@@ -57,6 +57,8 @@ export interface Store {
   /** Saved Respond sessions — the reading, the thinking, and the idea bank
    *  of angles the learner wrote but hasn't drafted yet. */
   respondSessions: RespondSession[];
+  /** Saved Transcribe sessions — where in each clip the ear got to. */
+  transcribeSessions: TranscribeSession[];
   /** Rolling CEFR-ish level — the band daily words are drawn at and missions
    *  are planned at. */
   newsLevel: NewsLevel;
@@ -527,6 +529,150 @@ export interface RespondSession {
   draft: string;
   polish?: Polish;
   status: "thinking" | "ideas" | "drafting" | "done";
+}
+
+// --- Transcribe: write what you hear, then say it back ----------------------
+//
+// The one mode where the English arrives as SOUND (docs/TRANSCRIBE.md). A clip
+// is cut into fifteen-second chunks; each chunk is written down from listening
+// alone, then said back over the speaker's own rhythm. Two gates, deliberately
+// different in kind: dictation is scored (a word-match pass line), shadowing is
+// only witnessed — scoring someone's mouth is exactly the anxiety this product
+// exists to remove. Every tenth chunk closes a passage with a milestone check,
+// because transcribing is not understanding.
+
+/** One timed caption cue as it arrives from a transcript — the raw material. */
+export interface TranscribeCue {
+  /** Seconds from the start of the clip. */
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** A fifteen-second unit of listening — the thing a learner actually faces. */
+export interface TranscribeChunk {
+  /** 0-based position in the clip; also its id within a session. */
+  index: number;
+  start: number;
+  end: number;
+  /** What was actually said — the reference the dictation is scored against. */
+  text: string;
+  /** Words carrying the sentence stress, for the shadowing pane's underlines. */
+  stress: string[];
+}
+
+/** A curated clip and its bundled transcript. Frequency-first listening, and —
+ *  like the word curriculum — it needs no network and no AI to run. */
+export interface TranscribeClip {
+  id: string;
+  title: string;
+  /** Honest attribution: the series or programme it came from. */
+  source: string;
+  /** YouTube video id, when there's a real video behind it. */
+  videoId?: string;
+  /** Whole-clip length in seconds. */
+  duration: number;
+  /** The band this clip's listening sits at. */
+  level: NewsLevel;
+  /** One line on what makes this clip easy or hard to hear. */
+  blurb: string;
+  /** The transcript, already cued. Chunking is derived, never stored. */
+  cues: TranscribeCue[];
+}
+
+/** How one word in the learner's attempt lined up against what was said.
+ *  `ok` renders plain, `fix`/`miss`/`extra` are the tutor's ochre pencil. */
+export type DiffKind = "ok" | "fix" | "miss" | "extra";
+
+export interface DiffSegment {
+  kind: DiffKind;
+  /** What the learner wrote — struck through on `fix` and `extra`. */
+  wrote?: string;
+  /** What was actually said — the ochre correction on `fix` and `miss`. */
+  heard?: string;
+}
+
+/**
+ * The deterministic result of checking one dictation. Computed in code, never
+ * by a model: a learner who wrote a word correctly must never be told they
+ * didn't, and no model gets a vote on that.
+ */
+export interface DictationScore {
+  /** Whole-percent word match against the chunk's reference text. */
+  accuracy: number;
+  /** Did it clear the pass line? The chunk gate's first half. */
+  passed: boolean;
+  /** The learner's own text, aligned and annotated for inline display. */
+  segments: DiffSegment[];
+  /** Reference words they missed or mis-wrote — tomorrow's review material. */
+  missed: string[];
+  /** Words in the reference, the denominator behind the percentage. */
+  total: number;
+}
+
+/** A pattern behind several slips, named once. The only correction in the mode,
+ *  and it arrives after the score, never during the writing. */
+export interface SlipPattern {
+  /** Mono kicker, e.g. "Subject–verb agreement · twice". */
+  label: string;
+  /** One clause explaining the rule, quoting their own words. */
+  note: string;
+}
+
+/** How one chunk ended. `shadowed` is the gate's second half — witnessed, not
+ *  scored, so it is a boolean and never a number. */
+export interface ChunkResult {
+  index: number;
+  accuracy: number;
+  /** How many times they played it. Kept so it can be watched falling. */
+  listens: number;
+  /** Scaffolds cost one miss each — the fade is visible, never punitive. */
+  aided: boolean;
+  shadowed: boolean;
+  missed: string[];
+}
+
+/** The gate at the end of a passage: what stayed, and what can now be used. */
+export interface MilestoneQuiz {
+  /** Exactly two comprehension questions about the passage. */
+  questions: string[];
+  /** Exactly two phrases from the passage to reuse in one sentence of theirs. */
+  phrases: string[];
+}
+
+/** Judgment of a milestone attempt. Deterministic phrase detection is the
+ *  floor the model may tighten but never loosen. */
+export interface MilestoneVerdict {
+  passed: boolean;
+  /** Which of the two phrases actually turned up in their own sentence. */
+  used: string[];
+  /** One short warm line; quotes their words when it worked. */
+  note: string;
+}
+
+/**
+ * One pass through a clip, saved so a twenty-minute video survives being closed.
+ * Progress is chunk-granular because that is the unit a learner resumes at.
+ */
+export interface TranscribeSession {
+  id: string;
+  day: DayKey;
+  createdAt: number;
+  updatedAt: number;
+  clipId: string;
+  /** The clip itself, frozen — a pasted link has no curated entry to look up. */
+  clip: TranscribeClip;
+  /** Seconds per chunk this session was cut at. */
+  chunkSeconds: number;
+  /** How many chunks the clip cut into. */
+  chunkCount: number;
+  /** 0-based cursor: the chunk they're on now. */
+  cursor: number;
+  /** Per-chunk outcomes, keyed by chunk index. */
+  results: Record<number, ChunkResult>;
+  /** Passage indexes whose milestone has been passed. */
+  milestonesPassed: number[];
+  status: "active" | "complete";
 }
 
 /**

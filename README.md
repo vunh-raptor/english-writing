@@ -50,6 +50,7 @@ Three surfaces, one pool of language and one spaced schedule underneath:
 | **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. Works fully offline. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
 | **Respond** | `/respond` | You bring the English: paste a post, an article, a newsletter, or hand over a link. The app gives you **questions and never answers** until you have an angle of your own — then you write it. Undrafted angles wait in an idea bank. See [`docs/RESPOND.md`](docs/RESPOND.md). |
 | **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
+| **Transcribe** | `/transcribe` | The one mode where the English arrives as **sound**: fifteen seconds of a clip at a time, written down from listening alone, then said back in your own mouth. The clip only advances when the dictation clears 90% and the chunk has been shadowed once; every tenth chunk closes with a comprehension check. Curated clips work fully offline. See [`docs/TRANSCRIBE.md`](docs/TRANSCRIBE.md). |
 | **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted, practiced four ways (Mixed · Recall · Sprint · Study — one per strand of a balanced program). See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
 | **Settings** | `/settings` | Words a day, your level, finish sound, theme (light/dark). |
 
@@ -131,11 +132,17 @@ which stage, is in [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
 
 ### Status
 
-The **daily words, respond, news chat, and phrasebook** flows are built and run
-today. All AI is server-side. **Your pool, schedule, streak, and vocabulary live
-in `localStorage`** (learn as a guest, no account needed). **Supabase auth is the
-remaining phase** — the Postgres schema and a typed data-access layer are in the
-repo (`supabase/`, `src/lib/server/db/`), ready to wire once Auth lands.
+The **daily words, respond, news chat, transcribe, and phrasebook** flows are
+built and run today. All AI is server-side. **Your pool, schedule, streak, and
+vocabulary live in `localStorage`** (learn as a guest, no account needed).
+**Supabase auth is the remaining phase** — the Postgres schema and a typed
+data-access layer are in the repo (`supabase/`, `src/lib/server/db/`), ready to
+wire once Auth lands.
+
+Transcribe's curated clips are currently read aloud by the browser's own speech
+synthesis, because they ship transcripts rather than video and the mode has to
+work offline. Giving a clip a `videoId` in `src/lib/shared/clips.ts` switches it
+to the real YouTube player; pasted links already use it.
 
 ## AI (server-side, free tier)
 
@@ -207,7 +214,7 @@ src/
     (main)/                    # the app shell: desktop rail / mobile tab bar
       layout.tsx
       page.tsx                 #  "/"  → redirect to /words
-      words/  news/  respond/  phrasebook/  settings/   (page.tsx each)
+      words/  news/  respond/  transcribe/  phrasebook/  settings/  (page.tsx each)
     api/
       health/route.ts
       words/daily/route.ts     # POST → a real-life moment per word in today's set
@@ -216,16 +223,20 @@ src/
       converse/{bridge,continue,ask,debrief}/route.ts
       phrasebook/{enrich,drill,judge}/route.ts
       respond/{source,questions,sharpen,ideas,polish}/route.ts
+      transcribe/{chunks,explain,milestone,judge}/route.ts
   components/
     DailyWords, NewsChat, NewsDashboard, News, Phrasebook, Respond,
-    SelectionCapture, Settings, app-nav, page-container, theme-*
+    Transcribe, TranscribeSession, SelectionCapture, Settings, app-nav,
+    page-container, theme-*
     ui/                        # shadcn/ui primitives
   lib/
-    shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases, respond
+    shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases,
+              #   respond, transcribe (scoring + chunking), clips (listening)
       __tests__/  # Vitest specs for the pure logic
-    client/   # browser-only: storage, sound, clientApi, supabase
+    client/   # browser-only: storage, sound, clientApi, supabase, player,
+              #   speech, recorder
     server/   # server-only ("server-only"): ai gateway, words, respond, extract,
-              #   news, mission, phrasebook, supabase + db/
+              #   news, mission, phrasebook, transcribe, supabase + db/
     utils.ts
   store/
     StoreContext.tsx           # persisted on-device state (localStorage today)

@@ -126,5 +126,6 @@ real 502s that are not bugs; retry like a user would.
 | The daily-word method | `docs/DAILY_WORDS.md` |
 | Respond's one rule + the SSRF guards | `docs/RESPOND.md` |
 | Phrasebook practice modes | `docs/PHRASEBOOK.md` |
+| Transcribe's two gates + the scoring rule | `docs/TRANSCRIBE.md` |
 | News Chat contracts | `docs/NEWS_CHAT.md`, `docs/NEWS_CHAT_V2.md` |
 | Why this architecture over alternatives | `docs/PATTERNS.md` |

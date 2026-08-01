@@ -7,7 +7,9 @@ import { STARTING_FREEZES } from "@/lib/shared/streak";
  */
 
 const STORAGE_KEY = "flowrite.v1";
-const SCHEMA_VERSION = 2;
+/** v3 adds `transcribeSessions` — the shallow merge below defaults it for
+ *  anyone arriving from v2, so no migration is needed. */
+const SCHEMA_VERSION = 3;
 
 /** Five a day: enough to be real progress, few enough to always finish. */
 export const DEFAULT_WORDS_PER_DAY = 5;
@@ -39,6 +41,7 @@ export function defaultStore(): Store {
     myLines: {},
     newsSessions: [],
     respondSessions: [],
+    transcribeSessions: [],
     newsLevel: "B1",
     hasWritten: false,
   };
@@ -69,6 +72,7 @@ export function loadStore(): Store {
       myLines: parsed.myLines ?? {},
       newsSessions: parsed.newsSessions ?? [],
       respondSessions: parsed.respondSessions ?? [],
+      transcribeSessions: parsed.transcribeSessions ?? [],
       newsLevel: (["A2", "B1", "B2", "C1"] as NewsLevel[]).includes(
         parsed.newsLevel as NewsLevel,
       )

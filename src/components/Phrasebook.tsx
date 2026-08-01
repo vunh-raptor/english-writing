@@ -65,6 +65,17 @@ const FLASH_SECONDS = 7;
  */
 const RAW_MEANING_LIBRARY = "saved as you highlighted it — details pending";
 const RAW_MEANING_DRILL = "saved exactly as you highlighted it";
+/** Transcribe doesn't capture by highlighting — a word lands here because the
+ *  ear missed it twice, and saying so is more use than a generic stand-in. */
+const MISHEARD_LIBRARY = "misheard while transcribing — details pending";
+const MISHEARD_DRILL = "your ear missed this one while transcribing";
+
+function rawMeaning(phrase: Phrase, where: "library" | "drill"): string {
+  if (phrase.captured?.module === "Transcribe") {
+    return where === "library" ? MISHEARD_LIBRARY : MISHEARD_DRILL;
+  }
+  return where === "library" ? RAW_MEANING_LIBRARY : RAW_MEANING_DRILL;
+}
 
 const MODE_META: Record<PracticeMode, { label: string; strand: string; desc: string }> = {
   mixed: {
@@ -276,7 +287,7 @@ function PhraseRow({
             <KindTag kind={kindOf(phrase)} />
           </div>
           <div className="mt-px truncate text-[13px] text-muted-foreground">
-            {phrase.meaning || RAW_MEANING_LIBRARY}
+            {phrase.meaning || rawMeaning(phrase, "library")}
           </div>
         </div>
         <div className="flex flex-none items-center gap-4">
@@ -649,7 +660,7 @@ export function Phrasebook() {
           )}
         </div>
         <div className="mt-0.5 text-sm text-muted-foreground">
-          {round.phrase.meaning || RAW_MEANING_DRILL}
+          {round.phrase.meaning || rawMeaning(round.phrase, "drill")}
         </div>
         {round.phrase.collocations && round.phrase.collocations.length > 0 && (
           <div className="mt-1.5 text-[12.5px] text-muted-foreground">

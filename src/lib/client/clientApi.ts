@@ -18,6 +18,10 @@ import type {
   LexKind,
   WordRound,
   WordSeed,
+  TranscribeCue,
+  SlipPattern,
+  MilestoneQuiz,
+  MilestoneVerdict,
 } from "@/types";
 
 /** Client calls to our own API routes (server does the crawling + AI). */
@@ -266,6 +270,72 @@ export async function judgePhrase(
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<DrillJudgment>;
+}
+
+// --- Transcribe: write what you hear, then say it back -----------------------
+
+/** A pasted video link → its captions, as timed cues. No AI, so this works
+ *  with no provider key; a video without captions fails honestly. */
+export async function fetchClipCues(
+  url: string,
+): Promise<{ videoId: string; title: string; cues: TranscribeCue[] }> {
+  const res = await fetch("/api/transcribe/chunks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<{ videoId: string; title: string; cues: TranscribeCue[] }>;
+}
+
+/** The pattern behind a chunk's slips. The score itself is computed on-device
+ *  in `lib/shared/transcribe.ts` and passed in — this only explains it, so a
+ *  failure costs the explanation and never the score. */
+export async function explainDictation(
+  level: NewsLevel,
+  reference: string,
+  attempt: string,
+  missed: string[],
+): Promise<{ patterns: SlipPattern[]; keep: string[] }> {
+  const res = await fetch("/api/transcribe/explain", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, reference, attempt, missed }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<{ patterns: SlipPattern[]; keep: string[] }>;
+}
+
+/** The two questions and two phrases that close a passage. Callers fall back
+ *  to `localMilestone()` so a passage never blocks on a provider. */
+export async function fetchMilestone(
+  level: NewsLevel,
+  passage: string,
+): Promise<MilestoneQuiz> {
+  const res = await fetch("/api/transcribe/milestone", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, passage }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<MilestoneQuiz>;
+}
+
+/** Judge a milestone attempt. Deterministic phrase detection is the floor the
+ *  model may tighten but never loosen. */
+export async function judgeMilestoneAttempt(
+  level: NewsLevel,
+  quiz: MilestoneQuiz,
+  answers: string[],
+  sentence: string,
+): Promise<MilestoneVerdict> {
+  const res = await fetch("/api/transcribe/judge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, quiz, answers, sentence }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<MilestoneVerdict>;
 }
 
 /** Closing debrief: per-target results, ≤2 upgrades, phrases to keep. */
