@@ -170,7 +170,7 @@ Any one provider is enough; the server picks the first configured (override with
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in the keys you have (all optional for the core app)
+cp .env.example .env.local   # Supabase is required; the AI keys are optional
 npm run dev                  # http://localhost:3000
 ```
 
@@ -197,12 +197,15 @@ access.
 ## Deploy (Vercel)
 
 1. Import the repo into **Vercel**.
-2. Set env vars from `.env.example` in the Vercel dashboard (at least one AI key
-   for the AI modes).
-3. Deploy. A Vercel Cron job can warm `/api/news/mission` so the first load is
+2. Set env vars from `.env.example` in the Vercel dashboard — the three Supabase
+   ones are required, plus at least one AI key for the AI modes.
+3. Add the deployment's `https://<domain>/auth/callback` to the project's allowed
+   redirect URLs in Supabase (Authentication -> URL Configuration), or sign-in
+   will bounce.
+4. Deploy. A Vercel Cron job can warm `/api/news/mission` so the first load is
    instant.
 
-Supabase (auth + DB) plugs in during the next phase; see
+How Supabase fits in — and why the app is account-only — is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Project layout

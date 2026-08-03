@@ -37,6 +37,11 @@ supabase link --project-ref <your-project-ref>   # once
 supabase db push                                  # applies migrations/*.sql in order
 ```
 
+`link` prompts for the project's Postgres password. That password is the CLI's
+business, not the app's: no code reads it, and it does not belong in
+`.env.local`. To run the CLI non-interactively (CI), pass it as the CLI's own
+`SUPABASE_DB_PASSWORD` from an encrypted secret store.
+
 **Or by hand:** paste each file, oldest first, into the Supabase Studio SQL
 editor and run it.
 
@@ -55,9 +60,10 @@ let the clients in `src/lib/server/supabase.ts` (server), `src/lib/client/supaba
 (browser), and `src/middleware.ts` (session refresh) connect. The typed
 data-access layer for these tables lives in `src/lib/server/db/`.
 
-> The schema is **ready to wire, not yet wired**: no route calls the DB until
-> Supabase Auth provides a signed-in `userId`. Until then the app runs entirely
-> on the guest-first `localStorage` path, unchanged.
+> These tables are **the app's only durable storage**. Every learner-visible
+> route reaches them through `/api/state`; nothing is written to the device. A
+> signed-out request gets a redirect (pages) or a 401 (API) — never an empty
+> store that looks like a new learner.
 
 ## Keeping the types in sync
 
