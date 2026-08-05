@@ -47,9 +47,10 @@ Three surfaces, one pool of language and one spaced schedule underneath:
 
 | Mode | Route | What it is |
 | --- | --- | --- |
-| **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. Works fully offline. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
+| **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
 | **Respond** | `/respond` | You bring the English: paste a post, an article, a newsletter, or hand over a link. The app gives you **questions and never answers** until you have an angle of your own — then you write it. Undrafted angles wait in an idea bank. See [`docs/RESPOND.md`](docs/RESPOND.md). |
 | **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
+| **Transcribe** | `/transcribe` | The one mode where the English arrives as **sound**: fifteen seconds of a clip at a time, written down from listening alone, then said back in your own mouth. The clip only advances when the dictation clears 90% and the chunk has been shadowed once; every tenth chunk closes with a comprehension check. Clip transcripts are bundled, so scoring needs no AI. See [`docs/TRANSCRIBE.md`](docs/TRANSCRIBE.md). |
 | **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted, practiced four ways (Mixed · Recall · Sprint · Study — one per strand of a balanced program). See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
 | **Settings** | `/settings` | Words a day, your level, finish sound, theme (light/dark). |
 
@@ -93,7 +94,7 @@ Two rules govern how a day is drawn:
 | Avoid semantic interference | A day's words never share a semantic field |
 | Spacing beats massing | Leitner boxes; every day mixes reviews with new |
 | Words travel in company | Every card carries its natural partner chunks |
-| Defer signup until after a win | Learn as a guest first, then sign up to save |
+| Defer signup until after a win | ~~Guest-first~~ — removed; the app is now account-only (see *Status*) |
 | Streaks, but forgiving | Streak **freeze** tokens absorb missed days |
 | Reward growth, not grinding | Words met, words mastered, vocabulary you wrote |
 | Make the win feel great | A soft chime and an honest debrief on completion |
@@ -114,8 +115,8 @@ codebase, deployed on **Vercel**.
 | UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives, **lucide-react** icons, **next-themes** for light/dark |
 | Server AI | **Server-only AI gateway** — Groq · Google Gemini · Anthropic, selected by env key (`src/lib/server/ai.ts`). Keys never reach the browser. |
 | Content sources | A bundled **word curriculum** (no I/O) + keyless **news adapters** (Google News RSS, GDELT, Reddit). |
-| State (today) | Client `localStorage`, guest-first. See *Status*. |
-| Auth + DB (next) | **Supabase** (Postgres + Auth). The schema is landed under `supabase/` with a typed data-access layer; Auth is the remaining step. |
+| State | Postgres via Supabase, per account, behind RLS. See *Status*. |
+| Auth + DB | **Supabase** (Postgres + Auth) — a hard dependency. Passwordless sign-in (magic link + Google); every table RLS'd per account. |
 | Hosting | **Vercel** (Hobby tier); a Vercel Cron warms the news cache. |
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full architecture, and
@@ -131,11 +132,18 @@ which stage, is in [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
 
 ### Status
 
-The **daily words, respond, news chat, and phrasebook** flows are built and run
-today. All AI is server-side. **Your pool, schedule, streak, and vocabulary live
-in `localStorage`** (learn as a guest, no account needed). **Supabase auth is the
-remaining phase** — the Postgres schema and a typed data-access layer are in the
-repo (`supabase/`, `src/lib/server/db/`), ready to wire once Auth lands.
+The **daily words, respond, news chat, transcribe, and phrasebook** flows are
+built and run today. All AI is server-side. **Your pool, schedule, streak, and
+vocabulary live in your account**, so they follow you between devices.
+**Supabase is now a hard dependency**: sign-in is passwordless (magic link or
+Google), every durable thing lives in Postgres under RLS, and nothing is written
+to the browser. Point the app at a project (`.env.example`) and run the
+migrations in `supabase/migrations/` before it will do anything.
+
+Transcribe's curated clips are currently read aloud by the browser's own speech
+synthesis, because they ship transcripts rather than video and the mode has to
+work offline. Giving a clip a `videoId` in `src/lib/shared/clips.ts` switches it
+to the real YouTube player; pasted links already use it.
 
 ## AI (server-side, free tier)
 
@@ -162,7 +170,7 @@ Any one provider is enough; the server picks the first configured (override with
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in the keys you have (all optional for the core app)
+cp .env.example .env.local   # Supabase is required; the AI keys are optional
 npm run dev                  # http://localhost:3000
 ```
 
@@ -189,12 +197,15 @@ access.
 ## Deploy (Vercel)
 
 1. Import the repo into **Vercel**.
-2. Set env vars from `.env.example` in the Vercel dashboard (at least one AI key
-   for the AI modes).
-3. Deploy. A Vercel Cron job can warm `/api/news/mission` so the first load is
+2. Set env vars from `.env.example` in the Vercel dashboard — the three Supabase
+   ones are required, plus at least one AI key for the AI modes.
+3. Add the deployment's `https://<domain>/auth/callback` to the project's allowed
+   redirect URLs in Supabase (Authentication -> URL Configuration), or sign-in
+   will bounce.
+4. Deploy. A Vercel Cron job can warm `/api/news/mission` so the first load is
    instant.
 
-Supabase (auth + DB) plugs in during the next phase; see
+How Supabase fits in — and why the app is account-only — is in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Project layout
@@ -207,7 +218,7 @@ src/
     (main)/                    # the app shell: desktop rail / mobile tab bar
       layout.tsx
       page.tsx                 #  "/"  → redirect to /words
-      words/  news/  respond/  phrasebook/  settings/   (page.tsx each)
+      words/  news/  respond/  transcribe/  phrasebook/  settings/  (page.tsx each)
     api/
       health/route.ts
       words/daily/route.ts     # POST → a real-life moment per word in today's set
@@ -216,19 +227,23 @@ src/
       converse/{bridge,continue,ask,debrief}/route.ts
       phrasebook/{enrich,drill,judge}/route.ts
       respond/{source,questions,sharpen,ideas,polish}/route.ts
+      transcribe/{chunks,explain,milestone,judge}/route.ts
   components/
     DailyWords, NewsChat, NewsDashboard, News, Phrasebook, Respond,
-    SelectionCapture, Settings, app-nav, page-container, theme-*
+    Transcribe, TranscribeSession, SelectionCapture, Settings, app-nav,
+    page-container, theme-*
     ui/                        # shadcn/ui primitives
   lib/
-    shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases, respond
+    shared/   # pure, isomorphic: date, stats, streak, srs, words, phrases,
+              #   respond, transcribe (scoring + chunking), clips (listening)
       __tests__/  # Vitest specs for the pure logic
-    client/   # browser-only: storage, sound, clientApi, supabase
+    client/   # browser-only: storage, sound, clientApi, supabase, player,
+              #   speech, recorder
     server/   # server-only ("server-only"): ai gateway, words, respond, extract,
-              #   news, mission, phrasebook, supabase + db/
+              #   news, mission, phrasebook, transcribe, supabase + db/
     utils.ts
   store/
-    StoreContext.tsx           # persisted on-device state (localStorage today)
+    StoreContext.tsx           # learner state, loaded/dispatched via /api/state
     AppProviders.tsx           # composes the providers
   types.ts
 supabase/

@@ -5,6 +5,14 @@ import type {
   PhraseAlternative,
   NewsLevel,
   LexKind,
+  ChunkResult,
+  ContentIdea,
+  Polish,
+  RespondSession,
+  SourceRef,
+  ThinkTurn,
+  TranscribeClip,
+  TranscribeSession,
 } from "@/types";
 
 /**
@@ -21,7 +29,10 @@ import type {
 export type NewsSessionStatus = "active" | "complete";
 /** Matches the DB enum after migration 0004 — the same set as `LexKind`. */
 export type PhraseKind = LexKind;
-export type PhraseSource = "news" | "coach" | "captured" | "daily";
+export type PhraseSource = "news" | "coach" | "captured" | "daily" | "transcribe";
+/** Matches the DB enums added in migration 0006. */
+export type RespondStatus = RespondSession["status"];
+export type TranscribeStatus = TranscribeSession["status"];
 
 /** `YYYY-MM-DD`, the learner's local calendar day (Postgres `date`). */
 type DateStr = string;
@@ -43,6 +54,9 @@ export interface Database {
           total_entries: number;
           total_ms: number;
           news_level: NewsLevel;
+          words_per_day: number;
+          sound: boolean;
+          has_written: boolean;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -57,6 +71,9 @@ export interface Database {
           total_entries?: number;
           total_ms?: number;
           news_level?: NewsLevel;
+          words_per_day?: number;
+          sound?: boolean;
+          has_written?: boolean;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -71,6 +88,9 @@ export interface Database {
           total_entries?: number;
           total_ms?: number;
           news_level?: NewsLevel;
+          words_per_day?: number;
+          sound?: boolean;
+          has_written?: boolean;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -159,6 +179,9 @@ export interface Database {
           srs_due: DateStr | null;
           srs_reps: number;
           srs_last_reviewed: DateStr | null;
+          my_line: string | null;
+          captured_module: string | null;
+          captured_day: DateStr | null;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -181,6 +204,9 @@ export interface Database {
           srs_due?: DateStr | null;
           srs_reps?: number;
           srs_last_reviewed?: DateStr | null;
+          my_line?: string | null;
+          captured_module?: string | null;
+          captured_day?: DateStr | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -203,6 +229,162 @@ export interface Database {
           srs_due?: DateStr | null;
           srs_reps?: number;
           srs_last_reviewed?: DateStr | null;
+          my_line?: string | null;
+          captured_module?: string | null;
+          captured_day?: DateStr | null;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Relationships: [];
+      };
+      vocab: {
+        Row: {
+          user_id: string;
+          word: string;
+          first_seen: DateStr;
+          count: number;
+        };
+        Insert: {
+          user_id: string;
+          word: string;
+          first_seen: DateStr;
+          count?: number;
+        };
+        Update: {
+          user_id?: string;
+          word?: string;
+          first_seen?: DateStr;
+          count?: number;
+        };
+        Relationships: [];
+      };
+      word_days: {
+        Row: {
+          user_id: string;
+          day: DateStr;
+          word_ids: string[];
+        };
+        Insert: {
+          user_id: string;
+          day: DateStr;
+          word_ids?: string[];
+        };
+        Update: {
+          user_id?: string;
+          day?: DateStr;
+          word_ids?: string[];
+        };
+        Relationships: [];
+      };
+      phrase_applied: {
+        Row: {
+          user_id: string;
+          day: DateStr;
+          applications: number;
+        };
+        Insert: {
+          user_id: string;
+          day: DateStr;
+          applications?: number;
+        };
+        Update: {
+          user_id?: string;
+          day?: DateStr;
+          applications?: number;
+        };
+        Relationships: [];
+      };
+      respond_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          day: DateStr;
+          source: SourceRef;
+          source_text: string;
+          turns: ThinkTurn[];
+          ideas: ContentIdea[];
+          chosen_id: string | null;
+          draft: string;
+          polish: Polish | null;
+          status: RespondStatus;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          day: DateStr;
+          source: SourceRef;
+          source_text?: string;
+          turns?: ThinkTurn[];
+          ideas?: ContentIdea[];
+          chosen_id?: string | null;
+          draft?: string;
+          polish?: Polish | null;
+          status?: RespondStatus;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          day?: DateStr;
+          source?: SourceRef;
+          source_text?: string;
+          turns?: ThinkTurn[];
+          ideas?: ContentIdea[];
+          chosen_id?: string | null;
+          draft?: string;
+          polish?: Polish | null;
+          status?: RespondStatus;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Relationships: [];
+      };
+      transcribe_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          day: DateStr;
+          clip_id: string;
+          clip: TranscribeClip;
+          chunk_seconds: number;
+          chunk_count: number;
+          cursor: number;
+          results: Record<string, ChunkResult>;
+          milestones_passed: number[];
+          status: TranscribeStatus;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          day: DateStr;
+          clip_id: string;
+          clip: TranscribeClip;
+          chunk_seconds?: number;
+          chunk_count?: number;
+          cursor?: number;
+          results?: Record<string, ChunkResult>;
+          milestones_passed?: number[];
+          status?: TranscribeStatus;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          day?: DateStr;
+          clip_id?: string;
+          clip?: TranscribeClip;
+          chunk_seconds?: number;
+          chunk_count?: number;
+          cursor?: number;
+          results?: Record<string, ChunkResult>;
+          milestones_passed?: number[];
+          status?: TranscribeStatus;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -216,6 +398,8 @@ export interface Database {
       news_session_status: NewsSessionStatus;
       phrase_kind: PhraseKind;
       phrase_source: PhraseSource;
+      respond_status: RespondStatus;
+      transcribe_status: TranscribeStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -225,3 +409,8 @@ export interface Database {
 export type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 export type NewsSessionRow = Database["public"]["Tables"]["news_sessions"]["Row"];
 export type PhraseRow = Database["public"]["Tables"]["phrases"]["Row"];
+export type VocabRow = Database["public"]["Tables"]["vocab"]["Row"];
+export type WordDayRow = Database["public"]["Tables"]["word_days"]["Row"];
+export type PhraseAppliedRow = Database["public"]["Tables"]["phrase_applied"]["Row"];
+export type RespondSessionRow = Database["public"]["Tables"]["respond_sessions"]["Row"];
+export type TranscribeSessionRow = Database["public"]["Tables"]["transcribe_sessions"]["Row"];

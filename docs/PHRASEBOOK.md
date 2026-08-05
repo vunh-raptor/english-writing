@@ -43,7 +43,7 @@ findings that shape the mechanics:
 | **Study** | language-focused learning | the full card (meaning, example, origin, similar ways, partners, where you met it) → write your own example | newest (≤6) | **none** — study isn't testing |
 
 Only Mixed calls the AI round-builder; Recall, Sprint, and Study run on the
-item's own stored material — instant, and fully offline-capable (judging still
+item's own stored material — instant, and needing no AI (judging still
 uses the API when available, with the deterministic matcher as fallback).
 
 ## The flow
@@ -124,7 +124,7 @@ hard code guards).
 
 ## Data
 
-- **Live (guest-first)**: captures join `Store.minedPhrases` (bounded, deduped
+- **Live**: captures join `Store.minedPhrases` (bounded, deduped
   by the content slug `phraseId(text)`) with `Phrase.captured =
   { module, context, day }` provenance; scheduling stays in `Store.phraseSrs`.
   `collectPhrase` / `removePhrase` in `StoreContext`. Clean applications are

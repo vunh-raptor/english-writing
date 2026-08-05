@@ -37,6 +37,11 @@ supabase link --project-ref <your-project-ref>   # once
 supabase db push                                  # applies migrations/*.sql in order
 ```
 
+`link` prompts for the project's Postgres password. That password is the CLI's
+business, not the app's: no code reads it, and it does not belong in
+`.env.local`. To run the CLI non-interactively (CI), pass it as the CLI's own
+`SUPABASE_DB_PASSWORD` from an encrypted secret store.
+
 **Or by hand:** paste each file, oldest first, into the Supabase Studio SQL
 editor and run it.
 
@@ -55,12 +60,44 @@ let the clients in `src/lib/server/supabase.ts` (server), `src/lib/client/supaba
 (browser), and `src/middleware.ts` (session refresh) connect. The typed
 data-access layer for these tables lives in `src/lib/server/db/`.
 
-> The schema is **ready to wire, not yet wired**: no route calls the DB until
-> Supabase Auth provides a signed-in `userId`. Until then the app runs entirely
-> on the guest-first `localStorage` path, unchanged.
+> These tables are **the app's only durable storage**. Every learner-visible
+> route reaches them through `/api/state`; nothing is written to the device. A
+> signed-out request gets a redirect (pages) or a 401 (API) — never an empty
+> store that looks like a new learner.
 
 ## Keeping the types in sync
 
 There's no ORM. When you change a migration, update the hand-authored `Database`
 type in `src/lib/server/db/types.ts` to match (or regenerate it with
 `supabase gen types typescript`), and run `npm run typecheck`.
+
+
+## Migration 0006 — the rest of the learner's state
+
+`0001`-`0005` covered the account anchor, News Chat conversations and the shared
+phrase library. `0006` lands everything else, which is what let `localStorage`
+be deleted outright:
+
+| Table / column | Holds |
+| --- | --- |
+| `profiles.words_per_day`, `.sound`, `.has_written` | the Settings dials, and whether a first session has landed |
+| `phrases.my_line` | the learner's own sentence per item — the `echo` drill's cue |
+| `phrases.captured_module`, `.captured_day` | the two thirds of `CaptureSource` 0003 left out |
+| `vocab` | words they have **written**, and when they first did |
+| `word_days` | which curated ids each local day issued, so today's set never reshuffles |
+| `phrase_applied` | clean applications per day — the "this week" strips |
+| `respond_sessions` | the source, the thinking ladder, the idea bank, the draft |
+| `transcribe_sessions` | the frozen clip + transcript, per-chunk outcomes, the resume cursor |
+
+Plus a `transcribe` value on `phrase_source`, and the `respond_status` /
+`transcribe_status` enums.
+
+Every table follows the same RLS shape: `to authenticated` **and** an ownership
+predicate in `using`, with `with check` on insert and update so a row can never
+be written or reassigned to another account. All access goes through the
+request-scoped client, so RLS — not application code — is what enforces it.
+
+**Not yet applied anywhere.** These migrations were authored without a Supabase
+project attached, so they are unrun: no `supabase db advisors`, no live query,
+no verification beyond review. Apply them to a scratch project and run the
+advisors before trusting them.

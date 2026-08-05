@@ -14,6 +14,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   GraduationCap,
+  Headphones,
   Newspaper,
   PenLine,
   Settings as SettingsIcon,
@@ -34,7 +35,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 // ---- nav model ------------------------------------------------------------
 
 /** Which live count a nav item surfaces as a badge. */
-type BadgeKind = "words" | "phrases";
+type BadgeKind = "words" | "phrases" | "clips";
 
 interface NavItem {
   href: string;
@@ -54,6 +55,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { href: "/words", label: "Daily words", short: "Words", icon: GraduationCap, badge: "words" },
       { href: "/news", label: "News chat", short: "News", icon: Newspaper },
       { href: "/respond", label: "Respond", short: "Respond", icon: PenLine },
+      { href: "/transcribe", label: "Transcribe", short: "Hear", icon: Headphones, badge: "clips" },
     ],
   },
   {
@@ -76,8 +78,6 @@ function isActive(pathname: string, href: string): boolean {
 
 // ---- collapse state -------------------------------------------------------
 
-const COLLAPSE_KEY = "flowrite.sidebar.collapsed";
-
 interface SidebarState {
   collapsed: boolean;
   toggle: () => void;
@@ -86,27 +86,16 @@ interface SidebarState {
 const SidebarContext = createContext<SidebarState | null>(null);
 
 /**
- * Holds whether the desktop rail is collapsed to the 72px icon strip, and
- * remembers the choice across visits. Mounted inside the store's hydration gate,
- * so reading localStorage on init is client-only and never mismatches SSR.
+ * Holds whether the desktop rail is collapsed to the 72px icon strip.
+ *
+ * Session-only, in memory. Nothing about a learner is written to the device any
+ * more — not even a layout preference — so the rail opens expanded on each
+ * visit rather than leaving a trace in the browser.
  */
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
-  });
+  const [collapsed, setCollapsed] = useState(false);
 
-  const toggle = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        /* private mode — skip persistence, the toggle still works this session */
-      }
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(() => setCollapsed((prev) => !prev), []);
 
   return (
     <SidebarContext.Provider value={{ collapsed, toggle }}>
@@ -135,8 +124,9 @@ function todayProgress(done: number, total: number): TodayProgress {
   return { current: done, target: total, pct };
 }
 
-/** The two live counts the nav shows: what today still asks for, and what the
- *  Phrasebook has ripe. Both derived, never stored. */
+/** The live counts the nav shows: what today still asks for, what the
+ *  Phrasebook has ripe, and which clips are still half-heard. All derived,
+ *  never stored. */
 function navBadges(store: Store): Record<BadgeKind, number> {
   return {
     words: buildDaySet({
@@ -147,8 +137,16 @@ function navBadges(store: Store): Record<BadgeKind, number> {
       perDay: store.settings.wordsPerDay,
     }).remaining,
     phrases: dueTodayCount(store.phraseSrs, store.minedPhrases),
+    clips: store.transcribeSessions.filter((s) => s.status === "active").length,
   };
 }
+
+/** What a badge's number is counting, in the expanded rail. */
+const BADGE_NOUN: Record<BadgeKind, (n: number) => string> = {
+  words: () => "today",
+  phrases: () => "due",
+  clips: (n) => (n === 1 ? "clip" : "clips"),
+};
 
 function initialOf(name: string): string {
   const n = name.trim();
@@ -406,7 +404,7 @@ function ExpandedRail({
                     <span>{item.label}</span>
                     {count > 0 && (
                       <span className="ml-2 whitespace-nowrap bg-gold px-1.5 py-px font-mono text-[11px] font-medium text-gold-foreground">
-                        {count} {item.badge === "words" ? "today" : "due"}
+                        {count} {BADGE_NOUN[item.badge!](count)}
                       </span>
                     )}
                   </Link>
