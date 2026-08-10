@@ -67,9 +67,9 @@ build), plus `npm run e2e` when the core loop moved.
 
 | Layer | Tool | What belongs here |
 | --- | --- | --- |
-| Pure logic | **Vitest** (`src/**/__tests__/*.test.ts`) | `lib/shared`: streak, SRS, stats, date. Fast, deterministic, no I/O. |
-| Core loop | **Playwright** (`e2e/*.spec.ts`) | The guest daily-words path — meet → drill → their own sentence — offline, no keys. The product's one non-negotiable journey. |
-| AI surfaces | **`verify` skill**, by hand | News Chat, Phrasebook, and the tailored halves of Daily Words and Respond — live third-party responses; automating them buys flakiness, not confidence. |
+| Pure logic | **Vitest** (`src/**/__tests__/*.test.ts`) | `lib/shared`: streak, SRS, stats, date, the day-set rules, the prompt kit, model-JSON coercion. Fast, deterministic, no I/O. |
+| The account gate | **Playwright** (`e2e/*.spec.ts`) | What is honestly assertable with no Supabase project attached: the app fails honestly, refuses state without a session, and writes nothing to the device. The learner journeys are **not** covered — see the note at the top of `e2e/account-gate.spec.ts`. |
+| AI surfaces | **`verify` skill**, by hand | Every mode, now — nothing is pre-written, so every mode's material comes back live. Automating them buys flakiness, not confidence. |
 
 Two rules keep this honest:
 

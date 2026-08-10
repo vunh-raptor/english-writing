@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Phrase, SrsRecord, WordSeed } from "@/types";
 import {
-  WORD_SEEDS,
   buildDaySet,
   gapPartner,
   gapSentence,
@@ -13,7 +12,6 @@ import {
   pickDrill,
   recallMatches,
   usesWord,
-  wordSeedById,
   wordToPhrase,
 } from "../words";
 
@@ -34,69 +32,73 @@ function seed(over: Partial<WordSeed> = {}): WordSeed {
   };
 }
 
+/**
+ * A stand-in curriculum.
+ *
+ * The bundled `WORD_SEEDS` array these tests used to run against is gone — the
+ * curriculum is generated per learner now — so the fixture below plays its
+ * part: distinct semantic fields, a spread of bands, in queue order. That is a
+ * better test subject anyway, because it exercises the rules against a
+ * catalogue whose shape the test controls.
+ */
+const CATALOG: WordSeed[] = [
+  seed({ id: "w-decide", word: "decide", band: "A2", field: "choice" }),
+  seed({ id: "w-borrow", word: "borrow", band: "A2", field: "money" }),
+  seed({ id: "w-tired", word: "tired", band: "A2", field: "energy", pos: "adjective" }),
+  seed({ id: "w-afford", word: "afford", band: "B1", field: "money" }),
+  seed({ id: "w-avoid", word: "avoid", band: "B1", field: "risk" }),
+  seed({ id: "w-suggest", word: "suggest", band: "B1", field: "telling" }),
+  seed({ id: "w-realize", word: "realize", band: "B1", field: "understanding" }),
+  seed({ id: "w-scrutiny", word: "scrutiny", band: "C1", field: "attention", pos: "noun" }),
+  seed({ id: "w-deliberate", word: "deliberate", band: "C1", field: "intention", pos: "adjective" }),
+];
+
 function poolItem(id: string): Phrase {
-  const s = wordSeedById(id)!;
+  const s = CATALOG.find((w) => w.id === id)!;
   return wordToPhrase(s, YESTERDAY);
 }
 
-describe("the curriculum itself", () => {
-  it("has no duplicate ids — ids are the pool's dedupe key", () => {
-    const ids = WORD_SEEDS.map((w) => w.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it("gives every word a meaning, an example containing it, and partners", () => {
-    for (const w of WORD_SEEDS) {
-      expect(w.meaning, w.id).not.toBe("");
-      expect(w.collocations.length, w.id).toBeGreaterThan(0);
-      // The example is the first encounter AND the offline `fit` sentence, so
-      // the word has to actually be in it or the gap can't be cut.
-      expect(usesWord(w.word, w.example), `${w.id} example`).toBe(true);
-    }
-  });
-
-  it("gives every word a field — the day-set rule depends on it", () => {
-    for (const w of WORD_SEEDS) expect(w.field, w.id).not.toBe("");
-  });
-});
-
 describe("pickDailyWords", () => {
   it("never repeats a semantic field within one set (interference)", () => {
-    const picked = pickDailyWords({ level: "B1", count: 8, met: new Set() });
+    const picked = pickDailyWords({ catalog: CATALOG, level: "B1", count: 5, met: new Set() });
     const fields = picked.map((w) => w.field);
     expect(new Set(fields).size).toBe(fields.length);
   });
 
   it("never re-issues a word already met", () => {
-    const first = pickDailyWords({ level: "B1", count: 5, met: new Set() });
+    const first = pickDailyWords({ catalog: CATALOG, level: "B1", count: 3, met: new Set() });
     const met = new Set(first.map((w) => w.id));
-    const second = pickDailyWords({ level: "B1", count: 5, met });
+    const second = pickDailyWords({ catalog: CATALOG, level: "B1", count: 3, met });
     expect(second.some((w) => met.has(w.id))).toBe(false);
   });
 
   it("draws from the learner's own band first", () => {
-    const picked = pickDailyWords({ level: "C1", count: 5, met: new Set() });
+    const picked = pickDailyWords({ catalog: CATALOG, level: "C1", count: 2, met: new Set() });
     expect(picked.every((w) => w.band === "C1")).toBe(true);
   });
 
   it("is deterministic — the same inputs give the same set", () => {
-    const a = pickDailyWords({ level: "A2", count: 5, met: new Set() });
-    const b = pickDailyWords({ level: "A2", count: 5, met: new Set() });
+    const a = pickDailyWords({ catalog: CATALOG, level: "A2", count: 3, met: new Set() });
+    const b = pickDailyWords({ catalog: CATALOG, level: "A2", count: 3, met: new Set() });
     expect(a.map((w) => w.id)).toEqual(b.map((w) => w.id));
   });
 
-  it("returns what it can rather than nothing once the curriculum runs out", () => {
-    const met = new Set(WORD_SEEDS.slice(0, WORD_SEEDS.length - 2).map((w) => w.id));
-    expect(pickDailyWords({ level: "B1", count: 5, met })).toHaveLength(2);
+  it("returns nothing at all from an empty catalogue", () => {
+    expect(pickDailyWords({ catalog: [], level: "B1", count: 5, met: new Set() })).toEqual([]);
+  });
+
+  it("returns what it can rather than nothing once the queue runs out", () => {
+    const met = new Set(CATALOG.slice(0, CATALOG.length - 2).map((w) => w.id));
+    expect(pickDailyWords({ catalog: CATALOG, level: "B1", count: 5, met })).toHaveLength(2);
   });
 
   it("relaxes the field rule only when it cannot otherwise fill the set", () => {
-    // Everything met except two words that share a field: a short set would be
-    // worse than two related words, so the rule yields last.
-    const money = WORD_SEEDS.filter((w) => w.field === "money").slice(0, 2);
-    expect(money.length).toBe(2);
-    const met = new Set(WORD_SEEDS.filter((w) => !money.includes(w)).map((w) => w.id));
-    const picked = pickDailyWords({ level: "B1", count: 2, met });
+    // Only the two "money" words are left: a short set would be worse than two
+    // related words, so the interference rule yields last.
+    const money = CATALOG.filter((w) => w.field === "money");
+    expect(money).toHaveLength(2);
+    const met = new Set(CATALOG.filter((w) => !money.includes(w)).map((w) => w.id));
+    const picked = pickDailyWords({ catalog: CATALOG, level: "B1", count: 2, met });
     expect(picked).toHaveLength(2);
   });
 });
@@ -269,6 +271,7 @@ describe("pickDrill — the ladder, and how it degrades", () => {
 
 describe("buildDaySet", () => {
   const base = {
+    catalog: CATALOG,
     pool: [] as Phrase[],
     srs: {} as Record<string, SrsRecord>,
     level: "B1" as const,
@@ -283,6 +286,12 @@ describe("buildDaySet", () => {
     expect(day.reviews).toHaveLength(0);
     expect(day.remaining).toBe(3);
     expect(day.done).toBe(0);
+  });
+
+  it("has nothing to offer before the curriculum has been generated", () => {
+    const day = buildDaySet({ ...base, catalog: [], wordDays: {} });
+    expect(day.todaysNew).toEqual([]);
+    expect(day.remaining).toBe(0);
   });
 
   it("keeps a day's issued set fixed once drawn", () => {
@@ -312,6 +321,17 @@ describe("buildDaySet", () => {
     });
     expect(day.reviews.map((p) => p.id)).toEqual(["w-decide"]);
     expect(day.remaining).toBe(day.remainingNew.length + 1);
+  });
+
+  it("ignores a due pool item that is not one of their curriculum words", () => {
+    // Captured highlights and mission targets are the Phrasebook's business.
+    const day = buildDaySet({
+      ...base,
+      wordDays: {},
+      pool: [{ id: "p-worth-it", text: "it's worth it", meaning: "", example: "", kind: "phrase" }],
+      srs: { "p-worth-it": { box: 1, due: YESTERDAY, reps: 1, last: YESTERDAY } },
+    });
+    expect(day.reviews).toHaveLength(0);
   });
 
   it("leaves a word that is not due out of the day", () => {

@@ -47,10 +47,10 @@ Three surfaces, one pool of language and one spaced schedule underneath:
 
 | Mode | Route | What it is |
 | --- | --- | --- |
-| **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
+| **Daily words** | `/` → `/words` | The daily habit: a frequency-first set of new words **written for you**, each walked **meet → drill → use it in a real moment**, where the drill climbs a five-rung ladder as the word's spaced-repetition box rises. See [`docs/DAILY_WORDS.md`](docs/DAILY_WORDS.md). |
 | **Respond** | `/respond` | You bring the English: paste a post, an article, a newsletter, or hand over a link. The app gives you **questions and never answers** until you have an angle of your own — then you write it. Undrafted angles wait in an idea bank. See [`docs/RESPOND.md`](docs/RESPOND.md). |
 | **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
-| **Transcribe** | `/transcribe` | The one mode where the English arrives as **sound**: fifteen seconds of a clip at a time, written down from listening alone, then said back in your own mouth. The clip only advances when the dictation clears 90% and the chunk has been shadowed once; every tenth chunk closes with a comprehension check. Clip transcripts are bundled, so scoring needs no AI. See [`docs/TRANSCRIBE.md`](docs/TRANSCRIBE.md). |
+| **Transcribe** | `/transcribe` | The one mode where the English arrives as **sound**: fifteen seconds of a passage at a time, written down from listening alone, then said back in your own mouth. The clip only advances when the dictation clears 90% and the chunk has been shadowed once; every tenth chunk closes with a comprehension check. Passages are written for you at your band, or you paste a real link. See [`docs/TRANSCRIBE.md`](docs/TRANSCRIBE.md). |
 | **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted, practiced four ways (Mixed · Recall · Sprint · Study — one per strand of a balanced program). See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
 | **Settings** | `/settings` | Words a day, your level, finish sound, theme (light/dark). |
 
@@ -59,12 +59,15 @@ its schedule. A phrase highlighted while reading in Respond, or mid-conversation
 in News Chat, lands there too. Anything the schedule says is ripe comes back in
 tomorrow's set. One curriculum, four ways in.
 
-## The curriculum: frequency first, and deliberately unrelated
+## The curriculum: yours, frequency first, and deliberately unrelated
 
-The words aren't a flat list of impressive vocabulary — they're a curated,
-**frequency-ordered** spine banded A2 → C1, because roughly 2,800 high-frequency
-words cover **>92%** of general English text (the New General Service List).
-Those are the words worth ten minutes a day.
+The words aren't a flat list of impressive vocabulary, and they aren't a fixed
+list either. Your curriculum is **written for you**, a batch at a time, from
+what the app knows you already have: frequency-first and banded A2 → C1,
+because roughly 2,800 high-frequency words cover **>92%** of general English
+text (the New General Service List). Those are the words worth ten minutes a
+day — and because the list is generated rather than shipped, it never repeats a
+word you know and never runs out.
 
 Two rules govern how a day is drawn:
 
@@ -114,7 +117,7 @@ codebase, deployed on **Vercel**.
 | Framework | **Next.js 14 (App Router)** + **React 18** + **TypeScript** |
 | UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives, **lucide-react** icons, **next-themes** for light/dark |
 | Server AI | **Server-only AI gateway** — Groq · Google Gemini · Anthropic, selected by env key (`src/lib/server/ai.ts`). Keys never reach the browser. |
-| Content sources | A bundled **word curriculum** (no I/O) + keyless **news adapters** (Google News RSS, GDELT, Reddit). |
+| Content sources | **Generated per learner and stored in Postgres** — your word curriculum and your listening passages. Plus keyless **news adapters** (Google News RSS, GDELT, Reddit) for the one mode that is about today. |
 | State | Postgres via Supabase, per account, behind RLS. See *Status*. |
 | Auth + DB | **Supabase** (Postgres + Auth) — a hard dependency. Passwordless sign-in (magic link + Google); every table RLS'd per account. |
 | Hosting | **Vercel** (Hobby tier); a Vercel Cron warms the news cache. |
@@ -140,17 +143,28 @@ Google), every durable thing lives in Postgres under RLS, and nothing is written
 to the browser. Point the app at a project (`.env.example`) and run the
 migrations in `supabase/migrations/` before it will do anything.
 
-Transcribe's curated clips are currently read aloud by the browser's own speech
-synthesis, because they ship transcripts rather than video and the mode has to
-work offline. Giving a clip a `videoId` in `src/lib/shared/clips.ts` switches it
-to the real YouTube player; pasted links already use it.
+**Nothing in the app is pre-written.** The words you meet, the moments you write
+into, the practice situations and the listening passages are all generated for
+your account from your own record, and stored. That also means **a provider key
+is a hard dependency alongside Supabase** — the bundled curriculum that used to
+let Daily words and Transcribe run with no key at all is gone. Everything you
+write is kept too: sentences land in `productions` with the ask that drew them
+out and the verdict they earned, which is both your record and the context every
+prompt reads.
+
+Generated passages are read aloud by the browser's own speech synthesis, since
+they are prose rather than video. A synthesized voice has none of the elision
+that makes real narration worth transcribing, so pasting a real YouTube link
+remains the other half of the mode.
 
 ## AI (server-side, free tier)
 
-The daily habit works with **no AI at all**: the curriculum, cards, recall
-check, judging fallback and schedule are all local. A provider key makes the
-"use it" moments personal and unlocks the conversational modes. Keys live in
-**server env vars**, never the browser:
+**A provider key is required.** Nothing is pre-written, so with no key
+configured there is no material: every route answers 503 and says so. What does
+*not* need a key is judging — production detection, the borrowing check and the
+dictation score are deterministic, so code can always rescue a real production
+even when a model is unavailable. Keys live in **server env vars**, never the
+browser:
 
 ```
 GROQ_API_KEY=…       # free: https://console.groq.com/keys
@@ -162,9 +176,10 @@ Any one provider is enough; the server picks the first configured (override with
 `AI_PROVIDER`). Models are configurable via `GROQ_MODEL` / `GEMINI_MODEL` /
 `ANTHROPIC_MODEL`. See [`.env.example`](.env.example).
 
-> **News Chat is inherently online** and has no offline fallback subject — if the
-> news can't be fetched or no AI is configured, it says so honestly rather than
-> faking content.
+> **Every mode fails honestly.** If the news can't be fetched, if a passage
+> can't be written, if a day's moments don't come back — the app says so and
+> offers a retry. It never substitutes generic material that fits nobody in
+> particular, which was the whole reason for removing the bundled content.
 
 ## Run it
 

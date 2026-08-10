@@ -1,9 +1,10 @@
 /**
  * Core data model for Flowrite.
  *
- * Everything lives on-device in localStorage — private by default, no account,
- * no audience. Nothing here ever leaves the browser except, optionally, the
- * text the learner explicitly sends for AI feedback.
+ * Everything durable lives in Postgres under the learner's account and is
+ * reached through `/api/state`; nothing is written to the device. That includes
+ * the curriculum itself — the words a learner meets and the passages they
+ * listen to are generated for them and stored, not bundled with the app.
  */
 
 /** A calendar day in the learner's local time, formatted `YYYY-MM-DD`. */
@@ -45,8 +46,11 @@ export interface Store {
   /** The learner's lexical pool — daily words they've met, mission targets/keeps
    *  from News Chat, and captured highlights. The Phrasebook's library. */
   minedPhrases: Phrase[];
-  /** Which curated words each local day introduced — keeps today's set stable
-   *  across reloads and reopenings. Pruned to recent days. */
+  /** The learner's own word curriculum, generated for them in batches and held
+   *  in queue order. Everything not yet in `minedPhrases` is still to come. */
+  wordCatalog: WordSeed[];
+  /** Which words each local day introduced — keeps today's set stable across
+   *  reloads and reopenings. Pruned to recent days. */
   wordDays: Record<DayKey, string[]>;
   /** The last sentence the learner wrote with each item, keyed by item id.
    *  Their own words are the best retrieval cue we have, so weeks later the
@@ -59,6 +63,9 @@ export interface Store {
   respondSessions: RespondSession[];
   /** Saved Transcribe sessions — where in each clip the ear got to. */
   transcribeSessions: TranscribeSession[];
+  /** The learner's most recent productions, newest first — the sentences
+   *  themselves, not just their consequences. Bounded to a readable window. */
+  productions: Production[];
   /** Rolling CEFR-ish level — the band daily words are drawn at and missions
    *  are planned at. */
   newsLevel: NewsLevel;
@@ -378,7 +385,11 @@ export interface AskHelp {
 /** Part of speech — shown on the card, and what the round asks them to do with it. */
 export type WordPos = "verb" | "noun" | "adjective" | "adverb";
 
-/** One entry in the curated, frequency-ordered curriculum (lib/shared/words.ts). */
+/**
+ * One entry in the learner's own word curriculum — generated for them in
+ * batches (`lib/server/curriculum.ts`) and stored in `word_items`, then drawn
+ * from by the day-set rules in `lib/shared/words.ts`.
+ */
 export interface WordSeed {
   /** Stable content id (`w-<word>`) — also this item's id in the phrase pool. */
   id: string;
@@ -439,6 +450,46 @@ export interface WordRound {
 
 /** How one word's turn ended — drives the debrief and the schedule. */
 export type WordOutcome = "clean" | "helped" | "missed";
+
+// --- The production ledger ---------------------------------------------------
+
+/** Which surface a sentence was produced on. Mirrors the `production_surface`
+ *  enum (migration 0007). */
+export type ProductionSurface =
+  | "words"
+  | "bridge"
+  | "phrasebook"
+  | "news"
+  | "respond"
+  | "transcribe";
+
+/**
+ * One sentence the learner wrote, kept with the ask that drew it out and the
+ * verdict it earned.
+ *
+ * The app used to keep only a production's *consequences* — a box moved, a
+ * counter rose — and throw the sentence away. Keeping them is what lets the
+ * learner see their own record, and what lets every generation prompt pitch the
+ * next word, moment or passage at this person rather than at a generic B1.
+ */
+export interface Production {
+  id: string;
+  day: DayKey;
+  createdAt: number;
+  surface: ProductionSurface;
+  /** The lexical item it was about, when there was one. */
+  itemSlug?: string;
+  /** Which rung or method asked for it ("recall", "situation", "extend"…). */
+  mode?: string;
+  /** What they were answering — a sentence without its ask is unreadable later. */
+  prompt: string;
+  /** What they wrote. */
+  text: string;
+  /** `unjudged` is honest: some surfaces are production without a pass mark. */
+  verdict: WordOutcome | "unjudged";
+  /** The one warm line they were given back, when there was one. */
+  note?: string;
+}
 
 // --- Respond: bring a source, think against it, produce your own ------------
 //

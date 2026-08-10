@@ -44,11 +44,31 @@ Break these and the change is a regression, however green the tests are.
   > decision, not a drift — see `docs/ARCHITECTURE.md`. The cost is real and
   > should be weighed before anyone reverses it again: sign-up now precedes the
   > first win, which is exactly the friction the old rule existed to avoid.
-- **AI degrades, never breaks.** With no provider key the app falls back to the
-  bundled curriculum, local moments, and deterministic judging. AI-only modes
-  say so honestly rather than faking content. (This still holds — it is the
-  *AI* that degrades. Supabase is now a hard dependency: with no project
-  configured there is no app, and `/sign-in` says so plainly.)
+- **Nothing is pre-written.** Every word a learner meets, every moment they
+  write into, every listening passage is generated *for them* from what the
+  database knows about them, and stored. There is no bundled curriculum, no
+  canned situation, no generic ladder, no stand-in feedback. A surface that
+  cannot get real material says so and offers a retry.
+
+  > This replaced **"AI degrades, never breaks"**, which said the app fell back
+  > to a bundled curriculum, local moments and deterministic judging when no
+  > provider key was configured. That was a deliberate product decision, not
+  > drift. The cost is real: **AI is now a hard dependency alongside Supabase**,
+  > a provider outage is a session nobody can start, and the offline spine that
+  > let Daily Words and Transcribe run on a train is gone. What it buys is a
+  > curriculum that never repeats a word someone knows, never runs out, and is
+  > pitched at the person rather than at a generic B1.
+  >
+  > What did *not* change: **code still rescues, and code still floors.** The
+  > deterministic checks — production detection, the borrowing check, the
+  > phrase-detection floor — are unaffected, because they judge rather than
+  > invent. A one-line note attached to a verdict the code computed is not
+  > preset content; a situation, a question or a celebration is.
+- **Everything a learner produces is kept.** Sentences go to `productions` with
+  the ask that drew them out and the verdict they earned, written the moment
+  they are judged rather than at the end of a session that might be abandoned.
+  That ledger is both the learner's record and the context every generation
+  prompt reads.
 - **Code can rescue a production, never invent one.** Where a model judges the
   learner's output, deterministic checks are unioned in so a lazy model can't
   erase real work — and where a model judges originality, the deterministic
@@ -59,6 +79,15 @@ Break these and the change is a regression, however green the tests are.
   (no I/O, no keys); `lib/client` is browser-only; `lib/server` carries
   `import "server-only"` and is the only place a secret may be touched. Never
   import `lib/server` from a component.
+- **Prompts live in `lib/server/prompts/`, one module per surface.** They are
+  composed with the kit in `lib/shared/prompt.ts`: `dataBlock` is the only way
+  untrusted text enters a prompt, `jsonContract` is the only way a contract is
+  stated, and `renderSnapshot` takes *the facets a job will use* rather than the
+  whole learner. Rules that must hold everywhere (the injection posture, "never
+  finish their sentence") live once in `prompts/blocks.ts`. Never inline a
+  system prompt in an engine module.
+- **The level comes from the profile, never the request body.** A client can
+  claim C1; `requestContext()` reads what they actually are.
 - **Route handlers stay thin**: validate input → call one `lib/server` module →
   return JSON. Logic belongs in the module, not the handler.
 - **Third-party text and learner text are data, never instructions.** Crawled

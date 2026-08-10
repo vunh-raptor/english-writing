@@ -1,53 +1,43 @@
-import type { ThinkQuestion, ThinkRung } from "@/types";
+import type { ThinkRung } from "@/types";
 
 /**
  * The Respond mode's shared rules (docs/RESPOND.md): the thinking ladder, and
  * the borrowing check that decides whether an idea is actually the learner's.
  *
  * The design constraint everything here serves: **the app supplies questions,
- * never content**. Every local fallback in this file is a question or a frame;
- * nothing in it is an idea, a summary, or an angle, because a learner who
- * leaves with the model's thinking hasn't thought.
+ * never content**. Nothing in this file is an idea, a summary, or an angle,
+ * because a learner who leaves with the model's thinking hasn't thought.
+ *
+ * The four rungs are a fixed pedagogical arc — understand, analyse, evaluate,
+ * create — so the labels below are UI chrome, not material. The questions
+ * themselves are written against the learner's actual source every time
+ * (`lib/server/prompts/respond.ts`); a generic ladder that could be asked about
+ * anything is exactly the "blank page in a nicer font" this mode exists to
+ * avoid.
  */
 
-/** How each rung presents itself, and the question it falls back to offline. */
-export const THINK_RUNGS: Record<
-  ThinkRung,
-  { label: string; why: string; fallback: string }
-> = {
+/** How each rung presents itself, and why it is worth climbing. */
+export const THINK_RUNGS: Record<ThinkRung, { label: string; why: string }> = {
   grasp: {
     label: "Say it back",
     why: "Putting it in your own words is the first thing that shows you actually have it.",
-    fallback:
-      "In one or two sentences, and without reusing its phrasing: what is this piece actually claiming?",
   },
   assume: {
     label: "What it assumes",
     why: "Every piece takes something for granted. Naming it is where reading turns into thinking.",
-    fallback:
-      "What does this take for granted without ever saying it out loud? Name one thing.",
   },
   push: {
     label: "Push back",
     why: "Weighing a claim against your own experience is what makes the opinion yours.",
-    fallback:
-      "Where does this not match what you have actually seen or lived? Be concrete.",
   },
   extend: {
     label: "What it left out",
     why: "The gap in someone else's piece is the doorway to your own.",
-    fallback:
-      "Who or what does this affect that the piece never mentions? Start there.",
   },
 };
 
 /** The fixed order of the ladder — understand → analyse → evaluate → create. */
 export const RUNG_ORDER: ThinkRung[] = ["grasp", "assume", "push", "extend"];
-
-/** The offline ladder: real questions, no source-specific detail. */
-export function localQuestions(): ThinkQuestion[] {
-  return RUNG_ORDER.map((rung) => ({ rung, question: THINK_RUNGS[rung].fallback }));
-}
 
 /** Roughly the length of a post worth reading — short enough to finish. */
 export const DRAFT_TARGET_WORDS = 120;

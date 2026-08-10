@@ -1,9 +1,14 @@
 import "server-only";
 import type {
+  ChatMessage,
   ChunkResult,
   DayKey,
+  Mission,
+  MissionProgress,
   NewsLevel,
+  NewsSession,
   Phrase,
+  Production,
   RespondSession,
   Settings,
   Store,
@@ -37,6 +42,10 @@ const MAX_MINED_PHRASES = 400;
 const MAX_NEWS_SESSIONS = 40;
 const MAX_RESPOND_SESSIONS = 20;
 const MAX_TRANSCRIBE_SESSIONS = 12;
+/** How much of the writing record travels to the client at once. */
+const MAX_PRODUCTIONS = 60;
+/** Ceiling on one write — a session hands over a handful, never a backlog. */
+const MAX_PRODUCTION_WRITE = 20;
 /** How much day-keyed history the "this week" strips can lean on. */
 const KEEP_DAYS = 70;
 
@@ -86,8 +95,18 @@ function sourceOf(phrase: Phrase): PhraseSource {
  * and issuing them together keeps the shape obvious at the call site.
  */
 export async function loadState(db: Db, userId: string): Promise<Store> {
-  const [profile, phrases, vocabRows, wordDayRows, appliedRows, news, respond, transcribe] =
-    await Promise.all([
+  const [
+    profile,
+    phrases,
+    vocabRows,
+    wordDayRows,
+    appliedRows,
+    news,
+    respond,
+    transcribe,
+    catalog,
+    productions,
+  ] = await Promise.all([
       db.from("profiles").select("*").eq("id", userId).maybeSingle(),
       db.from("phrases").select("*").eq("user_id", userId).order("created_at"),
       db.from("vocab").select("*").eq("user_id", userId),
@@ -96,6 +115,8 @@ export async function loadState(db: Db, userId: string): Promise<Store> {
       db.from("news_sessions").select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(MAX_NEWS_SESSIONS),
       db.from("respond_sessions").select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(MAX_RESPOND_SESSIONS),
       db.from("transcribe_sessions").select("*").eq("user_id", userId).order("updated_at", { ascending: false }).limit(MAX_TRANSCRIBE_SESSIONS),
+      db.from("word_items").select("slug, word, pos, band, meaning, example, collocations, field").eq("user_id", userId).order("rank"),
+      db.from("productions").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(MAX_PRODUCTIONS),
     ]);
 
   const p = profile.data;
@@ -146,6 +167,28 @@ export async function loadState(db: Db, userId: string): Promise<Store> {
     phraseSrs,
     phraseApplied,
     minedPhrases: phraseRows.map(toPhrase),
+    wordCatalog: (catalog.data ?? []).map((w) => ({
+      id: w.slug,
+      word: w.word,
+      pos: w.pos,
+      band: w.band,
+      meaning: w.meaning,
+      example: w.example,
+      collocations: w.collocations ?? [],
+      field: w.field,
+    })),
+    productions: (productions.data ?? []).map((r) => ({
+      id: r.id,
+      day: r.day,
+      createdAt: Date.parse(r.created_at),
+      surface: r.surface,
+      ...(r.item_slug ? { itemSlug: r.item_slug } : {}),
+      ...(r.mode ? { mode: r.mode } : {}),
+      prompt: r.prompt,
+      text: r.text,
+      verdict: r.verdict,
+      ...(r.note ? { note: r.note } : {}),
+    })),
     wordDays,
     myLines,
     newsSessions: (news.data ?? []).map((r) => ({
@@ -225,7 +268,54 @@ export type StateAction =
   | { type: "removeRespondSession"; id: string }
   | { type: "saveTranscribeSession"; session: TranscribeSession }
   | { type: "removeTranscribeSession"; id: string }
+  | { type: "saveNewsSession"; session: NewsSessionInput }
+  | { type: "removeNewsSession"; id: string }
+  | { type: "recordProductions"; productions: ProductionInput[] }
   | { type: "reset" };
+
+/**
+ * Every action name, as data.
+ *
+ * The route needs an allow-list, and a hand-maintained copy of one drifts the
+ * moment somebody adds an action — which is exactly what happened when
+ * `recordProductions` and `saveNewsSession` landed and the route kept
+ * answering "unknown action". Exporting it from beside the union keeps the two
+ * within one screen of each other, and `satisfies` makes the compiler check
+ * that every name here is a real action.
+ */
+export const STATE_ACTIONS = [
+  "updateSettings",
+  "setLevel",
+  "issueWordDay",
+  "finishWordSession",
+  "reviewPhrases",
+  "collectPhrase",
+  "removePhrase",
+  "keepMisheard",
+  "saveRespondSession",
+  "removeRespondSession",
+  "saveTranscribeSession",
+  "removeTranscribeSession",
+  "saveNewsSession",
+  "removeNewsSession",
+  "recordProductions",
+  "reset",
+] as const satisfies readonly StateAction["type"][];
+
+/** What a News Chat conversation hands the store (docs/NEWS_CHAT_V2.md §9). */
+export interface NewsSessionInput {
+  id: string;
+  day: DayKey;
+  level: NewsLevel;
+  mission: Mission;
+  messages: ChatMessage[];
+  progress: MissionProgress;
+  status: NewsSession["status"];
+  goalHit?: boolean;
+}
+
+/** One sentence to record, as the surface that drew it out describes it. */
+export type ProductionInput = Omit<Production, "id" | "day" | "createdAt">;
 
 /**
  * Apply one action, then hand back the fresh state.
@@ -449,6 +539,65 @@ export async function applyAction(db: Db, userId: string, action: StateAction): 
       await db.from("transcribe_sessions").delete().eq("user_id", userId).eq("id", action.id);
       break;
 
+    case "saveNewsSession": {
+      // News Chat conversations were the one durable thing still being dropped
+      // on the floor: `news_sessions` existed and was read on load, but nothing
+      // wrote to it. The counters come from the progress the server merged, so
+      // the dashboard's totals agree with the HUD the learner watched.
+      const s = action.session;
+      const produced = Object.values(s.progress.targets).filter((v) => v === "produced").length;
+      await db.from("news_sessions").upsert(
+        {
+          id: s.id,
+          user_id: userId,
+          day: s.day,
+          level: s.level,
+          title: s.mission.title,
+          source: s.mission.source,
+          url: s.mission.url ?? null,
+          goal: s.mission.goal,
+          status: s.status,
+          words_produced: s.progress.wordsProduced,
+          targets_produced: produced,
+          targets_total: s.mission.targets.length,
+          goal_hit: s.goalHit ?? null,
+          mission: s.mission,
+          messages: s.messages,
+          progress: s.progress,
+        },
+        { onConflict: "id" },
+      );
+      await prune(db, userId, "news_sessions", MAX_NEWS_SESSIONS);
+      break;
+    }
+
+    case "removeNewsSession":
+      await db.from("news_sessions").delete().eq("user_id", userId).eq("id", action.id);
+      break;
+
+    case "recordProductions": {
+      // The ledger is append-only and deliberately cheap to write: every
+      // surface calls it the moment a sentence is judged, so nothing has to
+      // remember to flush at the end of a session that might be abandoned.
+      const day = todayKey();
+      const rows = action.productions
+        .filter((p) => p.text.trim())
+        .slice(0, MAX_PRODUCTION_WRITE)
+        .map((p) => ({
+          user_id: userId,
+          day,
+          surface: p.surface,
+          item_slug: p.itemSlug ?? null,
+          mode: p.mode ?? null,
+          prompt: p.prompt.slice(0, 1000),
+          text: p.text.trim().slice(0, 2000),
+          verdict: p.verdict,
+          note: p.note?.slice(0, 400) ?? null,
+        }));
+      if (rows.length > 0) await db.from("productions").insert(rows);
+      break;
+    }
+
     case "reset": {
       // Everything except the account itself. Profile columns go back to their
       // defaults rather than the row being deleted, since auth.users owns it.
@@ -460,6 +609,12 @@ export async function applyAction(db: Db, userId: string, action: StateAction): 
         db.from("news_sessions").delete().eq("user_id", userId),
         db.from("respond_sessions").delete().eq("user_id", userId),
         db.from("transcribe_sessions").delete().eq("user_id", userId),
+        db.from("productions").delete().eq("user_id", userId),
+        // The generated curriculum and its material go too: "start over" has to
+        // mean a fresh set of words, not the same queue with the progress wiped.
+        db.from("word_items").delete().eq("user_id", userId),
+        db.from("listening_clips").delete().eq("user_id", userId),
+        db.from("ai_content").delete().eq("user_id", userId),
       ]);
       await db
         .from("profiles")
@@ -554,7 +709,7 @@ async function bumpApplied(db: Db, userId: string, day: DayKey, n: number): Prom
 async function prune(
   db: Db,
   userId: string,
-  table: "phrases" | "respond_sessions" | "transcribe_sessions",
+  table: "phrases" | "respond_sessions" | "transcribe_sessions" | "news_sessions",
   keep: number,
 ): Promise<void> {
   const { data } = await db

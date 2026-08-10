@@ -18,6 +18,7 @@ import type {
   LexKind,
   WordRound,
   WordSeed,
+  TranscribeClip,
   TranscribeCue,
   SlipPattern,
   MilestoneQuiz,
@@ -46,22 +47,34 @@ function toApiMessages(messages: ChatMessage[]) {
   }));
 }
 
-// --- Daily words: one call builds every "use it" round for today's set -------
+// --- Daily words: one call resolves the whole session ------------------------
 
-/** The real-life moments today's words are needed in. Callers fall back to the
- *  local packs in `lib/shared/words.ts`, so a session never blocks on this. */
-export async function fetchWordRounds(
-  level: NewsLevel,
-  words: Pick<WordSeed, "id" | "word" | "pos" | "meaning" | "collocations">[],
-): Promise<WordRound[]> {
-  const res = await fetch("/api/words/daily", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, words }),
-  });
+export interface WordSession {
+  /** The items this session runs, reviews and new words together. */
+  words: WordSeed[];
+  /** One round pack per word — the moment, the examples, the drill material. */
+  rounds: WordRound[];
+  /** The full set today issued, so the client can fix it against reshuffling. */
+  todaysNew: WordSeed[];
+}
+
+/**
+ * Today's session: which words, and the material for each.
+ *
+ * This used to send the client's own curriculum up and ask only for the
+ * tailored halves. The curriculum is generated per learner and lives in
+ * Postgres now, so the server decides the whole day — and there is no local
+ * fallback behind a failure here, by design.
+ */
+export async function fetchWordSession(): Promise<WordSession> {
+  const res = await fetch("/api/words/daily", { method: "POST" });
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
-  return Array.isArray(data.rounds) ? (data.rounds as WordRound[]) : [];
+  return {
+    words: Array.isArray(data.words) ? (data.words as WordSeed[]) : [],
+    rounds: Array.isArray(data.rounds) ? (data.rounds as WordRound[]) : [],
+    todaysNew: Array.isArray(data.todaysNew) ? (data.todaysNew as WordSeed[]) : [],
+  };
 }
 
 // --- Respond: bring a source, think against it, produce your own ------------
@@ -81,17 +94,16 @@ export async function loadSource(input: {
   return res.json() as Promise<{ source: SourceRef; text: string }>;
 }
 
-/** The four-rung thinking ladder, grounded in this source. Callers fall back
- *  to `localQuestions()` so the ladder always runs. */
+/** The four-rung thinking ladder, grounded in this source. All four rungs or
+ *  none — a ladder missing a rung is a different, easier exercise. */
 export async function thinkLadder(
-  level: NewsLevel,
   source: SourceRef,
   text: string,
 ): Promise<ThinkQuestion[]> {
   const res = await fetch("/api/respond/questions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, source, text }),
+    body: JSON.stringify({ source, text }),
   });
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
@@ -99,15 +111,11 @@ export async function thinkLadder(
 }
 
 /** "Push me": one harder question about the answer they just gave. */
-export async function sharpenThinking(
-  level: NewsLevel,
-  question: string,
-  answer: string,
-): Promise<string> {
+export async function sharpenThinking(question: string, answer: string): Promise<string> {
   const res = await fetch("/api/respond/sharpen", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, question, answer }),
+    body: JSON.stringify({ question, answer }),
   });
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
@@ -116,7 +124,6 @@ export async function sharpenThinking(
 
 /** Are these angles theirs, or the source restated? */
 export async function judgeContentIdeas(
-  level: NewsLevel,
   source: SourceRef,
   text: string,
   ideas: { id: string; hook: string; bullets: string[] }[],
@@ -124,7 +131,7 @@ export async function judgeContentIdeas(
   const res = await fetch("/api/respond/ideas", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, source, text, ideas }),
+    body: JSON.stringify({ source, text, ideas }),
   });
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
@@ -133,7 +140,6 @@ export async function judgeContentIdeas(
 
 /** Encouragement-first feedback on the finished piece. */
 export async function polishPiece(
-  level: NewsLevel,
   source: SourceRef,
   hook: string,
   draft: string,
@@ -141,7 +147,7 @@ export async function polishPiece(
   const res = await fetch("/api/respond/polish", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, source, hook, draft }),
+    body: JSON.stringify({ source, hook, draft }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<Polish>;
@@ -149,9 +155,10 @@ export async function polishPiece(
 
 // --- News Chat v2: today's planned mission, then the beat-by-beat delivery ---
 
-/** Today's mission, planned once per (day, level) from real headlines. */
-export async function fetchMission(level: NewsLevel): Promise<Mission> {
-  const res = await fetch(`/api/news/mission?level=${encodeURIComponent(level)}`);
+/** Today's mission, planned once per account per day from real headlines and
+ *  the learner's own record. The level comes from their profile, not the URL. */
+export async function fetchMission(): Promise<Mission> {
+  const res = await fetch("/api/news/mission");
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
   return data.mission as Mission;
@@ -175,14 +182,13 @@ export async function missionConverse(
 /** "Say it your way": the learner's intent (any language) → keywords + a
  *  gapped frame — building material, never a translation. */
 export async function missionBridge(
-  level: NewsLevel,
   currentDemand: string,
   intent: string,
 ): Promise<BridgeHelp> {
   const res = await fetch("/api/converse/bridge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, currentDemand, intent }),
+    body: JSON.stringify({ currentDemand, intent }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<BridgeHelp>;
@@ -192,14 +198,13 @@ export async function missionBridge(
  *  2-4 alternative next-word chunks + one continuation frame with ___ gaps.
  *  Building material only; by contract never a completion of their sentence. */
 export async function missionContinue(
-  level: NewsLevel,
   currentDemand: string,
   draft: string,
 ): Promise<ContinueHelp> {
   const res = await fetch("/api/converse/continue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, currentDemand, draft }),
+    body: JSON.stringify({ currentDemand, draft }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<ContinueHelp>;
@@ -207,15 +212,11 @@ export async function missionContinue(
 
 /** "Ask · anything": a free translate / explain / rephrase aide, with an
  *  optional insertable English phrase. */
-export async function missionAsk(
-  level: NewsLevel,
-  context: string,
-  question: string,
-): Promise<AskHelp> {
+export async function missionAsk(context: string, question: string): Promise<AskHelp> {
   const res = await fetch("/api/converse/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, context, question }),
+    body: JSON.stringify({ context, question }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<AskHelp>;
@@ -226,14 +227,13 @@ export async function missionAsk(
 /** Enrich a highlighted snippet into a phrasebook entry (reusable form,
  *  meaning, transfer example). Callers fail soft to saving the raw text. */
 export async function enrichPhrase(
-  level: NewsLevel,
   text: string,
   context: string,
 ): Promise<CaptureEnrichment> {
   const res = await fetch("/api/phrasebook/enrich", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, text, context }),
+    body: JSON.stringify({ text, context }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<CaptureEnrichment>;
@@ -243,13 +243,12 @@ export async function enrichPhrase(
  *  rotate (situation / reply / rephrase / personal); each round carries
  *  worked examples to learn from. */
 export async function drillPhrases(
-  level: NewsLevel,
   items: { id: string; text: string; meaning: string; example?: string; kind?: LexKind }[],
 ): Promise<DrillRoundSetup[]> {
   const res = await fetch("/api/phrasebook/drill", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, items }),
+    body: JSON.stringify({ items }),
   });
   if (!res.ok) throw await httpError(res);
   const data = await res.json();
@@ -258,7 +257,6 @@ export async function drillPhrases(
 
 /** Honest judgment of one drill answer: applied, or not yet. */
 export async function judgePhrase(
-  level: NewsLevel,
   phrase: { text: string; meaning: string },
   situation: string,
   sentence: string,
@@ -266,7 +264,7 @@ export async function judgePhrase(
   const res = await fetch("/api/phrasebook/judge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, phrase, situation, sentence }),
+    body: JSON.stringify({ phrase, situation, sentence }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<DrillJudgment>;
@@ -292,7 +290,6 @@ export async function fetchClipCues(
  *  in `lib/shared/transcribe.ts` and passed in — this only explains it, so a
  *  failure costs the explanation and never the score. */
 export async function explainDictation(
-  level: NewsLevel,
   reference: string,
   attempt: string,
   missed: string[],
@@ -300,22 +297,19 @@ export async function explainDictation(
   const res = await fetch("/api/transcribe/explain", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, reference, attempt, missed }),
+    body: JSON.stringify({ reference, attempt, missed }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<{ patterns: SlipPattern[]; keep: string[] }>;
 }
 
-/** The two questions and two phrases that close a passage. Callers fall back
- *  to `localMilestone()` so a passage never blocks on a provider. */
-export async function fetchMilestone(
-  level: NewsLevel,
-  passage: string,
-): Promise<MilestoneQuiz> {
+/** The two questions and two phrases that close a passage, remembered per
+ *  passage so re-opening a milestone never moves the goalposts. */
+export async function fetchMilestone(passage: string): Promise<MilestoneQuiz> {
   const res = await fetch("/api/transcribe/milestone", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, passage }),
+    body: JSON.stringify({ passage }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<MilestoneQuiz>;
@@ -324,7 +318,6 @@ export async function fetchMilestone(
 /** Judge a milestone attempt. Deterministic phrase detection is the floor the
  *  model may tighten but never loosen. */
 export async function judgeMilestoneAttempt(
-  level: NewsLevel,
   quiz: MilestoneQuiz,
   answers: string[],
   sentence: string,
@@ -332,7 +325,7 @@ export async function judgeMilestoneAttempt(
   const res = await fetch("/api/transcribe/judge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level, quiz, answers, sentence }),
+    body: JSON.stringify({ quiz, answers, sentence }),
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<MilestoneVerdict>;
@@ -351,4 +344,23 @@ export async function missionDebrief(
   });
   if (!res.ok) throw await httpError(res);
   return res.json() as Promise<Debrief>;
+}
+
+// --- The listening library: passages written for this learner ---------------
+
+/** Their stored passages, topped up by one if the library is short. */
+export async function fetchClips(): Promise<TranscribeClip[]> {
+  const res = await fetch("/api/transcribe/clips");
+  if (!res.ok) throw await httpError(res);
+  const data = await res.json();
+  return Array.isArray(data.clips) ? (data.clips as TranscribeClip[]) : [];
+}
+
+/** "Write me another one" — always generates, never waits for the library to
+ *  run down. Returns the whole library with the new passage first. */
+export async function writeAnotherClip(): Promise<TranscribeClip[]> {
+  const res = await fetch("/api/transcribe/clips", { method: "POST" });
+  if (!res.ok) throw await httpError(res);
+  const data = await res.json();
+  return Array.isArray(data.clips) ? (data.clips as TranscribeClip[]) : [];
 }

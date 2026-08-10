@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { applyAction, loadState, type StateAction } from "@/lib/server/db/state";
+import {
+  STATE_ACTIONS,
+  applyAction,
+  loadState,
+  type StateAction,
+} from "@/lib/server/db/state";
 import { supabaseServer, getUserId } from "@/lib/server/supabase";
 
 export const dynamic = "force-dynamic";
@@ -14,21 +19,8 @@ export const dynamic = "force-dynamic";
  * have to remember to write.
  */
 
-const ACTIONS = new Set([
-  "updateSettings",
-  "setLevel",
-  "issueWordDay",
-  "finishWordSession",
-  "reviewPhrases",
-  "collectPhrase",
-  "removePhrase",
-  "keepMisheard",
-  "saveRespondSession",
-  "removeRespondSession",
-  "saveTranscribeSession",
-  "removeTranscribeSession",
-  "reset",
-]);
+/** The allow-list, derived from the action union so the two cannot drift. */
+const ACTIONS = new Set<string>(STATE_ACTIONS);
 
 export async function GET() {
   const userId = await getUserId();

@@ -8,11 +8,14 @@ import type {
   ChunkResult,
   ContentIdea,
   Polish,
+  Production,
   RespondSession,
   SourceRef,
   ThinkTurn,
   TranscribeClip,
+  TranscribeCue,
   TranscribeSession,
+  WordPos,
 } from "@/types";
 
 /**
@@ -33,6 +36,9 @@ export type PhraseSource = "news" | "coach" | "captured" | "daily" | "transcribe
 /** Matches the DB enums added in migration 0006. */
 export type RespondStatus = RespondSession["status"];
 export type TranscribeStatus = TranscribeSession["status"];
+/** Matches the DB enums added in migration 0007. */
+export type ProductionSurface = Production["surface"];
+export type ProductionVerdict = Production["verdict"];
 
 /** `YYYY-MM-DD`, the learner's local calendar day (Postgres `date`). */
 type DateStr = string;
@@ -390,6 +396,168 @@ export interface Database {
         };
         Relationships: [];
       };
+      word_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          slug: string;
+          word: string;
+          pos: WordPos;
+          band: NewsLevel;
+          meaning: string;
+          example: string;
+          collocations: string[];
+          field: string;
+          rank: number;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          slug: string;
+          word: string;
+          pos: WordPos;
+          band: NewsLevel;
+          meaning?: string;
+          example?: string;
+          collocations?: string[];
+          field?: string;
+          rank?: number;
+          created_at?: Timestamp;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          slug?: string;
+          word?: string;
+          pos?: WordPos;
+          band?: NewsLevel;
+          meaning?: string;
+          example?: string;
+          collocations?: string[];
+          field?: string;
+          rank?: number;
+          created_at?: Timestamp;
+        };
+        Relationships: [];
+      };
+      listening_clips: {
+        Row: {
+          id: string;
+          user_id: string;
+          slug: string;
+          title: string;
+          source: string;
+          level: NewsLevel;
+          blurb: string;
+          wpm: number;
+          prose: string;
+          cues: TranscribeCue[];
+          duration: number;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          slug: string;
+          title: string;
+          source?: string;
+          level: NewsLevel;
+          blurb?: string;
+          wpm?: number;
+          prose: string;
+          cues?: TranscribeCue[];
+          duration?: number;
+          created_at?: Timestamp;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          slug?: string;
+          title?: string;
+          source?: string;
+          level?: NewsLevel;
+          blurb?: string;
+          wpm?: number;
+          prose?: string;
+          cues?: TranscribeCue[];
+          duration?: number;
+          created_at?: Timestamp;
+        };
+        Relationships: [];
+      };
+      ai_content: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          content_key: string;
+          payload: unknown;
+          prompt_version: string;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: string;
+          content_key: string;
+          payload: unknown;
+          prompt_version?: string;
+          created_at?: Timestamp;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          kind?: string;
+          content_key?: string;
+          payload?: unknown;
+          prompt_version?: string;
+          created_at?: Timestamp;
+        };
+        Relationships: [];
+      };
+      productions: {
+        Row: {
+          id: string;
+          user_id: string;
+          day: DateStr;
+          surface: ProductionSurface;
+          item_slug: string | null;
+          mode: string | null;
+          prompt: string;
+          text: string;
+          verdict: ProductionVerdict;
+          note: string | null;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          day: DateStr;
+          surface: ProductionSurface;
+          item_slug?: string | null;
+          mode?: string | null;
+          prompt?: string;
+          text: string;
+          verdict?: ProductionVerdict;
+          note?: string | null;
+          created_at?: Timestamp;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          day?: DateStr;
+          surface?: ProductionSurface;
+          item_slug?: string | null;
+          mode?: string | null;
+          prompt?: string;
+          text?: string;
+          verdict?: ProductionVerdict;
+          note?: string | null;
+          created_at?: Timestamp;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -400,6 +568,9 @@ export interface Database {
       phrase_source: PhraseSource;
       respond_status: RespondStatus;
       transcribe_status: TranscribeStatus;
+      production_surface: ProductionSurface;
+      production_verdict: ProductionVerdict;
+      word_pos: WordPos;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -414,3 +585,7 @@ export type WordDayRow = Database["public"]["Tables"]["word_days"]["Row"];
 export type PhraseAppliedRow = Database["public"]["Tables"]["phrase_applied"]["Row"];
 export type RespondSessionRow = Database["public"]["Tables"]["respond_sessions"]["Row"];
 export type TranscribeSessionRow = Database["public"]["Tables"]["transcribe_sessions"]["Row"];
+export type WordItemRow = Database["public"]["Tables"]["word_items"]["Row"];
+export type ListeningClipRow = Database["public"]["Tables"]["listening_clips"]["Row"];
+export type AiContentRow = Database["public"]["Tables"]["ai_content"]["Row"];
+export type ProductionRow = Database["public"]["Tables"]["productions"]["Row"];

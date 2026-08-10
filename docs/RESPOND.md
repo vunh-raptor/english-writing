@@ -130,9 +130,20 @@ learner pastes instead — which always works and needs no network at all.
 
 - **Nothing completes the learner's turn.** No summary, no suggested angle, no
   insertable text. The outline on the draft screen is `select-none` reference.
-- **Fail-soft everywhere.** No AI key → the generic ladder, the local sharpen,
-  the deterministic borrowing verdict, and a warm local polish. The only thing
-  that genuinely needs the network is link-fetching, and pasting replaces it.
+- **The questions are about *this* piece, or there are no questions.** The
+  generic four-rung ladder that used to stand in could be asked about anything
+  ever written, which turns the mode into a blank page with headings. Same for
+  the canned sharpen ("what makes you say that?") and the canned polish, which
+  praised a word count it had computed rather than the writing it never read.
+  All three now fail visibly, with the learner's work saved and a retry
+  offered.
+- **The borrowing check is still local, and still the floor.** `judgeIdeas`
+  needs no provider: the deterministic check decides, and the model may only
+  tighten it. That is judging, not content, which is why it survives.
+- **Every answer is kept.** Thinking answers, sharpen answers and the finished
+  draft go to `productions` as `unjudged` — honest, because nobody scores them,
+  and they are the best evidence of how this learner writes when nothing is
+  being marked.
 - **Untrusted text is data.** The source is third-party content and the drafts
   are the learner's; both are passed as clearly-delimited content, never as
   instructions.

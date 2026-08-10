@@ -1,39 +1,34 @@
 import { NextResponse } from "next/server";
 import { continueHelp } from "@/lib/server/mission";
 import { aiConfigured } from "@/lib/server/ai";
-import type { NewsLevel } from "@/types";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
-
+/** "Next words": a stalled draft → next-word options + a continuation frame. */
 export async function POST(req: Request) {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured on the server." }, { status: 503 });
-  }
-  let body: { level?: string; currentDemand?: string; draft?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
+
+  const body = await readJson<{ currentDemand?: string; draft?: string }>(req);
+  if (!body) return badRequest("Invalid JSON.");
+
   const draft = typeof body.draft === "string" ? body.draft.trim().slice(0, 600) : "";
-  if (!draft) {
-    return NextResponse.json({ error: "Missing draft." }, { status: 400 });
-  }
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
+  if (!draft) return badRequest("Missing draft.");
   const currentDemand =
-    typeof body.currentDemand === "string" ? body.currentDemand.slice(0, 500) : "";
+    typeof body.currentDemand === "string" ? body.currentDemand.slice(0, 400) : "";
+
   try {
-    const help = await continueHelp(level, currentDemand, draft);
-    return NextResponse.json(help);
+    return NextResponse.json(await continueHelp(ctx.snapshot, currentDemand, draft));
   } catch (e) {
-    // The client falls back to the beat's pre-planned ladder — help never blocks.
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Next-word help unavailable." },
-      { status: 502 },
-    );
+    return upstreamFailed(e, "Next-word help unavailable.");
   }
 }

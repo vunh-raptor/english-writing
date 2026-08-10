@@ -18,6 +18,11 @@ import { expect, test } from "@playwright/test";
  * `playwright.config.ts` still runs a production build with NO env, so what is
  * exercised below is the unconfigured path: the app has to fail honestly rather
  * than pretend, and it must never silently fall back to writing on the device.
+ *
+ * Removing the bundled curriculum widened that gap rather than changing its
+ * shape: there is no longer any journey a keyless build could complete, so
+ * every learner-facing assertion needs both a Supabase project and a provider
+ * key. The gate below is what remains true without either.
  */
 
 test("the app is live and reports its configuration honestly", async ({ request }) => {

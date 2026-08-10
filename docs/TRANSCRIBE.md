@@ -71,12 +71,14 @@ Cue timings are *derived* from the prose at a stated speaking rate rather than
 hand-written, because hand-timing a thousand words invites drift between the
 text and the clock, and the clock is what the chunk cut trusts.
 
-A curated clip with no `videoId` is read aloud by the browser's own speech
-synthesis, and the pane says so. This is honestly a compromise — a synthesized
-voice has none of the elision and connected speech that make real narration
-worth transcribing — but it is what keeps the mode running with no provider
-key at all: the transcript is bundled, so the score never depends on a model. Filling in a `videoId`
-switches a clip to the real YouTube player and is a one-field change.
+A generated clip has no `videoId`, so it is read aloud by the browser's own
+speech synthesis, and the pane says so. This is honestly a compromise — a
+synthesized voice has none of the elision and connected speech that make real
+narration worth transcribing — but it is what makes an endless library
+possible: the passage is written for this learner at their band, and it comes
+with its own transcript, so the score never depends on a model even though the
+material did. A learner who wants real speech pastes a link, which is the other
+half of the mode and is unchanged.
 
 **Pasted links** use the real video and its real captions. `fetchTranscript()`
 in `lib/server/transcribe.ts` parses out an eleven-character video id and builds
@@ -154,8 +156,13 @@ retrieval cue than any sentence we could generate.
 - **Never a blank page** — the audio is the material.
 - **Nothing completes the learner's turn** — scaffolds cost a miss and never
   reveal the line; the milestone asks for *their* sentence.
-- **AI degrades** — curated clips run with no provider key at all; the score,
-  the diff and the offline milestone are all deterministic. (Progress itself is
+- **The deterministic half stays deterministic** — the score, the diff and the
+  missed-word list are computed on-device from the stored transcript, so they
+  never depend on a model. What needs a provider is the *material*: the passage
+  itself and the milestone that closes it. The canned two-question milestone
+  that used to stand in ("what was this passage about?") could be asked of any
+  passage ever written, which is precisely what the gate exists to rule out, so
+  it is gone and a failure offers a retry. (Progress itself is
   server-owned — the app is account-only.)
 - **Never red** — every correction is ochre, and every control is Oxford.
 
@@ -164,7 +171,8 @@ retrieval cue than any sentence we could generate.
 | Concern | File |
 | --- | --- |
 | Scoring, diff, chunking, passages, scaffolds | `src/lib/shared/transcribe.ts` |
-| The bundled clip curriculum | `src/lib/shared/clips.ts` |
+| Prose → timed cues | `src/lib/shared/clips.ts` |
+| Generating passages | `src/lib/server/listening.ts`, `src/lib/server/prompts/listening.ts` |
 | Captions + the three AI jobs | `src/lib/server/transcribe.ts` |
 | Routes | `src/app/api/transcribe/{chunks,explain,milestone,judge}/route.ts` |
 | Entry + debrief | `src/components/Transcribe.tsx` |

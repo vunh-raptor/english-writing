@@ -1,39 +1,34 @@
 import { NextResponse } from "next/server";
 import { bridge } from "@/lib/server/mission";
 import { aiConfigured } from "@/lib/server/ai";
-import type { NewsLevel } from "@/types";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
-
+/** "Say it your way": their intent → keywords + a gapped frame. */
 export async function POST(req: Request) {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured on the server." }, { status: 503 });
-  }
-  let body: { level?: string; currentDemand?: string; intent?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  const intent = typeof body.intent === "string" ? body.intent.trim().slice(0, 500) : "";
-  if (!intent) {
-    return NextResponse.json({ error: "Missing intent." }, { status: 400 });
-  }
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
+
+  const body = await readJson<{ currentDemand?: string; intent?: string }>(req);
+  if (!body) return badRequest("Invalid JSON.");
+
+  const intent = typeof body.intent === "string" ? body.intent.trim().slice(0, 600) : "";
+  if (!intent) return badRequest("Missing intent.");
   const currentDemand =
-    typeof body.currentDemand === "string" ? body.currentDemand.slice(0, 500) : "";
+    typeof body.currentDemand === "string" ? body.currentDemand.slice(0, 400) : "";
+
   try {
-    const help = await bridge(level, currentDemand, intent);
-    return NextResponse.json(help);
+    return NextResponse.json(await bridge(ctx.snapshot, currentDemand, intent));
   } catch (e) {
-    // The client falls back to the beat's pre-planned ladder — help never blocks.
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Bridge help unavailable." },
-      { status: 502 },
-    );
+    return upstreamFailed(e, "Bridge help unavailable.");
   }
 }

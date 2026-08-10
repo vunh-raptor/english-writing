@@ -6,13 +6,13 @@ import { ArrowRight, Link2, Send, Sparkles } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
 import type {
   ContentIdea,
-  NewsLevel,
   Polish,
   RespondSession,
   SourceRef,
   ThinkQuestion,
   ThinkTurn,
 } from "@/types";
+import type { ProductionInput } from "@/lib/server/db/state";
 import {
   enrichPhrase,
   judgeContentIdeas,
@@ -28,10 +28,10 @@ import {
   THINK_RUNGS,
   checkBorrowing,
   ideaText,
-  localQuestions,
 } from "@/lib/shared/respond";
 import { countWords } from "@/lib/shared/stats";
 import { prettyDay, todayKey } from "@/lib/shared/date";
+import { newId } from "@/lib/shared/id";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/page-container";
@@ -64,12 +64,8 @@ const IDEA_SLOTS = 3;
 type View = "home" | "think" | "ideas" | "draft" | "done";
 type InputMode = "paste" | "link";
 
-function makeId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
 function emptyIdea(): ContentIdea {
-  return { id: makeId(), hook: "", bullets: ["", "", ""] };
+  return { id: newId(), hook: "", bullets: ["", "", ""] };
 }
 
 /** The source, readable and highlightable — the same capture affordance the
@@ -141,11 +137,18 @@ function SourcePane({
 }
 
 export function Respond() {
-  const { store, saveRespondSession, removeRespondSession, collectPhrase } = useStore();
-  const level: NewsLevel = store.newsLevel;
+  const {
+    store,
+    saveRespondSession,
+    removeRespondSession,
+    collectPhrase,
+    recordProductions,
+  } = useStore();
 
   const [view, setView] = useState<View>("home");
   const [busy, setBusy] = useState(false);
+  /** Set when the polish call failed — the draft is already saved either way. */
+  const [draftError, setDraftError] = useState("");
   const [error, setError] = useState("");
 
   // Source intake.
@@ -210,7 +213,7 @@ export function Respond() {
       const id = `rs-${snippet.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 48)}`;
       const captured = { module: "Respond", context, day };
       try {
-        const e = await enrichPhrase(level, snippet, context);
+        const e = await enrichPhrase(snippet, context);
         collectPhrase({
           id,
           text: e.text,
@@ -227,7 +230,7 @@ export function Respond() {
         collectPhrase({ id, text: snippet, meaning: "", example: snippet, captured });
       }
     },
-    [level, collectPhrase],
+    [collectPhrase],
   );
 
   // ---- start ----------------------------------------------------------------
@@ -238,18 +241,13 @@ export function Respond() {
     setError("");
     try {
       const loaded = await loadSource(mode === "link" ? { url } : { text: paste });
-      const id = makeId();
+      const id = newId();
       createdAt.current = Date.now();
 
-      // The ladder is the point, so a failed questions call degrades to the
-      // generic rungs rather than blocking the session.
-      let questions: ThinkQuestion[];
-      try {
-        questions = await thinkLadder(level, loaded.source, loaded.text);
-      } catch {
-        questions = [];
-      }
-      if (questions.length === 0) questions = localQuestions();
+      // The ladder is the point, and a generic ladder is a ladder about
+      // nothing — so a failure here surfaces rather than quietly downgrading
+      // the session into a blank page with headings.
+      const questions: ThinkQuestion[] = await thinkLadder(loaded.source, loaded.text);
 
       setSessionId(id);
       setSource(loaded.source);
@@ -296,7 +294,7 @@ export function Respond() {
     if (!turn || busy || !answer.trim()) return;
     setBusy(true);
     try {
-      setFollowUp(await sharpenThinking(level, turn.question, answer));
+      setFollowUp(await sharpenThinking(turn.question, answer));
     } catch {
       setFollowUp("What makes you say that — what happened that taught you it?");
     } finally {
@@ -317,6 +315,33 @@ export function Respond() {
         : t,
     );
     setTurns(next);
+
+    // Thinking answers are production without a pass mark — nobody judges
+    // them, and pretending otherwise would poison the record. `unjudged` says
+    // exactly that, and they are still the best evidence of how this learner
+    // writes when nothing is being scored.
+    const turn = turns[turnIdx];
+    const written: ProductionInput[] = [];
+    if (turn && answer.trim()) {
+      written.push({
+        surface: "respond",
+        mode: turn.rung,
+        prompt: turn.question,
+        text: answer.trim(),
+        verdict: "unjudged",
+      });
+    }
+    if (followUp && followAnswer.trim()) {
+      written.push({
+        surface: "respond",
+        mode: "sharpen",
+        prompt: followUp,
+        text: followAnswer.trim(),
+        verdict: "unjudged",
+      });
+    }
+    recordProductions(written);
+
     setAnswer("");
     setFollowUp("");
     setFollowAnswer("");
@@ -343,7 +368,6 @@ export function Respond() {
     setBusy(true);
     try {
       const verdicts = await judgeContentIdeas(
-        level,
         source!,
         text,
         filled.map((i) => ({ id: i.id, hook: i.hook, bullets: i.bullets.filter(Boolean) })),
@@ -389,14 +413,27 @@ export function Respond() {
   async function finishDraft() {
     if (busy || countWords(draft) < DRAFT_MIN_WORDS) return;
     setBusy(true);
+    setDraftError("");
     const chosen = ideas.find((i) => i.id === chosenId);
     try {
-      const p = await polishPiece(level, source!, chosen?.hook ?? "", draft);
+      const p = await polishPiece(source!, chosen?.hook ?? "", draft);
       setPolish(p);
       const next = ideas.map((i) => (i.id === chosenId ? { ...i, drafted: true } : i));
       setIdeas(next);
       persist({ ideas: next, draft, polish: p, status: "done" });
+      recordProductions([
+        {
+          surface: "respond",
+          mode: "draft",
+          prompt: `${source?.title ?? "A source"} — their angle: ${chosen?.hook ?? "(none)"}`,
+          text: draft,
+          verdict: "unjudged",
+          note: p.celebration,
+        },
+      ]);
       setView("done");
+    } catch {
+      setDraftError("That didn't come back. Your draft is saved — try again in a moment.");
     } finally {
       setBusy(false);
     }
@@ -741,6 +778,8 @@ export function Respond() {
             {words}/{DRAFT_TARGET_WORDS}
           </span>
         </div>
+
+        {draftError && <p className="note note-warning mt-4">{draftError}</p>}
 
         <div className="mt-4 flex items-center justify-end">
           <Button

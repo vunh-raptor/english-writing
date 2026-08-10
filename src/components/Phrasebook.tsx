@@ -377,7 +377,7 @@ function PhraseRow({
 }
 
 export function Phrasebook() {
-  const { store, reviewPhrases, removePhrase } = useStore();
+  const { store, reviewPhrases, removePhrase, recordProductions } = useStore();
   const pool = store.minedPhrases;
   const srs = store.phraseSrs;
   const level = store.newsLevel;
@@ -455,7 +455,6 @@ export function Phrasebook() {
       // the item's own stored material — instant and offline-safe.
       try {
         const fetched = await drillPhrases(
-          level,
           items.map((p) => ({
             id: p.id,
             text: p.text,
@@ -577,7 +576,6 @@ export function Phrasebook() {
     let j: DrillJudgment;
     try {
       j = await judgePhrase(
-        level,
         { text: round.phrase.text, meaning: round.phrase.meaning },
         `${round.setup}\n${round.task}`.trim(),
         sentence,
@@ -608,6 +606,22 @@ export function Phrasebook() {
       else if (!j.used) reviewPhrases([round.phrase.id], false);
     }
     if (clean || (sessionMode === "study" && j.used)) setProducedCount((n) => n + 1);
+
+    // Keep the sentence, not only its consequence. The mode goes in as well:
+    // "applied it in a situation" and "applied it under sprint pressure" are
+    // different evidence about the same phrase.
+    recordProductions([
+      {
+        surface: "phrasebook",
+        itemSlug: round.phrase.id,
+        mode: sessionMode === "mixed" ? round.method : sessionMode,
+        prompt: `${round.setup}\n${round.task}`.trim(),
+        text: sentence,
+        verdict: clean ? "clean" : j.used ? "helped" : "missed",
+        ...(j.note ? { note: j.note } : {}),
+      },
+    ]);
+
     setResults((rs) => [
       ...rs,
       { outcome: clean ? "clean" : j.used ? "peek" : "miss", sentence, prevBox },

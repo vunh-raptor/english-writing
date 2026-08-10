@@ -130,6 +130,7 @@ function todayProgress(done: number, total: number): TodayProgress {
 function navBadges(store: Store): Record<BadgeKind, number> {
   return {
     words: buildDaySet({
+      catalog: store.wordCatalog,
       wordDays: store.wordDays,
       pool: store.minedPhrases,
       srs: store.phraseSrs,
@@ -309,6 +310,7 @@ export function AppSidebar() {
   const info = streakInfo(profile, today);
   const badges = navBadges(store);
   const day = buildDaySet({
+    catalog: store.wordCatalog,
     wordDays: store.wordDays,
     pool: minedPhrases,
     srs: phraseSrs,
