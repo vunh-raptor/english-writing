@@ -21,7 +21,12 @@ import type {
   Store,
   TranscribeSession,
 } from "@/types";
-import type { StateAction } from "@/lib/server/db/state";
+import type {
+  NewsSessionInput,
+  ProductionInput,
+  StateAction,
+} from "@/lib/server/db/state";
+import { todayKey } from "@/lib/shared/date";
 
 /**
  * The learner's durable state, held in Postgres and reached over `/api/state`.
@@ -56,7 +61,8 @@ interface MissionOutcome {
   level: NewsLevel;
 }
 
-interface NewsSessionInput {
+/** What a News Chat conversation hands the store, before the day is stamped on. */
+interface ConversationInput {
   id: string;
   mission: Mission;
   messages: ChatMessage[];
@@ -77,7 +83,9 @@ interface StoreContextValue {
   finishWordSession(input: WordSessionInput): void;
   reviewPhrases(ids: string[], success: boolean): void;
   saveMissionOutcome(outcome: MissionOutcome): void;
-  saveNewsSession(input: NewsSessionInput): void;
+  saveNewsSession(input: ConversationInput): void;
+  removeNewsSession(id: string): void;
+  recordProductions(productions: ProductionInput[]): void;
   saveRespondSession(session: RespondSession): void;
   removeRespondSession(id: string): void;
   saveTranscribeSession(session: TranscribeSession): void;
@@ -106,6 +114,8 @@ function emptyStore(): Store {
     phraseSrs: {},
     phraseApplied: {},
     minedPhrases: [],
+    wordCatalog: [],
+    productions: [],
     wordDays: {},
     myLines: {},
     newsSessions: [],
@@ -263,13 +273,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * News Chat conversations are not yet server-backed — `news_sessions` exists
-   * in the schema but the conversation writer still needs porting, so this is
-   * a no-op rather than a silent local write. Tracked in docs/ARCHITECTURE.md.
+   * A News Chat conversation, saved as it goes.
+   *
+   * `news_sessions` has existed since migration 0002 and was read on load, but
+   * nothing ever wrote to it: the conversation was the one durable thing the
+   * app still dropped on the floor. It is written now, so a mission survives a
+   * closed tab and the /news dashboard reflects real history.
    */
-  const saveNewsSession = useCallback((_input: NewsSessionInput) => {
-    void _input;
-  }, []);
+  const saveNewsSession = useCallback(
+    (input: ConversationInput) => {
+      const session: NewsSessionInput = {
+        ...input,
+        day: input.mission.day || todayKey(),
+        level: input.mission.level,
+      };
+      dispatch({ type: "saveNewsSession", session });
+    },
+    [dispatch],
+  );
+
+  const removeNewsSession = useCallback(
+    (id: string) => dispatch({ type: "removeNewsSession", id }),
+    [dispatch],
+  );
+
+  /**
+   * Record what they actually wrote.
+   *
+   * Every surface calls this the moment a sentence is judged rather than at the
+   * end of a session, because a session that is abandoned halfway still
+   * contained real production and the learner should keep it. Cheap by design:
+   * an append, and the store comes back fresh like every other write.
+   */
+  const recordProductions = useCallback(
+    (productions: ProductionInput[]) => {
+      const real = productions.filter((p) => p.text.trim());
+      if (real.length === 0) return;
+      dispatch({ type: "recordProductions", productions: real });
+    },
+    [dispatch],
+  );
 
   const reset = useCallback(() => dispatch({ type: "reset" }), [dispatch]);
 
@@ -285,6 +328,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
+      removeNewsSession,
+      recordProductions,
       saveRespondSession,
       removeRespondSession,
       saveTranscribeSession,
@@ -305,6 +350,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       reviewPhrases,
       saveMissionOutcome,
       saveNewsSession,
+      removeNewsSession,
+      recordProductions,
       saveRespondSession,
       removeRespondSession,
       saveTranscribeSession,

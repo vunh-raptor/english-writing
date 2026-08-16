@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { judgeIdeas } from "@/lib/server/respond";
-import type { NewsLevel, SourceRef } from "@/types";
+import { badRequest, readJson, requestContext, unauthorized } from "@/lib/server/request";
+import type { SourceRef } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
 const MAX_IDEAS = 5;
 
 /**
@@ -13,12 +13,15 @@ const MAX_IDEAS = 5;
  * a genuine verdict with no provider key at all.
  */
 export async function POST(req: Request) {
-  let body: { level?: string; source?: Partial<SourceRef>; text?: string; ideas?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
+
+  const body = await readJson<{
+    source?: Partial<SourceRef>;
+    text?: string;
+    ideas?: unknown;
+  }>(req);
+  if (!body) return badRequest("Invalid JSON.");
 
   const text = typeof body.text === "string" ? body.text.slice(0, 12_000) : "";
   const ideas = (Array.isArray(body.ideas) ? body.ideas : [])
@@ -39,18 +42,15 @@ export async function POST(req: Request) {
     .filter((i) => i.id && i.hook)
     .slice(0, MAX_IDEAS);
 
-  if (ideas.length === 0 || !text) {
-    return NextResponse.json({ error: "Missing ideas or source." }, { status: 400 });
-  }
+  if (ideas.length === 0 || !text) return badRequest("Missing ideas or source.");
 
   const source: SourceRef = {
     title: typeof body.source?.title === "string" ? body.source.title.slice(0, 160) : "Untitled",
     site: typeof body.source?.site === "string" ? body.source.site.slice(0, 60) : undefined,
     words: typeof body.source?.words === "number" ? body.source.words : 0,
   };
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
 
-  return NextResponse.json({ verdicts: await judgeIdeas(level, source, text, ideas) });
+  return NextResponse.json({
+    verdicts: await judgeIdeas(ctx.snapshot, source, text, ideas),
+  });
 }

@@ -1,34 +1,42 @@
 import { NextResponse } from "next/server";
 import { missionDebrief, isMissionShaped, sanitizeMessages } from "@/lib/server/mission";
 import { aiConfigured } from "@/lib/server/ai";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
 import type { MissionProgress } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+/** Closing debrief: per-target results, ≤2 upgrades, phrases to keep. */
 export async function POST(req: Request) {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured on the server." }, { status: 503 });
-  }
-  let body: { mission?: unknown; progress?: Partial<MissionProgress>; messages?: unknown };
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
+
+  const body = await readJson<{
+    mission?: unknown;
+    progress?: Partial<MissionProgress>;
+    messages?: unknown;
+  }>(req);
+  if (!body) return badRequest("Invalid JSON.");
+  if (!isMissionShaped(body.mission)) return badRequest("Missing or malformed mission.");
+
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  if (!isMissionShaped(body.mission)) {
-    return NextResponse.json({ error: "Missing or malformed mission." }, { status: 400 });
-  }
-  try {
-    const debrief = await missionDebrief(
-      body.mission,
-      body.progress,
-      sanitizeMessages(body.messages),
-    );
-    return NextResponse.json(debrief);
-  } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "AI request failed." },
-      { status: 502 },
+      await missionDebrief(
+        ctx.snapshot,
+        body.mission,
+        body.progress,
+        sanitizeMessages(body.messages),
+      ),
     );
+  } catch (e) {
+    return upstreamFailed(e, "Debrief unavailable.");
   }
 }

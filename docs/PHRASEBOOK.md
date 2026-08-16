@@ -70,9 +70,10 @@ READ (News Chat, Ask margin)
 
 Practice now (≤6 items, the chosen mode)
   └─ mixed only: POST /api/phrasebook/drill  — ONE call: a full round pack per
-       phrase; the other modes run on the item's own stored material (instant,
-       offline-safe). Method rotates through a fixed arc (code-assigned, not
-       model-chosen):
+       phrase, remembered per (day, item set) so a reload returns the same
+       situations; the other modes run on the item's own stored material
+       (instant, no generation needed). Method rotates through a fixed arc
+       (code-assigned, not model-chosen):
          situation  an everyday moment to respond to
          reply      a 2-3 line mini-chat ending on a line spoken TO you
          rephrase   a flat "Plain version: …" sentence to say better
@@ -95,18 +96,27 @@ Practice now (≤6 items, the chosen mode)
 ```
 
 Method variety is planned, not random: sessions walk
-`situation → reply → rephrase → personal → …` (easiest ask first), the same
-arc offline — where `rephrase` is skipped, since its plain sentence needs the
-AI, and local packs cover the other three generically.
+`situation → reply → rephrase → personal → …` (easiest ask first), with
+single words leading on `collocation` instead, because words are learned in
+company.
 
 ## Guarantees (same stance as News Chat)
 
 - **Nothing completes the learner's turn.** Situations contain no ready-made
   answer; the phrase card is reference, not insertable text; the only way
   through a round is typing a sentence.
-- **Fail-soft everywhere.** Enrich fails → save raw. Drill fails → local
-  generic situations (marked "offline"). Judge fails → deterministic matcher +
-  self-evident notes. Practice never blocks on the network.
+- **Nothing is pre-written.** Every situation is built for the phrase it
+  elicits. Mixed mode used to fall back to generic situations that could host
+  any phrase at all — which is the opposite of what a practice round is for — so
+  a failed build now says so and offers a retry. Recall, Sprint and Study are
+  unaffected: they run on the learner's *own stored material*, which is theirs
+  rather than pre-written.
+- **Judging still fails soft, because judging is not content.** Enrich fails →
+  save the raw highlight. Judge fails → the deterministic `phraseMatcher`
+  verdict and the one line that reports it. Code can always rescue a real
+  production; it just never invents one.
+- **Every answer is kept.** Each judged sentence goes to `productions` with its
+  situation, its method and its verdict.
 - **Untrusted text is data.** Highlights, passages, and the learner's sentences
   are content in the prompts, never instructions.
 

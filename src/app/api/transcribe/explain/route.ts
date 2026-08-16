@@ -1,49 +1,45 @@
 import { NextResponse } from "next/server";
 import { explainSlips } from "@/lib/server/transcribe";
 import { aiConfigured } from "@/lib/server/ai";
-import type { NewsLevel } from "@/types";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
-const MAX_MISSED = 12;
+const MAX_MISSED = 20;
 
-/**
- * The pattern behind a chunk's slips. The score and the missed-word list are
- * computed on the client and passed in — this route only explains them, and a
- * failure costs an explanation, never a score.
- */
+/** The pattern behind a chunk's slips. The score itself is computed on-device
+ *  and passed in, so a failure here costs the explanation, never the score. */
 export async function POST(req: Request) {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured on the server." }, { status: 503 });
-  }
-  let body: { level?: string; reference?: unknown; attempt?: unknown; missed?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
 
-  const reference = typeof body.reference === "string" ? body.reference.trim().slice(0, 2000) : "";
-  const attempt = typeof body.attempt === "string" ? body.attempt.trim().slice(0, 2000) : "";
+  const body = await readJson<{
+    reference?: string;
+    attempt?: string;
+    missed?: unknown;
+  }>(req);
+  if (!body) return badRequest("Invalid JSON.");
+
+  const reference = typeof body.reference === "string" ? body.reference.trim().slice(0, 3000) : "";
+  const attempt = typeof body.attempt === "string" ? body.attempt.trim().slice(0, 3000) : "";
+  if (!reference || !attempt) return badRequest("Missing reference or attempt.");
+
   const missed = (Array.isArray(body.missed) ? body.missed : [])
-    .map((w) => (typeof w === "string" ? w.trim().slice(0, 40) : ""))
-    .filter(Boolean)
+    .filter((m): m is string => typeof m === "string")
+    .map((m) => m.slice(0, 40))
     .slice(0, MAX_MISSED);
 
-  if (!reference || !attempt) {
-    return NextResponse.json({ error: "Missing the chunk or the attempt." }, { status: 400 });
-  }
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
-
   try {
-    return NextResponse.json(await explainSlips(level, reference, attempt, missed));
+    return NextResponse.json(await explainSlips(ctx.snapshot, reference, attempt, missed));
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Explanation unavailable." },
-      { status: 502 },
-    );
+    return upstreamFailed(e, "Explanation unavailable.");
   }
 }

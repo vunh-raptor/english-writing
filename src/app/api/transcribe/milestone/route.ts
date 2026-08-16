@@ -1,40 +1,43 @@
 import { NextResponse } from "next/server";
 import { milestoneCheck } from "@/lib/server/transcribe";
 import { aiConfigured } from "@/lib/server/ai";
-import type { NewsLevel } from "@/types";
+import { contentDigest, remember } from "@/lib/server/db/generated";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
+import { MILESTONE_VERSION } from "@/lib/server/prompts/transcribe";
+import type { MilestoneQuiz } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
-
 /** The two questions and two phrases that close a passage. */
 export async function POST(req: Request) {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured on the server." }, { status: 503 });
-  }
-  let body: { level?: string; passage?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
+
+  const body = await readJson<{ passage?: string }>(req);
+  if (!body) return badRequest("Invalid JSON.");
 
   const passage = typeof body.passage === "string" ? body.passage.trim().slice(0, 6000) : "";
-  if (!passage) {
-    return NextResponse.json({ error: "Missing the passage." }, { status: 400 });
-  }
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
+  if (passage.length < 80) return badRequest("Missing passage.");
 
   try {
-    return NextResponse.json(await milestoneCheck(level, passage));
-  } catch (e) {
-    // The client falls back to its local milestone — a passage is never blocked
-    // by a provider outage.
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Milestone unavailable." },
-      { status: 502 },
+    const quiz = await remember<MilestoneQuiz>(
+      ctx.db,
+      ctx.userId,
+      // Keyed by the passage itself, so re-opening a milestone asks the same
+      // two questions rather than moving the goalposts mid-attempt.
+      { kind: "milestone", key: contentDigest(passage), version: MILESTONE_VERSION },
+      () => milestoneCheck(ctx.snapshot, passage),
     );
+    return NextResponse.json(quiz);
+  } catch (e) {
+    return upstreamFailed(e, "Milestone unavailable.");
   }
 }

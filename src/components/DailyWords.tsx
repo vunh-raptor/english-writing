@@ -13,16 +13,13 @@ import type {
   WordRound,
   WordSeed,
 } from "@/types";
-import { fetchWordRounds, judgePhrase } from "@/lib/client/clientApi";
+import { fetchWordSession, judgePhrase } from "@/lib/client/clientApi";
 import {
-  CURRICULUM_SIZE,
-  LOCAL_WORD_SETUPS,
-  LOCAL_WORD_TASKS,
   bridgePair,
   buildDaySet,
+  catalogById,
   gapPartner,
   gapSentence,
-  isDailyWord,
   judgeBridge,
   judgeFit,
   judgeRepair,
@@ -30,7 +27,6 @@ import {
   pickDrill,
   recallMatches,
   usesWord,
-  wordSeedById,
   wordToPhrase,
 } from "@/lib/shared/words";
 import { SRS_INTERVALS, srsSummary } from "@/lib/shared/srs";
@@ -121,7 +117,6 @@ interface SessionItem {
   /** Worked examples using the word elsewhere — inert input, never an answer. */
   examples: string[];
   /** True when the moment came from the local packs, not the round-builder. */
-  offline: boolean;
   /** Leitner box before today — the debrief computes "returns in…" from it. */
   prevBox: number;
   /** Which rung this word drills today, and the material it runs on. */
@@ -198,7 +193,14 @@ function WordCard({ item, muted }: { item: SessionItem; muted?: boolean }) {
 }
 
 export function DailyWords() {
-  const { store, issueWordDay, finishWordSession, reviewPhrases, collectPhrase } = useStore();
+  const {
+    store,
+    issueWordDay,
+    finishWordSession,
+    reviewPhrases,
+    collectPhrase,
+    recordProductions,
+  } = useStore();
   const pool = store.minedPhrases;
   const srs = store.phraseSrs;
   const level: NewsLevel = store.newsLevel;
@@ -220,6 +222,8 @@ export function DailyWords() {
   const [result, setResult] = useState<DrillJudgment | null>(null);
   const [results, setResults] = useState<ItemResult[]>([]);
   const [loading, setLoading] = useState(false);
+  /** Set when the day couldn't be built — shown instead of a silent retry. */
+  const [startError, setStartError] = useState("");
   const [bridge, setBridge] = useState("");
   const [bridgeDone, setBridgeDone] = useState<null | boolean>(null);
   const startedAt = useRef<number>(0);
@@ -232,9 +236,11 @@ export function DailyWords() {
   // and finishing tomorrow's words early is not a thing you can do. Reviews
   // come from the curriculum only — captured highlights and mission targets
   // are the Phrasebook's business, not this mode's.
-  const { todaysNew, remainingNew, reviews } = useMemo(
+  const catalog = store.wordCatalog;
+  const { remainingNew, reviews } = useMemo(
     () =>
       buildDaySet({
+        catalog,
         wordDays: store.wordDays,
         pool,
         srs,
@@ -242,15 +248,23 @@ export function DailyWords() {
         perDay,
         today,
       }),
-    [store.wordDays, pool, srs, level, perDay, today],
+    [catalog, store.wordDays, pool, srs, level, perDay, today],
   );
 
+  // Until the catalogue exists there is nothing to count, and the server mints
+  // it on the first session — so an empty catalogue means "not started yet",
+  // never "finished for today".
   const sessionSize = remainingNew.length + reviews.length;
-  const doneToday = sessionSize === 0;
+  const doneToday = catalog.length > 0 && sessionSize === 0;
+  /** How many of today's issued words are already in the pool. */
+  const metToday = (store.wordDays[today] ?? []).filter((id) =>
+    pool.some((p) => p.id === id),
+  ).length;
 
+  const inCatalog = useMemo(() => catalogById(catalog), [catalog]);
   const stats = useMemo(
-    () => srsSummary(pool.filter((p) => isDailyWord(p.id)).map((p) => p.id), srs),
-    [pool, srs],
+    () => srsSummary(pool.filter((p) => inCatalog.has(p.id)).map((p) => p.id), srs),
+    [pool, inCatalog, srs],
   );
   const info = streakInfo(store.profile, today);
 
@@ -266,7 +280,11 @@ export function DailyWords() {
 
   /** Both new words and reviews are curriculum entries, so both build from the
    *  seed — the pool row only supplies identity and the schedule. */
-  function itemFromSeed(seed: WordSeed, isNew: boolean): SessionItem {
+  function itemFromSeed(seed: WordSeed, isNew: boolean, round: WordRound): SessionItem {
+    const examples = [...round.examples, seed.example]
+      .filter((e) => e && e.trim())
+      .filter((e, n, arr) => arr.findIndex((x) => x.trim() === e.trim()) === n)
+      .slice(0, 3);
     return {
       id: seed.id,
       word: seed.word,
@@ -276,10 +294,9 @@ export function DailyWords() {
       collocations: seed.collocations,
       isNew,
       ...(isNew ? { seed } : {}),
-      setup: "",
-      task: LOCAL_WORD_TASKS[seed.pos],
-      examples: [],
-      offline: true,
+      setup: round.setup,
+      task: round.task,
+      examples,
       prevBox: srs[seed.id]?.box ?? 0,
       drill: "recall",
       gap: null,
@@ -321,56 +338,51 @@ export function DailyWords() {
     return { ...item, drill, gap, ...(drill === "repair" ? { repair: round?.repair } : {}) };
   }
 
+  /**
+   * Open a session.
+   *
+   * The whole day now arrives from one call: which words are due, whether the
+   * curriculum needed topping up, and the moment each word is wanted in. The
+   * client used to hold the curriculum and ask only for the tailored rungs;
+   * there is no bundled curriculum to hold any more, so a failure here is a
+   * real failure and says so rather than running a day of generic moments.
+   */
   async function start() {
-    if (loading || sessionSize === 0) return;
+    if (loading) return;
     setLoading(true);
+    setStartError("");
 
-    // Reviews first: a warm, winnable start before the unfamiliar words.
-    const base = [
-      ...reviews
-        .map((p) => wordSeedById(p.id))
-        .filter((s): s is WordSeed => !!s)
-        .map((s) => itemFromSeed(s, false)),
-      ...remainingNew.map((s) => itemFromSeed(s, true)),
-    ];
-
-    let byId = new Map<string, WordRound>();
+    let session: Awaited<ReturnType<typeof fetchWordSession>>;
     try {
-      const rounds = await fetchWordRounds(
-        level,
-        base.map((i) => ({
-          id: i.id,
-          word: i.word,
-          pos: i.pos,
-          meaning: i.meaning,
-          collocations: i.collocations,
-        })),
-      );
-      byId = new Map(rounds.map((r) => [r.id, r]));
+      session = await fetchWordSession();
     } catch {
-      // Offline or no AI — every item falls back to a local moment below.
+      setStartError("Couldn't build today's words. Have another go in a moment.");
+      setLoading(false);
+      return;
     }
 
-    const built = base.map((item, i) => {
-      const r = byId.get(item.id);
-      const examples = [...(r?.examples ?? []), item.example]
-        .filter((e) => e && e.trim())
-        .filter((e, n, arr) => arr.findIndex((x) => x.trim() === e.trim()) === n)
-        .slice(0, 3);
-      return withDrill(
-        {
-          ...item,
-          setup: r?.setup ?? LOCAL_WORD_SETUPS[i % LOCAL_WORD_SETUPS.length],
-          task: r?.task ?? item.task,
-          examples,
-          offline: !r,
-        },
-        r,
-      );
-    });
+    const met = new Set(pool.map((p) => p.id));
+    const byId = new Map(session.rounds.map((r) => [r.id, r]));
+    // Reviews first: a warm, winnable start before the unfamiliar words.
+    const ordered = [
+      ...session.words.filter((w) => met.has(w.id)),
+      ...session.words.filter((w) => !met.has(w.id)),
+    ];
+    const built = ordered
+      .map((seed) => {
+        const round = byId.get(seed.id);
+        return round ? withDrill(itemFromSeed(seed, !met.has(seed.id), round), round) : null;
+      })
+      .filter((i): i is SessionItem => !!i);
+
+    if (built.length === 0) {
+      setStartError("Couldn't build today's words. Have another go in a moment.");
+      setLoading(false);
+      return;
+    }
 
     // Fix today's set now, so a reload mid-session shows the same words.
-    issueWordDay(todaysNew.map((w) => w.id));
+    issueWordDay(session.todaysNew.map((w) => w.id));
 
     setItems(built);
     setIdx(0);
@@ -455,7 +467,6 @@ export function DailyWords() {
     let j: DrillJudgment;
     try {
       j = await judgePhrase(
-        level,
         { text: item.word, meaning: item.meaning },
         `${item.setup}\n${item.task}`.trim(),
         sentence,
@@ -491,9 +502,47 @@ export function DailyWords() {
     // in it, or the gap would have no answer.
     if (j.used) lines.current[item.id] = sentence;
 
+    // The sentence itself goes in the ledger, with the moment that drew it out
+    // and the verdict it earned. Written here rather than at the end of the
+    // session, so abandoning the day halfway still keeps what was produced.
+    recordProductions([
+      {
+        surface: "words",
+        itemSlug: item.id,
+        mode: item.drill,
+        prompt: `${item.setup}\n${item.task}`.trim(),
+        text: sentence,
+        verdict: outcome,
+        ...(j.note ? { note: j.note } : {}),
+      },
+    ]);
+
     setResults((rs) => [...rs, { outcome, sentence, prevBox: item.prevBox }]);
     setResult(j);
     setJudging(false);
+  }
+
+  /**
+   * Judge the day's closing bridge, and keep it.
+   *
+   * The bridge never touches the schedule — a bonus that could lapse a word
+   * would make the honest scheduling everywhere else a lie — but it is still
+   * production, so it still belongs in the ledger.
+   */
+  function submitBridge(a: SessionItem, b: SessionItem) {
+    const sentence = bridge.trim();
+    if (!sentence) return;
+    const ok = judgeBridge(a.word, b.word, sentence);
+    recordProductions([
+      {
+        surface: "bridge",
+        mode: "bridge",
+        prompt: `Use "${a.word}" and "${b.word}" in one sentence.`,
+        text: sentence,
+        verdict: ok ? "clean" : "missed",
+      },
+    ]);
+    setBridgeDone(ok);
   }
 
   /** Close the day: streak, totals, vocabulary, and the lines kept for echo. */
@@ -759,7 +808,7 @@ export function DailyWords() {
           <>
             <div className="mt-3 border-l-2 border-gold bg-secondary/40 py-3 pl-4 pr-4">
               <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                The moment{item.offline ? " · offline" : ""}
+                The moment
               </div>
               <p className="mt-1.5 whitespace-pre-line font-serif text-[16px] leading-relaxed text-foreground">
                 {item.setup}
@@ -936,7 +985,7 @@ export function DailyWords() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    setBridgeDone(judgeBridge(a.word, b.word, bridge));
+                    submitBridge(a, b);
                   }
                 }}
                 placeholder={`Use “${a.word}” and “${b.word}” in one sentence…`}
@@ -947,7 +996,7 @@ export function DailyWords() {
             <div className="mt-2.5 flex items-center justify-end">
               <Button
                 size="sm"
-                onClick={() => setBridgeDone(judgeBridge(a.word, b.word, bridge))}
+                onClick={() => submitBridge(a, b)}
                 disabled={!bridge.trim()}
               >
                 <Send /> Send
@@ -1092,8 +1141,8 @@ export function DailyWords() {
             Done for today.
           </p>
           <p className="mt-1.5 text-[13.5px] text-muted-foreground">
-            {todaysNew.length > 0
-              ? `${todaysNew.length} new ${todaysNew.length === 1 ? "word" : "words"} met, and nothing is due for review. Coming back tomorrow is the whole trick.`
+            {metToday > 0
+              ? `${metToday} new ${metToday === 1 ? "word" : "words"} met, and nothing is due for review. Coming back tomorrow is the whole trick.`
               : "Nothing due. Come back tomorrow — spacing does the work while you're away."}
           </p>
           <Button asChild variant="outline" className="mt-4 w-full">
@@ -1127,12 +1176,18 @@ export function DailyWords() {
             ))}
           </div>
           <p className="mt-3 text-[12.5px] leading-snug text-muted-foreground">
-            New words stay hidden until you meet them — the first look is worth
-            more when it isn&apos;t your fifth.
+            {catalog.length === 0
+              ? "Your first words are written for you when you start — nothing here is off a list."
+              : "New words stay hidden until you meet them — the first look is worth more when it isn't your fifth."}
           </p>
           <Button size="lg" className="mt-3.5 w-full" onClick={() => void start()} disabled={loading}>
-            {loading ? "Setting up…" : `Start today's words (${sessionSize})`}
+            {loading
+              ? "Setting up…"
+              : sessionSize > 0
+                ? `Start today's words (${sessionSize})`
+                : "Start today's words"}
           </Button>
+          {startError && <p className="note note-warning mt-3">{startError}</p>}
           <p className="mt-2.5 text-center font-mono text-[10.5px] text-muted-foreground">
             ≈ {minutes} {minutes === 1 ? "minute" : "minutes"} · meet · drill · your sentence
           </p>
@@ -1275,20 +1330,12 @@ export function DailyWords() {
               ))}
             </div>
             <div className="mt-4 flex items-baseline justify-between font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-              <span>Curriculum</span>
+              <span>Words met</span>
+              {/* No denominator: the curriculum is written for you a batch at a
+                  time, so there is no fixed list to be a fraction of. */}
               <span className="tabular-nums">
-                {stats.new + stats.learning + stats.mastered} / {CURRICULUM_SIZE}
+                {stats.new + stats.learning + stats.mastered}
               </span>
-            </div>
-            <div className="mt-1.5 h-1 bg-border">
-              <div
-                className="h-1 bg-brand"
-                style={{
-                  width: `${Math.round(
-                    ((stats.new + stats.learning + stats.mastered) / CURRICULUM_SIZE) * 100,
-                  )}%`,
-                }}
-              />
             </div>
             <p className="mt-3 text-pretty text-[13px] text-muted-foreground">
               {vocabSize(store.vocab)} distinct words in sentences you actually

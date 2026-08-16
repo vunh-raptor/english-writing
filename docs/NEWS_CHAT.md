@@ -241,7 +241,9 @@ Return: {"celebration":"warm 1-2 sentences",
   director if adherence to the Iron Rule slips.
 - **Latency UX**: typing indicator on each turn; prefetch assist during pauses so
   help appears instantly.
-- **Cost**: curated subject cached & shared; conversations are per-user and
+- **Cost**: the mission is remembered per account in `ai_content` (it can no
+  longer be shared between accounts — the plan reads the learner's own due items
+  and chosen subjects); conversations are per-user and
   short; rate-limit per user.
 - **Injection**: learner text is always data. The system prompt says so; we also
   never execute anything from it.
@@ -275,7 +277,8 @@ today's news — try again." If AI isn't configured → this mode is unavailable
 - **Reuses**: server AI gateway, the trends adapter pattern, the chat UI, the
   Sparks tap-to-insert UX, the milestone pops, and the SRS/Coach (via mined
   phrases).
-- The existing freewriting mode keeps its offline fallbacks; that's a different
+- The conversation itself is now written to `news_sessions` as it goes, so a
+  mission survives a closed tab; that's a different
   product surface. This mode is deliberately live.
 
 ---

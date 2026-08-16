@@ -17,11 +17,11 @@ point at.
 
 | Finding | What it settles | Where it lives here |
 | --- | --- | --- |
-| **Frequency coverage.** ~2,800 high-frequency words give **>92% coverage** of general English text (the New General Service List; Browne, Culligan & Phillips 2013, in the General Service List tradition). | *Which* words. Rare words are a bad trade for a learner with 10 minutes a day. | A curated, **frequency-first curriculum** banded A2 → C1 (`lib/shared/words.ts`), drawn at the learner's level |
+| **Frequency coverage.** ~2,800 high-frequency words give **>92% coverage** of general English text (the New General Service List; Browne, Culligan & Phillips 2013, in the General Service List tradition). | *Which* words. Rare words are a bad trade for a learner with 10 minutes a day. | A **frequency-first curriculum** banded A2 → C1, generated for the learner (`lib/server/prompts/curriculum.ts`) and drawn at their level |
 | **Deliberate beats incidental.** Incidental pickup from reading nets only ~9–18% of target words per encounter set; intentional vocabulary activities are reliably effective. | Waiting to meet words in the wild is too slow to be the main engine. A daily deliberate set is right. | The daily set itself: chosen for you, not stumbled on |
 | **Retrieval practice.** Recalling beats re-studying for L2 vocabulary, and **recall formats beat recognition** for productive knowledge. | Flashcard *flips* and multiple choice test the wrong thing. Everything is typed. | The whole **drill** ladder — every rung ends with the learner typing, never picking |
 | **Involvement Load Hypothesis** (Laufer & Hulstijn) — retention rises with need + search + evaluation. In direct comparisons (e.g. Keating 2008), **writing your own sentence beats fill-in-the-gap, which beats reading**. Generative use in a *new* context beats repetition in a familiar one. | The round that decides whether a word survives is the one where you compose with it. | The **use** beat: a real-life moment, answered in your own sentence — the only beat that earns an interval |
-| **Semantic interference.** Words taught in a semantic set (synonyms, opposites, "five kinds of weather") are learned *more slowly* — cross-association (Tinkham 1993; Finkbeiner & Nicol 2003; Erten & Tekin 2008; the evidence is mixed but the downside is asymmetric). | Grouping a day's words by topic — what most apps do — actively hurts. | Every curriculum entry carries a **`field`**, and a day's set never repeats one |
+| **Semantic interference.** Words taught in a semantic set (synonyms, opposites, "five kinds of weather") are learned *more slowly* — cross-association (Tinkham 1993; Finkbeiner & Nicol 2003; Erten & Tekin 2008; the evidence is mixed but the downside is asymmetric). | Grouping a day's words by topic — what most apps do — actively hurts. | Every entry carries a **`field`**; the generator is told to spread a batch across unrelated ones (and rejected in code if it doesn't), and a day's set never repeats one |
 | **Spacing.** Spaced practice beats massed on delayed tests; equally-spaced retrieval is strong for long-term retention. | A word met once is a word lost. | Met words join the shared **Leitner** schedule; a day is *reviews + new*, never new alone |
 | **Desirable difficulties** (Bjork). A task that stays easy stops teaching; difficulty should track how strong the memory already is. | One fixed exercise is wrong for a word's whole life. | The **drill ladder** below: the ask hardens as the Leitner box rises, so difficulty expands alongside the interval |
 
@@ -94,11 +94,11 @@ you compose the sentence in the first place. It costs one field on the store
 
 **The ladder degrades, it doesn't break.** `pickDrill` walks *down* the ladder
 until it finds a rung whose material actually exists — checked by running the
-real gap functions, not by proxies. With no AI key there is no `repair` pair and
-often no AI `cloze`, so a box-3 word drops to `partner`, and a word whose every
-partner chunk starts with the word itself (`borrow money`, `borrow it from
-someone`) drops again to `fit` on its own stored example. `recall` always works,
-so the ladder can't fail.
+real gap functions, not by proxies. A round that came back without a `repair`
+pair drops a box-3 word to `partner`, and a word whose every partner chunk
+starts with the word itself (`borrow money`, `borrow it from someone`) drops
+again to `fit` on its own stored example. `recall` always works, so the ladder
+can't fail once a session has started.
 
 ### Honest scheduling
 
@@ -119,9 +119,17 @@ vocabulary count (so "your vocabulary" only ever counts words they **wrote**).
 - **Nothing completes your turn.** The moment never contains the word (checked
   in code, server-side); worked examples are inert; the only way through is
   typing a sentence.
-- **Fail-soft everywhere.** No AI key or no network → local moments, local
-  judging, the full arc still runs. The curriculum, the cards, the recall check
-  and the schedule are all offline by construction.
+- **Nothing is pre-written.** The words are generated for this learner, and so
+  is every moment they answer. There are no generic setups left: the ten open
+  moments that used to stand in for a failed round ("a friend asks how your week
+  is going") fitted any word and elicited none, so a session that cannot get
+  real material says so and offers a retry.
+- **The material is fixed once generated.** A day's rounds are stored in
+  `ai_content` keyed by the day and the word set, so reloading mid-session
+  returns the same moments rather than a fresh set nobody has read.
+- **Every sentence is kept.** The "use" beat writes to `productions` the moment
+  it is judged — with the moment that drew it out and the verdict — so
+  abandoning the day halfway still keeps what was produced.
 - **The day is fixed once drawn.** `Store.wordDays[today]` freezes the set, so
   reloading never reshuffles it and you can't farm tomorrow's words today.
   Leaving halfway and coming back resumes exactly where you were.
@@ -165,16 +173,29 @@ never disagree with the sentence around it.
 
 | Piece | File |
 | --- | --- |
-| Curriculum, day-set rules, the drill ladder, matchers | `src/lib/shared/words.ts` |
+| Day-set rules, the drill ladder, matchers, judging | `src/lib/shared/words.ts` |
+| Generating the curriculum | `src/lib/server/curriculum.ts`, `src/lib/server/prompts/curriculum.ts` |
 | Round builder (the one AI job) | `src/lib/server/words.ts` |
 | Route | `src/app/api/words/daily/route.ts` |
 | UI (home · session · debrief) | `src/components/DailyWords.tsx`, `/words` |
-| Store commits | `issueWordDay`, `finishWordSession` in `src/store/StoreContext.tsx` |
+| Store commits | `issueWordDay`, `finishWordSession`, `recordProductions` in `src/store/StoreContext.tsx` |
 
-### Growing the curriculum
+### Where the curriculum comes from
 
-`WORD_SEEDS` is the spine, ordered roughly by usefulness within each band. To
-extend it, add entries with a plain-words `meaning`, one natural `example`, 2–4
-`collocations`, and — the part that's easy to get wrong — a `field` that
-honestly names the semantic area, so the day-set rule can keep related words
-apart. Order within a band is the order they're met.
+There is no list to extend. `lib/server/curriculum.ts` mints a batch of ~12
+words whenever the learner's queue drops below six unmet items, and stores them
+in `word_items` in queue order.
+
+The two rules the old curated list existed to encode moved into the prompt and
+the coercion, because they are pedagogy rather than content:
+
+- **Frequency first**, and never a word already met — the learner's met items go
+  in as an exhaustive exclusion list, and a slug that already exists is rejected
+  with the reason named so the retry can fix it.
+- **One word per semantic field per batch**, checked in code. A model asked for
+  "unrelated words" will still hand you three ways to be tired.
+
+A partial batch is kept rather than retried: half a fortnight of words beats an
+error page. An empty one retries once with the rejections named, then fails
+honestly. To change *what kind* of words a learner meets, change the prompt —
+and bump its `VERSION`, since that is what invalidates the cache.

@@ -1,51 +1,53 @@
 import { NextResponse } from "next/server";
 import { judgeMilestone } from "@/lib/server/transcribe";
 import { aiConfigured } from "@/lib/server/ai";
-import type { NewsLevel } from "@/types";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
+import type { MilestoneQuiz } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
-
-function strings(v: unknown, max: number, chars: number): string[] {
-  return (Array.isArray(v) ? v : [])
-    .map((s) => (typeof s === "string" ? s.trim().slice(0, chars) : ""))
-    .slice(0, max);
-}
-
-/** Judge a milestone attempt: two answers plus one sentence of their own. */
 export async function POST(req: Request) {
-  if (!aiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured on the server." }, { status: 503 });
-  }
-  let body: { level?: string; quiz?: unknown; answers?: unknown; sentence?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
 
-  const q = (body.quiz ?? {}) as Record<string, unknown>;
-  const quiz = {
-    questions: strings(q.questions, 2, 300).filter(Boolean),
-    phrases: strings(q.phrases, 2, 80).filter(Boolean),
-  };
-  const answers = strings(body.answers, 2, 600);
+  const body = await readJson<{
+    quiz?: Partial<MilestoneQuiz>;
+    answers?: unknown;
+    sentence?: string;
+  }>(req);
+  if (!body) return badRequest("Invalid JSON.");
+
+  const questions = (Array.isArray(body.quiz?.questions) ? body.quiz!.questions : [])
+    .filter((q): q is string => typeof q === "string")
+    .map((q) => q.slice(0, 300))
+    .slice(0, 2);
+  const phrases = (Array.isArray(body.quiz?.phrases) ? body.quiz!.phrases : [])
+    .filter((p): p is string => typeof p === "string")
+    .map((p) => p.slice(0, 60))
+    .slice(0, 2);
   const sentence = typeof body.sentence === "string" ? body.sentence.trim().slice(0, 600) : "";
-
-  if (quiz.questions.length < 2 || quiz.phrases.length < 2 || !sentence) {
-    return NextResponse.json({ error: "Missing the check or the sentence." }, { status: 400 });
+  if (questions.length < 2 || phrases.length < 2 || !sentence) {
+    return badRequest("Missing quiz or sentence.");
   }
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
+
+  const answers = (Array.isArray(body.answers) ? body.answers : [])
+    .filter((a): a is string => typeof a === "string")
+    .map((a) => a.slice(0, 600))
+    .slice(0, 2);
 
   try {
-    return NextResponse.json(await judgeMilestone(level, quiz, answers, sentence));
-  } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Judging unavailable." },
-      { status: 502 },
+      await judgeMilestone(ctx.snapshot, { questions, phrases }, answers, sentence),
     );
+  } catch (e) {
+    return upstreamFailed(e, "Judgment unavailable.");
   }
 }

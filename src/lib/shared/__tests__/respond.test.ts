@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RUNG_ORDER, checkBorrowing, ideaText, localQuestions } from "../respond";
+import { RUNG_ORDER, THINK_RUNGS, checkBorrowing, ideaText } from "../respond";
 
 /**
  * The source these run against. Short on purpose: the borrowing check works on
@@ -16,15 +16,17 @@ describe("the thinking ladder", () => {
     expect(RUNG_ORDER).toEqual(["grasp", "assume", "push", "extend"]);
   });
 
-  it("falls back to four real questions when the AI call fails", () => {
-    const qs = localQuestions();
-    expect(qs.map((q) => q.rung)).toEqual(RUNG_ORDER);
-    // Every fallback has to be an actual question — the mode's one rule is that
-    // the app asks and never answers, and the offline path is no exception.
-    // Containment, not a trailing "?", because a rung may add a short
-    // instruction after it ("…? Name one thing."). This mirrors the server's
-    // own `looksLikeQuestion` guard on AI-generated rungs.
-    for (const q of qs) expect(q.question, q.rung).toContain("?");
+  it("describes every rung, and describes only rungs", () => {
+    // The rungs carry UI chrome — a label and why it is worth climbing — and
+    // deliberately no question of their own. A generic ladder that could be
+    // asked about any source is exactly what this mode exists to avoid, so the
+    // questions are written against the learner's actual source every time.
+    expect(Object.keys(THINK_RUNGS).sort()).toEqual([...RUNG_ORDER].sort());
+    for (const rung of RUNG_ORDER) {
+      expect(THINK_RUNGS[rung].label, rung).not.toBe("");
+      expect(THINK_RUNGS[rung].why, rung).not.toBe("");
+      expect(THINK_RUNGS[rung].why, rung).not.toContain("?");
+    }
   });
 });
 

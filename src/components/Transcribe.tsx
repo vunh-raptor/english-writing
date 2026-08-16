@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/store/StoreContext";
 import type {
@@ -10,7 +10,6 @@ import type {
   TranscribeClip,
   TranscribeSession as Session,
 } from "@/types";
-import { CLIPS } from "@/lib/shared/clips";
 import {
   CHUNKS_PER_PASSAGE,
   CHUNK_SECONDS,
@@ -19,8 +18,9 @@ import {
   cutIntoChunks,
   passageRange,
 } from "@/lib/shared/transcribe";
-import { fetchClipCues } from "@/lib/client/clientApi";
+import { fetchClipCues, fetchClips, writeAnotherClip } from "@/lib/client/clientApi";
 import { todayKey } from "@/lib/shared/date";
+import { newId } from "@/lib/shared/id";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/page-container";
@@ -29,24 +29,23 @@ import { TranscribeSession } from "@/components/TranscribeSession";
 /**
  * Transcribe (docs/TRANSCRIBE.md) — the mode where the English arrives as sound.
  *
- *   ENTRY     pick a curated clip, paste a link, or resume where the ear left off.
+ *   ENTRY     pick one of your passages, paste a link, or resume where the ear
+ *             left off.
  *   SESSION   the split view: the clip on the left, the writing on the right.
  *   DEBRIEF   what a passage cost and what it left behind.
  *
- * Curated clips carry their own transcripts, so the mode runs with no account,
- * no network and no keys — the same offline posture as Daily words, and for the
- * same reason: a habit that needs a connection isn't a habit.
+ * The passages used to be three hand-written clips bundled with the app, which
+ * made the mode work offline and made it run out after a week. They are written
+ * for the learner now and stored server-side, so the library is endless and can
+ * sit at their band — at the cost of the offline start, which is the trade the
+ * whole app made when the curriculum stopped being bundled.
  */
 
 type View = "entry" | "session" | "debrief";
 type Intake = "clips" | "link";
 
-function makeId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
 export function Transcribe() {
-  const { store, saveTranscribeSession, keepMisheard } = useStore();
+  const { store, saveTranscribeSession, keepMisheard, recordProductions } = useStore();
   const level: NewsLevel = store.newsLevel;
 
   const [view, setView] = useState<View>("entry");
@@ -57,6 +56,36 @@ export function Transcribe() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [debriefPassage, setDebriefPassage] = useState(0);
+
+  /** The learner's own passages. Fetched on open; the server writes one if the
+   *  library is short, so a first visit lands on something to listen to. */
+  const [clips, setClips] = useState<TranscribeClip[]>([]);
+  const [clipsBusy, setClipsBusy] = useState(true);
+  const [clipsError, setClipsError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    fetchClips()
+      .then((list) => live && setClips(list))
+      .catch(() => live && setClipsError("Couldn't reach your passages. Try again in a moment."))
+      .finally(() => live && setClipsBusy(false));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function writeAnother() {
+    if (clipsBusy) return;
+    setClipsBusy(true);
+    setClipsError("");
+    try {
+      setClips(await writeAnotherClip());
+    } catch {
+      setClipsError("Couldn't write you a passage just now. Try again in a moment.");
+    } finally {
+      setClipsBusy(false);
+    }
+  }
 
   /** Chunks are derived from the frozen transcript, never stored — one source
    *  of truth for where every boundary falls. */
@@ -74,7 +103,7 @@ export function Transcribe() {
     (clip: TranscribeClip, existing?: Session) => {
       const next: Session =
         existing ?? {
-          id: makeId(),
+          id: newId(),
           day: todayKey(),
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -137,6 +166,7 @@ export function Transcribe() {
         level={level}
         onSave={onSave}
         onMisheard={keepMisheard}
+        onProduced={(production) => recordProductions([production])}
         onPassageDone={(passage) => {
           setDebriefPassage(passage);
           setView("debrief");
@@ -188,7 +218,7 @@ export function Transcribe() {
                     : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
-                {t === "clips" ? "Today's clips" : "Paste a link"}
+                {t === "clips" ? "Your passages" : "Paste a link"}
               </button>
             ))}
           </div>
@@ -196,13 +226,26 @@ export function Transcribe() {
           {intake === "clips" ? (
             <>
               <div className="mt-4 flex flex-col gap-px">
-                {CLIPS.map((clip, i) => (
+                {clips.map((clip, i) => (
                   <ClipRow key={clip.id} clip={clip} primary={i === 0} onStart={() => start(clip)} />
                 ))}
               </div>
-              <p className="mt-4 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
-                {CHUNK_SECONDS}-second chunks · a milestone every {CHUNKS_PER_PASSAGE} · nothing skipped
-              </p>
+              {clips.length === 0 && (
+                <p className="mt-4 max-w-[520px] text-[13.5px] leading-normal text-muted-foreground">
+                  {clipsBusy
+                    ? "Writing you a passage to listen to…"
+                    : "Nothing here yet. Every passage is written for you, so the first one takes a moment."}
+                </p>
+              )}
+              {clipsError && <p className="note note-warning mt-3 max-w-[520px]">{clipsError}</p>}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                  {CHUNK_SECONDS}-second chunks · a milestone every {CHUNKS_PER_PASSAGE} · nothing skipped
+                </p>
+                <Button variant="secondary" size="sm" onClick={() => void writeAnother()} disabled={clipsBusy}>
+                  {clipsBusy ? "Writing…" : "Write me another"}
+                </Button>
+              </div>
             </>
           ) : (
             <div className="mt-6">

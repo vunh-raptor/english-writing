@@ -37,6 +37,7 @@ import {
   enrichPhrase,
 } from "@/lib/client/clientApi";
 import { todayKey } from "@/lib/shared/date";
+import { newId } from "@/lib/shared/id";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,10 +69,6 @@ const MODEL_REVEAL_SECONDS = 7;
 const PULSE_MS = 7000;
 /** Long pause before the idea rung opens by itself (never more than that). */
 const AUTO_IDEA_MS = 15000;
-
-function makeSessionId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
 
 /** A short speaker label for the manuscript, e.g. "a friend of mine" → "FRIEND". */
 function partnerLabel(role: string): string {
@@ -204,7 +201,7 @@ function AskPanel({
     setQ("");
     setBusy(true);
     try {
-      const help = await missionAsk(level, context, question);
+      const help = await missionAsk(context, question);
       setEntries((prev) => {
         const copy = [...prev];
         copy[copy.length - 1] = { q: question, help };
@@ -364,7 +361,7 @@ export function NewsChat({
 
   const loadOnceRef = useRef(false);
   const savedRef = useRef(false);
-  const sessionIdRef = useRef<string>(resume?.id ?? makeSessionId());
+  const sessionIdRef = useRef<string>(resume?.id ?? newId());
   const hintRungRef = useRef<HintRung>("none");
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -420,7 +417,7 @@ export function NewsChat({
     setLoading(true);
     setError(null);
     try {
-      const m = await fetchMission(level);
+      const m = await fetchMission();
       setMission(m);
       setProgress(initialProgress(m));
     } catch (e) {
@@ -451,7 +448,7 @@ export function NewsChat({
       const level = progress?.level ?? store.newsLevel;
       const captured = { module: "News Chat", context: context || undefined, day: todayKey() };
       try {
-        const e = await enrichPhrase(level, text, context);
+        const e = await enrichPhrase(text, context);
         collectPhrase({
           id: phraseId(e.text || text),
           text: e.text || text,
@@ -536,7 +533,7 @@ export function NewsChat({
     if (draft === nextDraftRef.current && nextHelp) return; // same words — reuse
     setNextBusy(true);
     try {
-      const help = await missionContinue(progress.level, currentDemand, draft);
+      const help = await missionContinue(currentDemand, draft);
       nextDraftRef.current = draft;
       setNextHelp(help);
       setNextFrameShown(false);
@@ -770,7 +767,7 @@ export function NewsChat({
     // Bridge material is frame-level help, wherever it comes from.
     markHint("frame");
     try {
-      const help = await missionBridge(progress.level, currentDemand, intent);
+      const help = await missionBridge(currentDemand, intent);
       setBridgeHelp(help);
     } catch {
       // Fail soft to the beat's pre-planned ladder — help never blocks.

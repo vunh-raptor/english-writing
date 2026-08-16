@@ -14,7 +14,7 @@ module-driven backend), see [`PATTERNS.md`](PATTERNS.md).
 | Language | **TypeScript** throughout (`@/*` → `src/*`). |
 | UI | **Tailwind CSS** + **shadcn/ui** (new-york style, stone base) on **Radix** primitives; **lucide-react** icons; **next-themes** for light/dark. |
 | Server AI | A **server-only gateway** (`src/lib/server/ai.ts`) fronting Groq · Google Gemini · Anthropic, chosen by which env key is present. Keys never leave the server. |
-| Content sources | A bundled, frequency-ordered **word curriculum** (no I/O at all) plus keyless server **news adapters** (Google News RSS, GDELT, Reddit). |
+| Content sources | **Generated per learner and stored** — the word curriculum (`word_items`) and the listening passages (`listening_clips`) are written for the account that will meet them. Plus keyless server **news adapters** (Google News RSS, GDELT, Reddit) for the one mode that is about today. |
 | Learner state | **Postgres, server-owned.** Read and written through `/api/state` as the signed-in user under RLS (`src/lib/server/db/state.ts`, `src/store/StoreContext.tsx`). Nothing durable on the device. |
 | Auth + DB | **Supabase** (Postgres + Auth), and a hard dependency. Passwordless sign-in (magic link + Google) with `@supabase/ssr`; the middleware gates every page and API route. Schema in `supabase/migrations/` with RLS on every table — see [`../supabase/README.md`](../supabase/README.md). |
 | Hosting | **Vercel** (Hobby). A Vercel Cron can warm the news cache. |
@@ -60,9 +60,9 @@ the browser:
 
 | Folder | Runs where | Contents |
 | --- | --- | --- |
-| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (the daily-word curriculum + day-set rules), `phrases` (drill methods + matchers), `respond` (the think ladder + the borrowing check), `transcribe` (dictation scoring, the word diff, chunking) + `clips` (the bundled listening curriculum). No I/O, no keys. |
+| `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (day-set rules + the drill ladder + judging), `phrases` (drill methods + matchers), `respond` (the rung arc + the borrowing check), `transcribe` (dictation scoring, the word diff, chunking), `clips` (prose → timed cues), `prompt` (the prompt-composition kit + the learner snapshot's rendering), `modelJson` (reading a model's answer back). No I/O, no keys. |
 | `lib/client` | browser only | `sound`, `clientApi` (fetch our own API), `supabase` (browser client), `player`/`speech` (chunk playback), `recorder` (shadow capture). |
-| `lib/server` | server only (`"server-only"`) | `ai` gateway, `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `transcribe` (captions + the milestone jobs), `supabase` + `db/`. |
+| `lib/server` | server only (`"server-only"`) | `ai` gateway, `prompts/` (every system prompt, one module per surface), `request` (auth + the learner snapshot + the four route answers), `curriculum` (generating words), `listening` (generating passages), `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `transcribe`, `supabase` + `db/`. |
 
 Because the stats/streak/SRS logic lives in `lib/shared`, it moved behind the
 API **unchanged** when state went server-side — `lib/server/db/state.ts` calls
@@ -103,12 +103,51 @@ with the theme provider.
 - `chatComplete(system, messages, maxTokens)` — multi-turn completion. Groq uses
   the OpenAI-compatible endpoint, Gemini its `generateContent` API, Anthropic
   the SDK. `rawComplete(system, user)` is the single-shot helper.
-- `aiConfigured()` lets the UI degrade gracefully: with no key, the app falls
-  back to on-device feedback and the curated syllabus; AI modes announce
-  themselves as unavailable.
+- `aiConfigured()` gates every route. It no longer selects between an AI path
+  and a bundled one — there is no bundled one — so a missing key is a 503 that
+  says so plainly.
 
-Higher-level prompt construction lives in the feature modules (`words.ts`,
-`respond.ts`, `mission.ts`, `phrasebook.ts`).
+### The prompt layer
+
+Prompts used to be one long template literal per job, inlined in the engine
+that called it. That is fine for one prompt and unmanageable for a dozen: the
+injection rule drifted between them, the JSON contracts were formatted three
+different ways, and there was nowhere to make a change that had to hold
+everywhere. Three pieces replaced that:
+
+| Piece | Where | Job |
+| --- | --- | --- |
+| The kit | `lib/shared/prompt.ts` | Pure composition: `section`, `bullets`, `numbered`, `dataBlock` (the only fence untrusted text enters through), `jsonContract` (one phrasing), and `renderSnapshot`. Isomorphic and unit-tested. |
+| The texts | `lib/server/prompts/*.ts` | One module per surface, each exporting its system prompt, its user-half builder, and a `VERSION` string. Rules that must hold everywhere live once in `blocks.ts`. |
+| The learner | `lib/server/db/context.ts` | `loadSnapshot()` — six narrow indexed reads, all capped, assembled into a `LearnerSnapshot`. Loaded **once per request** by `requestContext()` and passed down. |
+
+`renderSnapshot(snapshot, facets)` is the efficiency lever: a judging call asks
+for `["level"]`, the curriculum generator asks for the lot. Empty facets render
+as nothing rather than as "none" — a line saying nothing still costs tokens and
+still invites the model to comment on it.
+
+A prompt's `VERSION` is stored alongside whatever it generated, so changing a
+prompt invalidates its own cache instead of serving yesterday's shape.
+
+### Where content comes from now
+
+Nothing is bundled. Two generators mint durable material:
+
+- **`lib/server/curriculum.ts`** — batches of ~12 words at a time, minted when
+  the learner's queue drops below six unmet items. The learner's met words go
+  in as an exhaustive exclusion list, and the one-word-per-semantic-field rule
+  is checked in code rather than hoped for. Stored in `word_items`.
+- **`lib/server/listening.ts`** — one passage per call, at the learner's band,
+  about subjects they have engaged with. The model writes prose only; the cue
+  timings are derived from it by `cueProse` at a stated speaking rate, because
+  a model asked for timings returns a transcript and a clock that disagree.
+  Stored in `listening_clips`.
+
+Per-session material (a day's rounds, a practice session's situations, a
+mission, a milestone) goes through `remember()` in `lib/server/db/generated.ts`:
+read-through, keyed by what it is *for*, versioned by the prompt that built it.
+That is what stops a reload changing the question someone is halfway through
+answering, and it is also the record of what the app taught.
 
 ## Content adapters
 
@@ -122,9 +161,10 @@ keys, caching, ToS isolation). One adapter family, keyless by default:
 Route handlers cache these responses at the edge (`revalidate`), and a Vercel
 Cron can warm them so the first user load is instant.
 
-Daily words deliberately has **no** adapter: its curriculum is a curated,
-frequency-ordered list bundled in `lib/shared/words.ts`, so the mode that has
-to work every single day has nothing to fetch and nothing to fail
+Daily words has no adapter either, but for a different reason than it used to:
+its curriculum is generated, not fetched. `lib/shared/words.ts` now holds only
+the *rules* — how a day's set is drawn, which drill rung a box earns, how a
+production is judged — and takes the learner's catalogue as an argument
 ([`DAILY_WORDS.md`](DAILY_WORDS.md)).
 
 `lib/server/extract.ts` is a different animal and is treated as one: it fetches
@@ -143,14 +183,14 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | --- | --- |
 | `GET /api/health` | Liveness. |
 | `GET /api/state` | The signed-in learner's whole durable state. |
-| `POST /api/state` | Apply one state action; returns the fresh whole store. |
-| `POST /api/words/daily` | One call per daily set: a real-life moment per word to produce it in. |
+| `POST /api/state` | Apply one state action; returns the fresh whole store. Includes `recordProductions` (the writing ledger) and `saveNewsSession`. |
+| `POST /api/words/daily` | The whole daily session: which words are due (topping the curriculum up if it is short) plus a round pack per word. Takes no body — the server owns the decision. |
 | `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
 | `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
 | `POST /api/respond/sharpen` | One harder question about the answer they just gave. |
 | `POST /api/respond/ideas` | Are these angles theirs, or the source restated? |
 | `POST /api/respond/polish` | Encouragement-first feedback on a finished piece. |
-| `GET /api/news/mission` | Today's planned News Chat mission, cached per (day, level). |
+| `GET /api/news/mission` | Today's News Chat mission, planned against this learner's record and remembered per (account, day, level). |
 | `POST /api/converse` | News Chat turn — the scene-partner engine (state merged in code). |
 | `POST /api/converse/bridge` | "Say it your way": intent (any language) → keywords + gapped frame. |
 | `POST /api/converse/continue` | "Next words": a stalled mid-sentence draft → next-word options + a gapped continuation frame. Never a completion. |
@@ -159,6 +199,8 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `POST /api/phrasebook/enrich` | A captured highlight → reusable form + meaning + transfer example. |
 | `POST /api/phrasebook/drill` | One call per practice session: a real-life situation per due phrase. |
 | `POST /api/phrasebook/judge` | Honest per-answer judgment: applied in their own sentence, or not. |
+| `GET /api/transcribe/clips` | The learner's listening library, topped up by one passage if short. |
+| `POST /api/transcribe/clips` | "Write me another" — always generates a fresh passage. |
 | `POST /api/transcribe/chunks` | A pasted YouTube link → its captions as timed cues. No AI. |
 | `POST /api/transcribe/explain` | The pattern behind a dictation's slips (the score itself is computed on-device). |
 | `POST /api/transcribe/milestone` | A passage → two comprehension questions + two phrases to reuse. |
@@ -213,41 +255,76 @@ Every mutation returns the whole fresh store, because one clean production moves
 the schedule, the streak and the day's tally at once, and a client
 reconstructing that from a patch would eventually disagree with the database.
 
+Migration `0007` completed the picture, and changed what "durable state" means:
+the **curriculum itself** is now learner data. `word_items` holds the words
+generated for this account, `listening_clips` the passages, `ai_content` the
+per-session material keyed by what it was generated for, and `productions`
+every sentence the learner has written with the ask that drew it out and the
+verdict it earned.
+
+That last one closed the app's oldest gap. Until it existed, a session left
+behind only its *consequences* — a Leitner box moved, a streak advanced, a
+counter incremented — and the sentences themselves were thrown away. They are
+the record now, and they are also what every generation prompt reads.
+
 **What is still open:**
 
-1. **News Chat conversations are not yet server-backed.** `news_sessions` exists
-   and is read on load, but `saveNewsSession` is currently a no-op rather than a
-   silent local write — the conversation writer still needs porting.
-2. **A guest-to-account import.** There is none: anyone with progress in an old
+1. **A guest-to-account import.** There is none: anyone with progress in an old
    browser blob starts fresh. Adding a one-time read-and-upload on first sign-in
    is small, and would cost nobody their streak.
-3. **E2E coverage of the learner journeys**, which needs a Supabase project or a
+2. **E2E coverage of the learner journeys**, which needs a Supabase project or a
    seeded local stack in CI — see `e2e/account-gate.spec.ts`.
+3. **Nothing surfaces the production ledger to the learner yet.** It is loaded
+   into the store and read by every prompt, but there is no "everything you have
+   written" screen, which is the obvious thing to build on top of it.
+4. **Generation cost is per-account.** Missions used to be planned once per
+   (day, level) and shared; they cannot be shared now that the plan reads the
+   learner's own due items and chosen subjects. Batching the curriculum (twelve
+   words per call, so one call covers a fortnight) is the main lever that
+   remains.
 
-Caching stays table- and edge-based (`fetched_at`/TTL + `revalidate`), and
-scheduled work stays on **Vercel Cron** — no long-running worker or Redis on the
-free tier. Sharing generated news subjects across users (keyed by day + level)
-is the main cost lever.
+Caching stays table- and edge-based (`ai_content` + `fetched_at`/TTL +
+`revalidate`), and scheduled work stays on **Vercel Cron** — no long-running
+worker or Redis on the free tier.
 
-## Offline posture
+## Availability posture
 
-Two postures, chosen per mode by what the mode is *for*.
+There is no offline story left, and that is the deliberate trade this
+architecture made twice.
 
-- **Nothing works offline any more.** Learner state is server-owned, so every
-  mode needs the network. The *content* is still bundled (the word curriculum,
-  the Transcribe clips), and the AI still degrades to local material — but a
-  session cannot start, or be saved, without reaching the server.
-- **The Phrasebook degrades.** Its Mixed mode wants the round-builder; Recall,
-  Sprint and Study run on stored material alone.
-- **Respond degrades to its local ladder.** With no AI key the questions are
-  generic but real, the borrowing check is local anyway, and pasting needs no
-  network at all — only link-fetching does.
-- **News Chat requires the network** and deliberately has no offline fallback
-  subject — it fails honestly rather than faking today's news.
-- **Transcribe needs no AI, but does need the network.** Curated clips ship
-  their own transcripts, so scoring, the diff, the gate and the milestone all
-  run with no provider key — but progress is server-owned like everything else.
-  See [`TRANSCRIBE.md`](TRANSCRIBE.md).
+The first trade moved learner state to Postgres: nothing durable lives on the
+device, so every mode needs the network. The second removed the bundled
+content: the word curriculum and the listening passages are generated per
+learner, so every mode needs a **provider key** as well as a network.
+
+What that costs, stated plainly:
+
+- **A provider outage is a session nobody can start.** Daily Words and
+  Transcribe used to run on a train with no key at all. They do not now.
+- **Free-tier rate limits are visible to learners.** A 502 from a rate-limited
+  provider is a real error on a real screen; retrying is what a user does.
+
+What it buys: a curriculum that never repeats a word someone knows, never runs
+out after a few hundred days, and can lean on what the learner has actually
+written. The bundled list could do none of those things.
+
+Every surface fails the same way as a result — honestly, with a retry, and
+never by substituting material that fits nobody in particular:
+
+- **Daily Words** says it could not build today's words. The alternative was
+  ten generic moments ("a friend asks how your week is going") that fit any
+  word and elicit none.
+- **The Phrasebook's** Mixed mode says it could not build the rounds. Recall,
+  Sprint and Study still run: they use the learner's *own stored material*,
+  which is theirs rather than pre-written.
+- **Respond** surfaces a failed ladder rather than falling back to four generic
+  rungs, and a failed polish rather than a canned celebration that praises a
+  word count it computed instead of the writing it never read.
+- **Transcribe** keeps its deterministic half — the score, the diff and the
+  missed-word list are computed on-device from the stored transcript — but the
+  milestone that closes a passage is generated per passage or not at all.
+- **News Chat** is unchanged: it was always inherently online, and always
+  failed honestly rather than faking today's news.
 
 ## Ops notes
 

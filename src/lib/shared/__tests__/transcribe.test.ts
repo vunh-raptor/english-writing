@@ -5,8 +5,6 @@ import {
   cutIntoChunks,
   firstLetters,
   hardestWord,
-  keyPhrases,
-  localMilestone,
   milestoneDue,
   normalizeWord,
   passageOf,
@@ -14,12 +12,15 @@ import {
   scoreDictation,
   stressWords,
 } from "../transcribe";
-import { CLIPS, findClip } from "../clips";
+import { clipDuration, cueProse } from "../clips";
 import type { TranscribeCue } from "@/types";
 
 /** The chunk the design was built around, and the attempt it was built around. */
 const REFERENCE =
   "Coral reefs cover less than one percent of the ocean floor, yet they support a quarter of all marine species. When the water warms by a single degree, the algae that feed the coral are expelled, and the reef turns white.";
+
+/** A generated passage stands in for the clips that used to be bundled. */
+const PASSAGE = `${REFERENCE} A bleached reef is not a dead reef. It is a starving one. The coral animal is still there, still building, still holding its shape against the current. What has gone is the tenant. For most of the last ten thousand years, coral has run a quiet arrangement inside its own tissue.`;
 
 const ATTEMPT =
   "Coral reefs cover less than one percent of the ocean floor, yet they support a quarter of all marine species. When the water warm by a single degree, the algy that feed the coral are expelled, and the reef turn white.";
@@ -150,9 +151,10 @@ describe("cutIntoChunks", () => {
   });
 
   it("covers every cue exactly once, in order", () => {
-    const chunks = cutIntoChunks(CLIPS[0].cues, CHUNK_SECONDS);
+    const cues = cueProse(PASSAGE, 150);
+    const chunks = cutIntoChunks(cues, CHUNK_SECONDS);
     const rebuilt = chunks.map((c) => c.text).join(" ");
-    const original = CLIPS[0].cues.map((c) => c.text.trim()).join(" ");
+    const original = cues.map((c) => c.text.trim()).join(" ");
     expect(rebuilt).toBe(original);
     for (let i = 1; i < chunks.length; i++) {
       expect(chunks[i].start).toBeGreaterThanOrEqual(chunks[i - 1].end);
@@ -197,47 +199,33 @@ describe("scaffolds", () => {
   });
 });
 
-describe("the offline milestone", () => {
-  it("pulls two reusable phrases straight out of the passage", () => {
-    const quiz = localMilestone(REFERENCE);
-    expect(quiz.questions).toHaveLength(2);
-    expect(quiz.phrases).toHaveLength(2);
-    for (const phrase of quiz.phrases) {
-      expect(REFERENCE.toLowerCase()).toContain(phrase.toLowerCase());
+describe("cueing a generated passage", () => {
+  it("keeps every word of the prose, in order", () => {
+    const cues = cueProse(PASSAGE, 150);
+    expect(cues.map((c) => c.text).join(" ")).toBe(PASSAGE.replace(/\s+/g, " ").trim());
+  });
+
+  it("runs the clock forward without gaps or overlaps", () => {
+    const cues = cueProse(PASSAGE, 150);
+    expect(cues[0].start).toBe(0);
+    for (let i = 1; i < cues.length; i++) {
+      expect(cues[i].start).toBe(cues[i - 1].end);
     }
   });
 
-  it("picks phrases from different parts of the passage", () => {
-    const [a, b] = keyPhrases(REFERENCE, 2);
-    expect(a).not.toBe(b);
-    expect(Math.abs(REFERENCE.indexOf(a) - REFERENCE.indexOf(b))).toBeGreaterThan(20);
+  it("makes a slower reading take longer, which is the whole point of wpm", () => {
+    expect(clipDuration(cueProse(PASSAGE, 120))).toBeGreaterThan(
+      clipDuration(cueProse(PASSAGE, 180)),
+    );
   });
 
-  it("asks for nothing it cannot find rather than inventing a phrase", () => {
-    expect(keyPhrases("the and of to it is", 2)).toEqual([]);
-  });
-});
-
-describe("the bundled curriculum", () => {
-  it("gives every clip a transcript, a duration and a findable id", () => {
-    expect(CLIPS.length).toBeGreaterThan(0);
-    for (const clip of CLIPS) {
-      expect(clip.cues.length).toBeGreaterThan(0);
-      expect(clip.duration).toBeGreaterThan(0);
-      expect(findClip(clip.id)).toBe(clip);
-    }
+  it("lands line breaks on sentence ends, so chunks cut on sentences", () => {
+    const cues = cueProse("One two three. Four five six.", 150);
+    expect(cues.map((c) => c.text)).toEqual(["One two three.", "Four five six."]);
   });
 
-  it("opens the reef clip on the chunk the mode was designed around", () => {
-    const clip = findClip("clip-reefs");
-    expect(clip).toBeDefined();
-    const first = cutIntoChunks(clip!.cues, CHUNK_SECONDS)[0];
-    expect(first.text).toBe(REFERENCE);
-  });
-
-  it("cuts each clip into at least one full passage", () => {
-    for (const clip of CLIPS) {
-      expect(cutIntoChunks(clip.cues, CHUNK_SECONDS).length).toBeGreaterThanOrEqual(10);
-    }
+  it("has nothing to cue from empty prose", () => {
+    expect(cueProse("", 150)).toEqual([]);
+    expect(clipDuration([])).toBe(0);
   });
 });

@@ -101,3 +101,32 @@ request-scoped client, so RLS — not application code — is what enforces it.
 project attached, so they are unrun: no `supabase db advisors`, no live query,
 no verification beyond review. Apply them to a scratch project and run the
 advisors before trusting them.
+
+## Migration 0007 — the curriculum becomes the learner's
+
+`0001`-`0006` moved everything the learner *accumulated* into Postgres. `0007`
+moves what the app *gives* them, and keeps what they produce:
+
+| Table | Holds |
+| --- | --- |
+| `word_items` | The learner's own word curriculum, generated in batches and held in queue order (`rank`). Replaces the 890-line `WORD_SEEDS` array that used to ship with the app. Rows are never deleted on being met — the row is the record of what has been covered, so the next batch can avoid repeating it. |
+| `listening_clips` | Generated listening passages: prose, the speaking rate, and the cues derived from both. Frozen at generation time so a half-finished clip scores against exactly the text it played. |
+| `ai_content` | Per-session generated material, keyed `(user_id, kind, content_key)` and stamped with the `prompt_version` that built it. A reload replays the stored payload instead of generating a different question mid-answer; a prompt change misses its own cache by design. |
+| `productions` | **Every sentence the learner has written**, with the ask that drew it out and the verdict it earned. The app used to keep only a production's consequences and throw the sentence away. |
+
+Plus the `production_surface`, `production_verdict` and `word_pos` enums.
+
+`productions` earns its keep three times over: the learner can see what they
+have actually written, the schedule has evidence behind it, and every
+generation prompt reads the recent rows (`src/lib/server/db/context.ts`) so the
+next word, moment or passage is pitched at the person who wrote them rather
+than at a generic B1.
+
+Two indexes carry the load: `productions_user_created_idx` for "their recent
+writing" (the snapshot's hot path) and a partial
+`productions_user_item_idx` for "how has this item gone for them".
+
+**Not yet applied anywhere.** Like `0006`, this was authored without a Supabase
+project attached: no `supabase db advisors`, no live query, no verification
+beyond review. Apply to a scratch project and run the advisors before trusting
+it.

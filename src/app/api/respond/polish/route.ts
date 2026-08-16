@@ -1,32 +1,51 @@
 import { NextResponse } from "next/server";
 import { polishDraft } from "@/lib/server/respond";
-import type { NewsLevel, SourceRef } from "@/types";
+import { aiConfigured } from "@/lib/server/ai";
+import {
+  aiUnavailable,
+  badRequest,
+  readJson,
+  requestContext,
+  unauthorized,
+  upstreamFailed,
+} from "@/lib/server/request";
+import type { SourceRef } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const LEVELS: NewsLevel[] = ["A2", "B1", "B2", "C1"];
-
-/** Encouragement-first feedback on the finished piece. polishDraft() fails
- *  soft internally, so a finished draft never ends on an error. */
+/**
+ * Encouragement-first feedback on the finished piece.
+ *
+ * This used to be ungated and unable to fail, because it fell back to a warm
+ * local note. The note praised a word count it had computed rather than the
+ * writing it never read, so it is gone: a failure is now a failure the learner
+ * can retry, and their draft is already saved either way.
+ */
 export async function POST(req: Request) {
-  let body: { level?: string; source?: Partial<SourceRef>; hook?: string; draft?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  if (!aiConfigured()) return aiUnavailable();
+  const ctx = await requestContext();
+  if (!ctx) return unauthorized();
+
+  const body = await readJson<{
+    source?: Partial<SourceRef>;
+    hook?: string;
+    draft?: string;
+  }>(req);
+  if (!body) return badRequest("Invalid JSON.");
+
   const draft = typeof body.draft === "string" ? body.draft.trim().slice(0, 4000) : "";
-  if (!draft) return NextResponse.json({ error: "Missing draft." }, { status: 400 });
+  if (!draft) return badRequest("Missing draft.");
 
   const source: SourceRef = {
     title: typeof body.source?.title === "string" ? body.source.title.slice(0, 160) : "Untitled",
     site: typeof body.source?.site === "string" ? body.source.site.slice(0, 60) : undefined,
     words: typeof body.source?.words === "number" ? body.source.words : 0,
   };
-  const level: NewsLevel = LEVELS.includes(body.level as NewsLevel)
-    ? (body.level as NewsLevel)
-    : "B1";
   const hook = typeof body.hook === "string" ? body.hook.slice(0, 240) : "";
 
-  return NextResponse.json(await polishDraft(level, source, hook, draft));
+  try {
+    return NextResponse.json(await polishDraft(ctx.snapshot, source, hook, draft));
+  } catch (e) {
+    return upstreamFailed(e, "Couldn't read your piece just now — try again.");
+  }
 }

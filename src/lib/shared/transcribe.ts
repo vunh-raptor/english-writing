@@ -361,62 +361,6 @@ export function stressWords(text: string, max = 7): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// The offline milestone
-// ---------------------------------------------------------------------------
-
-/**
- * Two reusable phrases pulled straight out of a passage: runs of consecutive
- * content words, longest first, taken from different parts of the text so they
- * aren't two halves of the same clause.
- */
-export function keyPhrases(passage: string, want = 2): string[] {
-  const words = splitWords(passage);
-  const runs: { text: string; at: number }[] = [];
-  let run: string[] = [];
-  let startedAt = 0;
-
-  const flush = () => {
-    if (run.length >= 2) runs.push({ text: run.slice(0, 3).join(" "), at: startedAt });
-    run = [];
-  };
-  words.forEach((w, i) => {
-    if (FUNCTION_WORDS.has(normalizeWord(w)) || w.length < 4) {
-      flush();
-      return;
-    }
-    if (run.length === 0) startedAt = i;
-    run.push(w);
-  });
-  flush();
-
-  const picked: { text: string; at: number }[] = [];
-  for (const candidate of [...runs].sort((a, b) => b.text.length - a.text.length)) {
-    if (picked.length >= want) break;
-    if (picked.some((p) => p.text === candidate.text)) continue;
-    // Keep the picks apart, so the milestone asks for two different ideas
-    // rather than two halves of one clause.
-    if (picked.some((p) => Math.abs(p.at - candidate.at) < 8)) continue;
-    picked.push(candidate);
-  }
-  return picked.map((p) => p.text);
-}
-
-/**
- * The milestone a passage gets when no model is available. The questions are
- * generic in shape but real in demand: both require having followed the
- * passage, and neither can be answered by copying it back.
- */
-export function localMilestone(passage: string): MilestoneQuiz {
-  return {
-    questions: [
-      "In your own words, what was this passage actually about?",
-      "What is the one thing here you would tell someone else, and why that one?",
-    ],
-    phrases: keyPhrases(passage, 2),
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Display helpers
 // ---------------------------------------------------------------------------
 

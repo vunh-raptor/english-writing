@@ -12,12 +12,12 @@ import type {
   TranscribeChunk,
   TranscribeSession as Session,
 } from "@/types";
+import type { ProductionInput } from "@/lib/server/db/state";
 import {
   PASS_LINE,
   clockTime,
   firstLetters,
   hardestWord,
-  localMilestone,
   milestoneDue,
   passageOf,
   passageRange,
@@ -65,6 +65,8 @@ interface Props {
   onExit(): void;
   /** Words misheard in this chunk, for tomorrow's review. */
   onMisheard(words: { text: string; heard: string }[]): void;
+  /** The milestone sentence, for the writing record. */
+  onProduced(production: ProductionInput): void;
 }
 
 export function TranscribeSession({
@@ -75,6 +77,7 @@ export function TranscribeSession({
   onPassageDone,
   onExit,
   onMisheard,
+  onProduced,
 }: Props) {
   const [step, setStep] = useState<Step>("dictate");
   const [cursor, setCursor] = useState(session.cursor);
@@ -103,6 +106,9 @@ export function TranscribeSession({
   const [answers, setAnswers] = useState(["", ""]);
   const [sentence, setSentence] = useState("");
   const [verdict, setVerdict] = useState<string>("");
+  /** Set when the check couldn't be written — the passage waits rather than
+   *  closing on two questions that would fit any passage at all. */
+  const [quizError, setQuizError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const mountRef = useRef<HTMLDivElement>(null);
@@ -190,7 +196,7 @@ export function TranscribeSession({
     // The explanation is a bonus on top of a score that already exists, so it
     // is fetched after the fact and its failure is silent.
     if (result.missed.length > 0) {
-      explainDictation(level, chunk.text, text, result.missed)
+      explainDictation(chunk.text, text, result.missed)
         .then((r) => {
           setPatterns(r.patterns);
           setKeep(r.keep);
@@ -282,11 +288,14 @@ export function TranscribeSession({
       .slice(from, to + 1)
       .map((c) => c.text)
       .join(" ");
+    setQuizError("");
     try {
-      setQuiz(await fetchMilestone(level, passageText));
+      setQuiz(await fetchMilestone(passageText));
     } catch {
-      // No key, no network, or a bad response — the passage still closes.
-      setQuiz(localMilestone(passageText));
+      // The canned two questions that used to stand in here ("what was this
+      // passage about?") could be asked of any passage ever written, which is
+      // precisely what this gate exists to rule out. Say so and offer a retry.
+      setQuizError("Couldn't set the check for this passage. Try again in a moment.");
     } finally {
       setBusy(false);
     }
@@ -296,8 +305,17 @@ export function TranscribeSession({
     if (!quiz || busy) return;
     setBusy(true);
     setVerdict("");
+    const ask = `${quiz.questions.join(" / ")} — using: ${quiz.phrases.join(", ")}`;
     try {
-      const result = await judgeMilestoneAttempt(level, quiz, answers, sentence);
+      const result = await judgeMilestoneAttempt(quiz, answers, sentence);
+      onProduced({
+        surface: "transcribe",
+        mode: "milestone",
+        prompt: ask,
+        text: sentence,
+        verdict: result.passed ? "clean" : "missed",
+        ...(result.note ? { note: result.note } : {}),
+      });
       if (!result.passed) {
         setVerdict(result.note);
         return;
@@ -774,6 +792,13 @@ export function TranscribeSession({
               <div className="mt-8 flex items-center gap-3 text-muted-foreground">
                 <span className="spinner spinner-sm" />
                 <span className="text-sm">Setting the check…</span>
+              </div>
+            ) : quizError ? (
+              <div className="mt-8 max-w-[520px]">
+                <p className="note note-warning">{quizError}</p>
+                <Button className="mt-4" variant="secondary" onClick={() => void openMilestone()}>
+                  Try again
+                </Button>
               </div>
             ) : quiz ? (
               <>
