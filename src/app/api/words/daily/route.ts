@@ -33,13 +33,17 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   if (!aiConfigured()) return aiUnavailable();
 
-  const ctx = await requestContext();
-  if (!ctx) return unauthorized();
-
-  const { db, userId, snapshot } = ctx;
-  const day = todayKey();
-
   try {
+    // Context construction reads the learner snapshot from several tables. Keep
+    // it inside the route's error boundary too: a transient Data API failure (or
+    // an unapplied migration) must still produce our JSON error contract rather
+    // than Next's HTML 500 page, which the client cannot decode.
+    const ctx = await requestContext();
+    if (!ctx) return unauthorized();
+
+    const { db, userId, snapshot } = ctx;
+    const day = todayKey();
+
     // Two batched reads rather than one: `loadState` is the tested seam for the
     // whole store and `loadSnapshot` for the prompt context, and they want
     // different slices. Both issue their queries in parallel, so this is two

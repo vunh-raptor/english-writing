@@ -34,6 +34,11 @@ export type { WordRoundInput };
 const MAX_WORDS = 10;
 /** A worked example longer than this is a paragraph, not a model sentence. */
 const MAX_EXAMPLE_WORDS = 25;
+/** Each pack contains six sentences plus JSON structure. Scale the allowance
+ * with the day size so five- and ten-word modes do not end in truncated JSON. */
+const TOKENS_PER_ROUND = 360;
+const MIN_OUTPUT_TOKENS = 1500;
+const MAX_OUTPUT_TOKENS = 4000;
 
 /** Coerce one response into rounds, keeping only what survives the guards. */
 function coerceRounds(
@@ -113,9 +118,13 @@ export async function wordRounds(
   if (capped.length === 0) return [];
 
   const prompt = roundsUser(snapshot, capped);
+  const outputTokens = Math.min(
+    MAX_OUTPUT_TOKENS,
+    Math.max(MIN_OUTPUT_TOKENS, capped.length * TOKENS_PER_ROUND),
+  );
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await rawComplete(SYSTEM, prompt, 1500);
+    const raw = await rawComplete(SYSTEM, prompt, outputTokens);
     const obj = extractObject(raw);
     const rounds = obj ? coerceRounds(obj, capped) : [];
     if (rounds.length > 0) return rounds;
