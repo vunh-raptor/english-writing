@@ -34,6 +34,12 @@ const REFILL_BELOW = 6;
 const MAX_MEANING_WORDS = 20;
 /** Total curriculum ceiling per learner, so a runaway loop can't mint forever. */
 const MAX_ITEMS = 2000;
+/** A complete word entry normally costs 140-200 output tokens. The previous
+ * fixed 1,800-token ceiling regularly cut a twelve-word JSON batch in half (or
+ * before its closing brace), making a new learner's first session fail. */
+const TOKENS_PER_WORD = 260;
+const MIN_OUTPUT_TOKENS = 1800;
+const MAX_OUTPUT_TOKENS = 4000;
 
 const POS = new Set<WordPos>(["verb", "noun", "adjective", "adverb"]);
 const BANDS = new Set<NewsLevel>(["A2", "B1", "B2", "C1"]);
@@ -143,7 +149,11 @@ export async function generateWordBatch(
             .map((e) => `- ${e}`)
             .join("\n")}\nReturn corrected JSON only.`;
 
-    const raw = await rawComplete(SYSTEM, prompt, 1800, 0.7);
+    const outputTokens = Math.min(
+      MAX_OUTPUT_TOKENS,
+      Math.max(MIN_OUTPUT_TOKENS, count * TOKENS_PER_WORD),
+    );
+    const raw = await rawComplete(SYSTEM, prompt, outputTokens, 0.7);
     const obj = extractObject(raw);
     if (!obj) {
       console.warn(`[curriculum] attempt ${attempt}: no JSON —`, raw.slice(0, 300));
