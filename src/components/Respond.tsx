@@ -509,6 +509,8 @@ export function Respond() {
             onChange={(e) => setAnswer(e.target.value)}
             placeholder="In your own words…"
             className="w-full resize-none bg-transparent font-serif text-[16px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
+            autoCorrect="off"
+            spellCheck={false}
           />
         </div>
 
@@ -525,6 +527,8 @@ export function Respond() {
                 onChange={(e) => setFollowAnswer(e.target.value)}
                 placeholder="Keep going…"
                 className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
           </div>
@@ -638,6 +642,8 @@ export function Respond() {
                     onChange={(e) => setIdea(idea.id, { hook: e.target.value })}
                     placeholder="Your hook — the line that makes someone read on…"
                     className="mt-2 w-full border-b border-input bg-transparent py-1.5 font-serif text-[17px] text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
 
                   <div className="mt-2.5 flex flex-col gap-1.5">
@@ -657,6 +663,8 @@ export function Respond() {
                             bi === 0 ? "the point you'd make first…" : "then…"
                           }
                           className="min-w-0 flex-1 bg-transparent py-0.5 text-[14px] text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/60"
+                          autoCorrect="off"
+                          spellCheck={false}
                         />
                       </div>
                     ))}

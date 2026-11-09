@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractObject, normalizeGaps, str, strList } from "../modelJson";
+import { extractObject, normalizeGaps, resolveItemId, str, strList } from "../modelJson";
 
 describe("extractObject", () => {
   it("reads plain JSON", () => {
@@ -51,5 +51,38 @@ describe("normalizeGaps", () => {
 
   it("leaves a single underscore alone — it isn't a gap", () => {
     expect(normalizeGaps("snake_case stays")).toBe("snake_case stays");
+  });
+});
+
+
+const items = [
+  { id: "w-appreciate", word: "appreciate" },
+  { id: "w-look-up", word: "look up" },
+  { id: "w-use", word: "use" },
+];
+
+describe("resolveItemId — forgive decorated ids, nothing looser", () => {
+  it("matches the exact id", () => {
+    expect(resolveItemId("w-appreciate", items)?.id).toBe("w-appreciate");
+  });
+
+  it("forgives a trailing ordinal, a dropped prefix, and underscores", () => {
+    for (const raw of ["w-appreciate-1", "appreciate-1", "appreciate_1", "W_Appreciate", "appreciate"]) {
+      expect(resolveItemId(raw, items)?.id).toBe("w-appreciate");
+    }
+    expect(resolveItemId("look up", items)?.id).toBe("w-look-up");
+    expect(resolveItemId("look_up_2", items)?.id).toBe("w-look-up");
+  });
+
+  it("returns nothing for empty input or no items", () => {
+    expect(resolveItemId("", items)).toBeUndefined();
+    expect(resolveItemId("   ", items)).toBeUndefined();
+    expect(resolveItemId("w-appreciate", [])).toBeUndefined();
+  });
+
+  it("never substring-matches: 'user' is not 'use', 'appreciated' is not 'appreciate'", () => {
+    expect(resolveItemId("user", items)).toBeUndefined();
+    expect(resolveItemId("w-user", items)).toBeUndefined();
+    expect(resolveItemId("appreciated", items)).toBeUndefined();
   });
 });

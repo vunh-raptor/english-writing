@@ -168,6 +168,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(action),
+          // A sentence they just wrote must survive the tab closing under it.
+          // `keepalive` lets the browser finish the request after unload; it
+          // is capped at 64KB in flight, so only the small, precious write
+          // gets it — a bulky session save must not fail on the cap instead.
+          keepalive: action.type === "recordProductions",
         });
         if (!res.ok) throw new Error(String(res.status));
         setStore((await res.json()) as Store);

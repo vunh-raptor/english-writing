@@ -898,6 +898,8 @@ export function Phrasebook() {
                 disabled={flashActive}
                 autoComplete="off"
                 className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70 disabled:opacity-60"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
             <div className="mt-2.5 flex items-center justify-end">

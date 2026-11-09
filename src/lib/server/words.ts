@@ -1,7 +1,7 @@
 import "server-only";
 import type { WordRound } from "@/types";
 import type { LearnerSnapshot } from "@/lib/shared/prompt";
-import { extractObject, str, strList } from "@/lib/shared/modelJson";
+import { extractObject, resolveItemId, str, strList } from "@/lib/shared/modelJson";
 import { countWords } from "@/lib/shared/stats";
 import { wordMatcher } from "@/lib/shared/words";
 import { rawComplete } from "./ai";
@@ -41,13 +41,15 @@ function coerceRounds(
   words: WordRoundInput[],
 ): WordRound[] {
   if (!Array.isArray(obj.rounds)) return [];
-  const byId = new Map(words.map((w) => [w.id, w]));
   const out: WordRound[] = [];
+  const seen = new Set<string>();
 
   for (const r of obj.rounds) {
     const o = (r ?? {}) as Record<string, unknown>;
-    const word = byId.get(str(o.id));
-    if (!word) continue;
+    const word = resolveItemId(str(o.id), words);
+    // One round per word: a forgiving id match must not let two packs land
+    // on the same word and silently drop the other.
+    if (!word || seen.has(word.id)) continue;
 
     const matcher = wordMatcher(word.word);
     const setup = str(o.setup);
@@ -85,6 +87,7 @@ function coerceRounds(
         ? { wrong, right }
         : undefined;
 
+    seen.add(word.id);
     out.push({
       id: word.id,
       setup,
@@ -119,7 +122,7 @@ export async function wordRounds(
     const obj = extractObject(raw);
     const rounds = obj ? coerceRounds(obj, capped) : [];
     if (rounds.length > 0) return rounds;
-    console.warn(`[words] attempt ${attempt} produced no usable rounds`);
+    console.warn(`[words] attempt ${attempt} produced no usable rounds —`, raw.slice(0, 300));
   }
 
   throw new Error("Couldn't build today's moments — try again in a moment.");
