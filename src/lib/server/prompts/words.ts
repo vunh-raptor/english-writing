@@ -31,7 +31,7 @@ export interface WordRoundInput {
  * for a sentence, gapped in code, cannot.
  */
 
-export const VERSION = "words.rounds.v2";
+export const VERSION = "words.rounds.v3";
 
 export const SYSTEM = joinParts([
   "You write practice material for words an English learner is studying today. For EACH word you get, return one pack.",
@@ -51,6 +51,7 @@ export const SYSTEM = joinParts([
     "HARD RULES",
     bullets([
       NO_LEAK,
+      'id: copy each word\'s id EXACTLY as given at the start of its line (for example "w-appreciate") — no numbering, no changes.',
       "Each example, and both the cloze and repair sentences, MUST contain the word (any normal inflection is fine).",
       EXAMPLES_ARE_INPUT,
       "Vary the settings across rounds — different places, people, and times of day.",

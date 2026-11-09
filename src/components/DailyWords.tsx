@@ -489,6 +489,24 @@ export function DailyWords() {
     const clean = j.used && !helped;
     const outcome: WordOutcome = clean ? "clean" : j.used ? "helped" : "missed";
 
+    // The sentence itself goes in the ledger, with the moment that drew it out
+    // and the verdict it earned. Written here rather than at the end of the
+    // session, so abandoning the day halfway still keeps what was produced —
+    // and dispatched before the phrase and schedule writes, because the store
+    // saves one action at a time: a learner who closes the tab a second after
+    // Send should lose a schedule tick, never the sentence they wrote.
+    recordProductions([
+      {
+        surface: "words",
+        itemSlug: item.id,
+        mode: item.drill,
+        prompt: `${item.setup}\n${item.task}`.trim(),
+        text: sentence,
+        verdict: outcome,
+        ...(j.note ? { note: j.note } : {}),
+      },
+    ]);
+
     // A new word joins the library the moment it's been used — that's when it
     // stops being the app's word and starts being theirs.
     if (item.seed) collectPhrase(wordToPhrase(item.seed, today));
@@ -502,20 +520,6 @@ export function DailyWords() {
     // in it, or the gap would have no answer.
     if (j.used) lines.current[item.id] = sentence;
 
-    // The sentence itself goes in the ledger, with the moment that drew it out
-    // and the verdict it earned. Written here rather than at the end of the
-    // session, so abandoning the day halfway still keeps what was produced.
-    recordProductions([
-      {
-        surface: "words",
-        itemSlug: item.id,
-        mode: item.drill,
-        prompt: `${item.setup}\n${item.task}`.trim(),
-        text: sentence,
-        verdict: outcome,
-        ...(j.note ? { note: j.note } : {}),
-      },
-    ]);
 
     setResults((rs) => [...rs, { outcome, sentence, prevBox: item.prevBox }]);
     setResult(j);
@@ -720,6 +724,8 @@ export function DailyWords() {
                         }}
                         placeholder="write it the natural way…"
                         autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         className="min-w-[200px] flex-1 resize-none border-b-2 border-input bg-transparent py-1.5 font-serif text-[16px] leading-relaxed text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
                       />
                     ) : (
@@ -871,6 +877,8 @@ export function DailyWords() {
                     }}
                     placeholder="Answer in your own sentence…"
                     autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
                   />
                 </div>
@@ -990,6 +998,8 @@ export function DailyWords() {
                 }}
                 placeholder={`Use “${a.word}” and “${b.word}” in one sentence…`}
                 autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
               />
             </div>

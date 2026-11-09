@@ -1064,6 +1064,8 @@ export function NewsChat({
               onChange={(e) => setBridgeIntent(e.target.value)}
               placeholder="Type your idea in any language…"
               className="flex-1"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <Button type="submit" variant="outline" size="sm" disabled={bridging || !bridgeIntent.trim()}>
               {bridging ? "…" : "Help me say it"}
@@ -1315,6 +1317,8 @@ export function NewsChat({
                     disabled={!mission}
                     autoComplete="off"
                     className="w-full resize-none overflow-hidden bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
                 </div>
 

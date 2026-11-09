@@ -140,14 +140,17 @@ vocabulary count (so "your vocabulary" only ever counts words they **wrote**).
 
 | Route | In → out |
 | --- | --- |
-| `POST /api/words/daily` | `{ level, words[{id,word,pos,meaning,collocations}] }` → `{ rounds[{id,setup,task,examples[],cloze?,repair?{wrong,right}}] }` |
+| `POST /api/words/daily` | no body — the learner, level and due words come from the session → `{ words[], rounds[{id,setup,task,examples[],cloze?,repair?{wrong,right}}], todaysNew[] }` |
 | `POST /api/phrasebook/judge` | reused as-is — a word is a lexical item like any other |
 
 Server module `src/lib/server/words.ts` (mission.ts robustness pattern:
 first-`{…}` extraction, per-field coercion, hard code guards — a setup that
 leaks its word is dropped, an example or cloze that doesn't contain it is
 dropped, and a repair pair whose halves differ by more than a word-level fix is
-dropped).
+dropped). A round is matched to its word by id, forgiving the decorations small
+models add (`appreciate-1`, `w_appreciate`) but never a substring
+(`resolveItemId` in `lib/shared/modelJson.ts`) — an exact-match lookup used to
+throw away whole sets of good rounds.
 
 One deliberate choice worth calling out: the model is asked for a **complete
 sentence**, never one with a blank in it. The gap is cut in code

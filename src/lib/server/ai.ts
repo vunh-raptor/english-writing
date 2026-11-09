@@ -29,7 +29,7 @@ export interface ChatTurn {
 function resolveProvider(): Resolved | null {
   const candidates: { provider: Provider; key?: string; model: string }[] = [
     { provider: "groq", key: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile" },
-    { provider: "gemini", key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || "gemini-2.0-flash" },
+    { provider: "gemini", key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite" },
     { provider: "anthropic", key: process.env.ANTHROPIC_API_KEY, model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5" },
   ];
   const forced = process.env.AI_PROVIDER as Provider | undefined;

@@ -49,3 +49,36 @@ export function strList(v: unknown, max: number): string[] {
 export function normalizeGaps(text: string): string {
   return text.replace(/_{2,}/g, "___");
 }
+
+/** Lowercase, separators unified, so "W_Look Up" and "w-look-up" compare equal. */
+function idKey(s: string): string {
+  return s.trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
+
+/**
+ * Which of `items` a model meant by the id it echoed back.
+ *
+ * Small models decorate ids rather than copying them — "appreciate-1",
+ * "appreciate_1", "w-appreciate-1" for `w-appreciate` — and an exact-match
+ * lookup then throws away a perfectly good round, sometimes all of them. This
+ * forgives exactly those habits and nothing looser: exact id first, then the id
+ * with a trailing ordinal stripped, then the bare word itself. No substring
+ * matching, so "use" can never claim a round meant for "user".
+ */
+export function resolveItemId<T extends { id: string; word: string }>(
+  raw: string,
+  items: T[],
+): T | undefined {
+  const key = idKey(raw);
+  if (!key) return undefined;
+  const exact = items.find((w) => idKey(w.id) === key);
+  if (exact) return exact;
+
+  const bare = key.replace(/-\d+$/, "");
+  return items.find(
+    (w) =>
+      idKey(w.id) === bare ||
+      idKey(w.id).replace(/^w-/, "") === bare ||
+      idKey(w.word) === bare,
+  );
+}
