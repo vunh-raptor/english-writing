@@ -3,6 +3,7 @@ import type {
   NewsLevel,
   Phrase,
   SrsRecord,
+  TalkState,
   TalkVerdict,
   WordDrill,
   WordOutcome,
@@ -492,23 +493,7 @@ export function hintLeaks(hint: string, sentence: string): boolean {
   return shared / theirs.length >= 0.75;
 }
 
-/** Where one word's conversation stands. */
-export interface TalkState {
-  /** How many sentences this word asks for. */
-  asks: number;
-  /** Index of the ask currently open. */
-  ask: number;
-  /** Misses on the open ask — drives the hint level and the way out. */
-  misses: number;
-  /** Misses across the whole word — any at all means it was not clean. */
-  totalMisses: number;
-  /** They reopened the card after it hid. Help is free; the interval isn't. */
-  peeked: boolean;
-  /** The sentences that landed, in order. */
-  landed: string[];
-  /** They chose to leave it for tomorrow. */
-  left: boolean;
-}
+export type { TalkState };
 
 export type TalkEvent =
   | { type: "turn"; verdict: TalkVerdict; sentence: string }

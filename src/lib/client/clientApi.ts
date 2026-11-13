@@ -16,9 +16,7 @@ import type {
   DrillRoundSetup,
   DrillJudgment,
   LexKind,
-  TalkTurn,
-  WordRound,
-  WordSeed,
+  WordDay,
   TranscribeClip,
   TranscribeCue,
   SlipPattern,
@@ -48,55 +46,40 @@ function toApiMessages(messages: ChatMessage[]) {
   }));
 }
 
-// --- Daily words: one call resolves the whole session ------------------------
+// --- Daily words: the server owns the day; the client names moves ------------
 
-export interface WordSession {
-  /** The items this session runs, reviews and new words together. */
-  words: WordSeed[];
-  /** One round pack per word — the moment, the examples, the drill material. */
-  rounds: WordRound[];
-  /** The full set today issued, so the client can fix it against reshuffling. */
-  todaysNew: WordSeed[];
+/** Today's stored session, or null when it hasn't been opened. Never generates. */
+export async function peekWordDay(): Promise<WordDay | null> {
+  const res = await fetch("/api/words/daily");
+  if (!res.ok) throw await httpError(res);
+  return ((await res.json()) as { day: WordDay | null }).day;
 }
 
-/**
- * Today's session: which words, and the material for each.
- *
- * This used to send the client's own curriculum up and ask only for the
- * tailored halves. The curriculum is generated per learner and lives in
- * Postgres now, so the server decides the whole day — and there is no local
- * fallback behind a failure here, by design.
- */
-export async function fetchWordSession(): Promise<WordSession> {
+/** Open today's session: resume it, or build it once (slow the first time). */
+export async function openWordDay(): Promise<WordDay> {
   const res = await fetch("/api/words/daily", { method: "POST" });
   if (!res.ok) throw await httpError(res);
-  const data = await res.json();
-  return {
-    words: Array.isArray(data.words) ? (data.words as WordSeed[]) : [],
-    rounds: Array.isArray(data.rounds) ? (data.rounds as WordRound[]) : [],
-    todaysNew: Array.isArray(data.todaysNew) ? (data.todaysNew as WordSeed[]) : [],
-  };
+  return ((await res.json()) as { day: WordDay }).day;
 }
 
-/**
- * One turn of a word's conversation: send the sentence, get the verdict.
- *
- * `misses` is how many times this same ask has already been missed — it sets
- * how strong a hint the server may give, and nothing else.
- */
-export async function wordTurn(
-  word: { word: string; pos: string; meaning: string },
-  said: string,
-  sentence: string,
-  misses: number,
-): Promise<TalkTurn> {
+export type WordMove =
+  | { move: "say"; wordId: string; sentence: string }
+  | { move: "peek"; wordId: string }
+  | { move: "leave"; wordId: string }
+  | { move: "bridge"; sentence: string }
+  | { move: "finish" };
+
+/** Make one move and get the day back as the server now has it. */
+export async function wordMove(move: WordMove): Promise<WordDay> {
   const res = await fetch("/api/words/turn", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ word, said, sentence, misses }),
+    body: JSON.stringify(move),
+    // A sentence they just sent must survive the tab closing under it.
+    keepalive: true,
   });
   if (!res.ok) throw await httpError(res);
-  return res.json() as Promise<TalkTurn>;
+  return ((await res.json()) as { day: WordDay }).day;
 }
 
 // --- Respond: bring a source, think against it, produce your own ------------

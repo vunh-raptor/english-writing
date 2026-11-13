@@ -48,6 +48,8 @@ Break these and the change is a regression, however green the tests are.
 - **Account-only, server-owned state.** Every durable thing a learner
   accumulates — streak, vocabulary, phrase library and its schedule, saved
   sessions — lives in Postgres under RLS and is reached through `/api/state`.
+  A session in progress counts: today's Daily Words conversation is kept
+  server-side move by move, so leaving the page loses nothing.
   **Nothing durable is written to the device**: no `localStorage`, no
   `sessionStorage`, not even a layout preference. A signed-out request gets a
   redirect (pages) or a 401 (API), never an empty store that looks like a new
@@ -114,6 +116,14 @@ Break these and the change is a regression, however green the tests are.
 - Oxford blue for every interactive affordance; **ochre only for annotations**;
   **never red**; **no emoji**; square corners; flat surfaces; sentence case.
 - Reach for tokens (`bg-card`, `text-brand`, `bg-ochre-tint`), never raw hex.
+- **Daily Words is the pilot of a softer look** and is exempt from "square
+  corners; flat surfaces" and "Oxford for every affordance": rounded cards, a
+  violet accent, glass and soft shadow, all scoped under `.dw` in
+  `globals.css`. A learner called the old look dated; this is the trial of its
+  replacement, in one mode, before any decision about the rest. What it keeps
+  is the part that was never style: ochre for corrections, never red, no emoji,
+  tokens not hex. Do not let `.dw` classes leak into another mode until the
+  whole app is being moved.
 
 ## The delivery cycle
 

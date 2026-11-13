@@ -42,7 +42,7 @@ export interface WordRoundInput {
  * tokens and seconds spent for nothing.
  */
 
-export const VERSION = "words.rounds.v6";
+export const VERSION = "words.rounds.v7";
 
 export const SYSTEM = joinParts([
   "You write practice material for words an English learner is studying today. For EACH word you get, return one pack: the opening of a short conversation and the two lines that carry it on.",
@@ -63,6 +63,7 @@ export const SYSTEM = joinParts([
       NO_LEAK,
       "That rule covers every followup too: none of them may contain the word or any form of it.",
       "Test every setup and followup like this: imagine a good answer. If that answer would sound just as natural WITHOUT the word, the line is too loose — rewrite it so the word is what the answer needs.",
+      'Every setup MUST contain that person\'s actual words in double quotes, ending in a question or a remark to answer. A setup that only describes the scene gives the learner nothing to reply to.',
       "The learner is NEVER the speaker in the setup or a followup, and nothing you write has a blank or a gap in it. This is a conversation to answer, not a sentence to complete.",
       'id: copy each word\'s id EXACTLY as given at the start of its line (for example "w-appreciate") — no numbering, no changes.',
       "Each example MUST contain the word (any normal inflection is fine).",

@@ -77,6 +77,8 @@ interface StoreContextValue {
   saving: boolean;
   /** Set when the last write failed; the UI can say so rather than lie. */
   error: string;
+  /** Re-read the store after a server-side change made outside `dispatch`. */
+  refresh(): void;
   updateSettings(patch: Partial<Settings>): void;
   setLevel(level: NewsLevel): void;
   issueWordDay(ids: string[]): void;
@@ -181,6 +183,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setError("That didn't save. Your last change may not have stuck.");
       } finally {
         setSaving(false);
+      }
+    });
+  }, []);
+
+  /**
+   * Re-read the store after the server changed it on its own.
+   *
+   * Daily Words makes its moves through its own route, and closing a word moves
+   * the schedule, the library and the streak server-side. This brings the rest
+   * of the app (the sidebar counts, the Phrasebook) back in step. It rides the
+   * same queue as writes so it can never land out of order with one.
+   */
+  const refresh = useCallback(() => {
+    queue.current = queue.current.then(async () => {
+      try {
+        const res = await fetch("/api/state");
+        if (res.ok) setStore((await res.json()) as Store);
+      } catch {
+        // A missed refresh only leaves a count stale until the next one.
       }
     });
   }, []);
@@ -335,6 +356,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveNewsSession,
       removeNewsSession,
       recordProductions,
+      refresh,
       saveRespondSession,
       removeRespondSession,
       saveTranscribeSession,
@@ -357,6 +379,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveNewsSession,
       removeNewsSession,
       recordProductions,
+      refresh,
       saveRespondSession,
       removeRespondSession,
       saveTranscribeSession,

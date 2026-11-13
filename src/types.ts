@@ -471,6 +471,68 @@ export interface TalkTurn {
   hint?: string;
 }
 
+/** Where one word's conversation stands. Pure rules in lib/shared/words. */
+export interface TalkState {
+  /** How many sentences this word asks for. */
+  asks: number;
+  /** Index of the ask currently open. */
+  ask: number;
+  /** Misses on the open ask — drives the hint level and the way out. */
+  misses: number;
+  /** Misses across the whole word — any at all means it was not clean. */
+  totalMisses: number;
+  /** They reopened the card after it hid. Help is free; the interval isn't. */
+  peeked: boolean;
+  /** The sentences that landed, in order. */
+  landed: string[];
+  /** They chose to leave it for tomorrow. */
+  left: boolean;
+}
+
+/** One line of a word's conversation, as it is shown and as it is stored. */
+export type TalkEntry =
+  | { t: "said"; text: string; task?: string }
+  | { t: "you"; text: string }
+  | { t: "landed"; reply: string }
+  | { t: "note"; missing: boolean; reply: string; quote?: string; hint?: string };
+
+/** One word in today's session: its script, and how far its conversation got. */
+export interface WordDayItem {
+  seed: WordSeed;
+  /** New today, or a scheduled review. */
+  isNew: boolean;
+  /** Leitner box before today — "comes back in…" is computed from it. */
+  prevBox: number;
+  /** The script: the opening moment, then the questions that carry it on. */
+  asks: { said: string; task?: string }[];
+  /** Worked examples using the word elsewhere — inert input, never an answer. */
+  examples: string[];
+  talk: TalkState;
+  thread: TalkEntry[];
+  /** Set once the conversation is over; null while it is still open. */
+  outcome: WordOutcome | null;
+}
+
+/**
+ * Today's Daily Words session, as the server keeps it.
+ *
+ * This is the whole day in one document: which words, the script for each, and
+ * every line said so far. It used to live in the browser tab, which meant
+ * leaving the page threw away the conversation and started the same word again
+ * from nothing. Kept server-side, a session resumes exactly where it stopped,
+ * on any device, and a word finished today stays finished today.
+ */
+export interface WordDay {
+  day: DayKey;
+  items: WordDayItem[];
+  /** When the session was first opened (ms) — the day's duration runs from it. */
+  startedAt: number;
+  /** The closing two-word sentence, once it has been tried. */
+  bridge: { text: string; ok: boolean } | null;
+  /** Set when the day was closed: streak, totals and vocabulary are committed. */
+  finishedAt: string | null;
+}
+
 /** How one word's turn ended — drives the debrief and the schedule. */
 export type WordOutcome = "clean" | "helped" | "missed";
 

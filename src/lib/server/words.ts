@@ -74,6 +74,9 @@ function coerceRounds(
     // Empty, or it gave the word away, or it came back as a sentence to
     // complete — a blank turns answering someone into filling a form.
     if (!setup || matcher.test(setup) || HAS_BLANK.test(setup)) continue;
+    // A scene with nobody speaking gives them nothing to answer. The opening
+    // has to carry a line said to them: something quoted, or a question.
+    if (!/["“”]/.test(setup) && !setup.includes("?")) continue;
 
     // The ask has to come from the model too, now that there is no bundled
     // instruction to fall back on. A round without one is not a round.
@@ -147,13 +150,22 @@ export async function wordRounds(
 
   const prompt = roundsUser(snapshot, capped);
 
+  // A partial set is kept, but not at the first asking: the checks are strict
+  // enough that one generation often loses a word or two, and a second try is
+  // cheaper than a learner getting a short day. The fuller set wins.
+  let best: WordRound[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await rawComplete(SYSTEM, prompt, 3200);
     const obj = extractObject(raw);
     const rounds = obj ? coerceRounds(obj, capped) : [];
-    if (rounds.length > 0) return rounds;
-    console.warn(`[words] attempt ${attempt} produced no usable rounds —`, raw.slice(0, 300));
+    if (rounds.length > best.length) best = rounds;
+    if (best.length === capped.length) break;
+    console.warn(
+      `[words] attempt ${attempt}: ${rounds.length} of ${capped.length} rounds usable —`,
+      raw.slice(0, 200),
+    );
   }
+  if (best.length > 0) return best;
 
   throw new Error("Couldn't build today's moments — try again in a moment.");
 }

@@ -375,3 +375,338 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ==========================================================================
+   Daily Words — the pilot of a softer, rounder look (docs/DESIGN_SYSTEM.md).
+
+   Everything here is scoped under `.dw`, so the rest of the app keeps
+   Scriptorium's square, flat surfaces untouched. The accent is its own token
+   set rather than a retune of Oxford, for the same reason: nothing outside
+   this mode should move when these do.
+   ========================================================================== */
+@layer base {
+  .dw {
+    --dw-accent: 250 84% 60%; /* indigo */
+    --dw-accent-2: 277 78% 60%; /* violet */
+    --dw-accent-3: 199 92% 56%; /* sky */
+    --dw-accent-soft: 248 100% 97%;
+    --dw-accent-ink: 250 62% 40%;
+    --dw-good: 160 72% 34%;
+    --dw-good-soft: 152 64% 95%;
+    --dw-shadow: 240 30% 20%;
+  }
+  .dark .dw {
+    --dw-accent: 250 92% 72%;
+    --dw-accent-2: 277 84% 72%;
+    --dw-accent-3: 199 90% 64%;
+    --dw-accent-soft: 250 34% 19%;
+    --dw-accent-ink: 250 96% 84%;
+    --dw-good: 158 62% 56%;
+    --dw-good-soft: 158 34% 15%;
+    --dw-shadow: 240 60% 2%;
+  }
+}
+
+@layer components {
+  .dw {
+    position: relative;
+    isolation: isolate;
+  }
+  /* Headings elsewhere are Newsreader; here they are the sans, heavy and
+     tight, which is most of what makes the mode read as a different room. */
+  .dw h1,
+  .dw h2,
+  .dw h3 {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+  /* Two soft washes of colour behind the page — atmosphere, not decoration to
+     read. Fixed so they don't scroll away under a long conversation. */
+  .dw-mesh {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .dw-mesh::before,
+  .dw-mesh::after {
+    content: "";
+    position: absolute;
+    width: 46rem;
+    height: 46rem;
+    border-radius: 9999px;
+    filter: blur(90px);
+    opacity: 0.16;
+  }
+  .dw-mesh::before {
+    top: -22rem;
+    right: -14rem;
+    background: hsl(var(--dw-accent-2));
+  }
+  .dw-mesh::after {
+    top: 6rem;
+    left: -26rem;
+    background: hsl(var(--dw-accent-3));
+    opacity: 0.11;
+  }
+
+  .dw-card {
+    border-radius: 24px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow:
+      0 1px 2px hsl(var(--dw-shadow) / 0.04),
+      0 14px 34px -18px hsl(var(--dw-shadow) / 0.18);
+  }
+  .dw-hero {
+    border-radius: 28px;
+    color: white;
+    background:
+      radial-gradient(120% 140% at 100% 0%, hsl(var(--dw-accent-3) / 0.55), transparent 55%),
+      linear-gradient(135deg, hsl(250 84% 58%), hsl(277 78% 56%));
+    box-shadow: 0 24px 50px -24px hsl(250 84% 50% / 0.55);
+  }
+  .dw-glass {
+    border-radius: 26px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card) / 0.78);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+    backdrop-filter: blur(18px) saturate(1.5);
+    box-shadow:
+      0 1px 2px hsl(var(--dw-shadow) / 0.05),
+      0 22px 48px -22px hsl(var(--dw-shadow) / 0.3);
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+  .dw-glass:focus-within {
+    border-color: hsl(var(--dw-accent) / 0.6);
+    box-shadow:
+      0 0 0 4px hsl(var(--dw-accent) / 0.14),
+      0 22px 48px -22px hsl(var(--dw-shadow) / 0.3);
+  }
+
+  .dw-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0.7rem 1.35rem;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, hsl(250 84% 60%), hsl(277 78% 58%));
+    box-shadow: 0 10px 24px -10px hsl(250 84% 55% / 0.7);
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      opacity 0.15s ease;
+  }
+  .dw-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 28px -10px hsl(250 84% 55% / 0.8);
+  }
+  .dw-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+  }
+  .dw-btn:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .dw-btn:focus-visible,
+  .dw-btn-quiet:focus-visible,
+  .dw-tile:focus-visible,
+  .dw-pill:focus-visible {
+    outline: 2px solid hsl(var(--dw-accent));
+    outline-offset: 2px;
+  }
+  /* On the gradient hero the filled button inverts: white, with the accent ink. */
+  .dw-btn-onhero {
+    color: hsl(250 70% 42%);
+    background: white;
+    box-shadow: 0 10px 24px -12px hsl(240 60% 10% / 0.5);
+  }
+  .dw-btn-quiet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    padding: 0.45rem 0.9rem;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .dw-btn-quiet:hover {
+    background: hsl(var(--dw-accent-soft));
+    color: hsl(var(--dw-accent-ink));
+  }
+
+  .dw-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 9999px;
+    padding: 0.2rem 0.65rem;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+  .dw-chip-accent {
+    background: hsl(var(--dw-accent-soft));
+    color: hsl(var(--dw-accent-ink));
+  }
+  .dw-chip-good {
+    background: hsl(var(--dw-good-soft));
+    color: hsl(var(--dw-good));
+  }
+  .dw-chip-note {
+    background: hsl(var(--ochre-tint));
+    color: hsl(var(--gold));
+  }
+
+  .dw-tile {
+    border-radius: 20px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    text-align: left;
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+  button.dw-tile:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--dw-accent) / 0.45);
+    box-shadow: 0 16px 30px -18px hsl(var(--dw-shadow) / 0.3);
+  }
+
+  .dw-pill {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding: 0.35rem 0.8rem;
+    font-size: 13px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .dw-pill:hover {
+    border-color: hsl(var(--dw-accent) / 0.4);
+  }
+  .dw-pill[aria-current="true"] {
+    border-color: transparent;
+    color: white;
+    background: linear-gradient(135deg, hsl(250 84% 60%), hsl(277 78% 58%));
+  }
+
+  .dw-bubble-them {
+    max-width: min(100%, 38rem);
+    border-radius: 22px 22px 22px 6px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding: 0.9rem 1.15rem;
+    box-shadow: 0 8px 22px -16px hsl(var(--dw-shadow) / 0.25);
+  }
+  .dw-bubble-you {
+    max-width: min(88%, 34rem);
+    margin-left: auto;
+    border-radius: 22px 22px 6px 22px;
+    padding: 0.8rem 1.1rem;
+    color: white;
+    background: linear-gradient(135deg, hsl(250 84% 60%), hsl(277 78% 58%));
+    box-shadow: 0 12px 26px -16px hsl(250 84% 55% / 0.7);
+  }
+  /* The tutor's pencil keeps its ochre — that part of the old system is a
+     promise about tone ("never red"), not a matter of style. */
+  .dw-note {
+    max-width: min(100%, 38rem);
+    border-radius: 18px;
+    border: 1px solid hsl(var(--ochre-line));
+    background: hsl(var(--ochre-tint));
+    padding: 0.85rem 1.1rem;
+    color: hsl(var(--gold));
+  }
+
+  .dw-ring {
+    --p: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 9999px;
+    background: conic-gradient(white calc(var(--p) * 1%), hsl(0 0% 100% / 0.22) 0);
+  }
+  .dw-ring > * {
+    display: grid;
+    place-items: center;
+    border-radius: 9999px;
+    background: hsl(255 78% 56%);
+  }
+
+  .dw-rise {
+    animation: dw-rise 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  }
+  .dw-pop {
+    animation: dw-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  .dw-shimmer {
+    border-radius: 14px;
+    background: linear-gradient(
+      100deg,
+      hsl(var(--muted)) 30%,
+      hsl(var(--dw-accent-soft)) 50%,
+      hsl(var(--muted)) 70%
+    );
+    background-size: 220% 100%;
+    animation: dw-shimmer 1.4s linear infinite;
+  }
+}
+
+@keyframes dw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dw-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes dw-shimmer {
+  to {
+    background-position: -220% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dw-rise,
+  .dw-pop,
+  .dw-shimmer {
+    animation: none;
+  }
+  .dw-btn,
+  .dw-tile {
+    transition: none;
+  }
+}

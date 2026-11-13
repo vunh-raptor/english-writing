@@ -188,8 +188,9 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `GET /api/health` | Liveness. |
 | `GET /api/state` | The signed-in learner's whole durable state. |
 | `POST /api/state` | Apply one state action; returns the fresh whole store. Includes `recordProductions` (the writing ledger) and `saveNewsSession`. |
-| `POST /api/words/daily` | The whole daily session: which words are due (topping the curriculum up if it is short) plus a round pack per word. Takes no body — the server owns the decision. |
-| `POST /api/words/turn` | One turn of a word's conversation: the sentence they sent, judged `landed` / `almost` / `missing`, with a reaction or a hint that never contains the corrected sentence. |
+| `GET /api/words/daily` | Today's stored Daily Words session, or null. Never generates. |
+| `POST /api/words/daily` | Open today's session: resume the stored one, or build it once (which words are due, topping the curriculum up if short, plus the script for each word's conversation). |
+| `POST /api/words/turn` | One move in today's session — `say` a sentence, `peek`, `leave`, `bridge`, `finish`. The server owns the session (`lib/server/wordDay.ts`); the body only names the move. Returns the whole day. |
 | `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
 | `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
 | `POST /api/respond/sharpen` | One harder question about the answer they just gave. |

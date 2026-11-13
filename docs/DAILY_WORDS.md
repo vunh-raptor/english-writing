@@ -81,6 +81,36 @@ debrief:  "N of M came out right, first time, from memory" — every word, every
           sentence that landed, and when each one comes back
 ```
 
+### The server owns the session
+
+Today's session is one stored document, a `WordDay` (`src/types.ts`): the
+words, the script for each, every line said so far, and what is finished. It
+lives in `ai_content` under kind `word_day`, one row per learner per day, and
+every move goes through `src/lib/server/wordDay.ts`.
+
+It used to be React state. Leaving for the dashboard threw the conversation
+away, reopening regenerated the script, and a word practised "with help" —
+which correctly stays due — was dealt again the same afternoon from zero. A
+learner said they had assumed it was saved. Now:
+
+- **Leaving loses nothing.** Reopening, reloading or switching device lands on
+  the same line of the same conversation.
+- **A word finished today stays finished today**, whatever its schedule says.
+  "Stays due" means tomorrow.
+- **The script is fixed for the day.** It is generated once, when the day is
+  first opened.
+- **Words can be taken in any order.** The dashboard tiles and the rail at the
+  top of the session open any word's conversation.
+- **The client sends moves, not state**: `say`, `peek`, `leave`, `bridge`,
+  `finish`. How many misses a line has had, what was asked, and the learner's
+  level are read from what is stored, never from the request. Each move returns
+  the whole day as the server now has it.
+- **Closing the day is idempotent**, so a reload on the debrief can't count the
+  streak twice.
+
+The sentences themselves still go to `productions`, which remains the ledger;
+the `WordDay` is the session, not the record.
+
 ### Said until it's right — and the fences around that
 
 Required correction is the thing most likely to make a learner quit, and this
@@ -163,16 +193,15 @@ vocabulary count (so "your vocabulary" only ever counts words they **wrote**).
   moments that used to stand in for a failed round ("a friend asks how your week
   is going") fitted any word and elicited none, so a session that cannot get
   real material says so and offers a retry.
-- **The material is fixed once generated.** A day's rounds are stored in
-  `ai_content` keyed by the day and the word set, so reloading mid-session
-  returns the same moments rather than a fresh set nobody has read.
+- **The session is saved, move by move.** The day's script and every line said
+  live in one stored `WordDay`, so a reload, a closed tab or another device
+  shows exactly the conversation that was left.
 - **Every sentence is kept.** Each sent sentence — landed or not — is written to
   `productions` the moment it is judged (`mode: "talk"`), with the line that
   drew it out, the verdict, and the note it got back. Abandoning the day halfway
   still keeps what was produced.
-- **The day is fixed once drawn.** `Store.wordDays[today]` freezes the set, so
-  reloading never reshuffles it and you can't farm tomorrow's words today.
-  Leaving halfway and coming back resumes exactly where you were.
+- **The day is fixed once drawn.** `word_days` records what today issued, so
+  tomorrow's draw can't re-issue it and you can't farm tomorrow's words today.
 - **Untrusted text is data.** The learner's sentences are content in the
   prompts, never instructions.
 
@@ -180,8 +209,9 @@ vocabulary count (so "your vocabulary" only ever counts words they **wrote**).
 
 | Route | In → out |
 | --- | --- |
-| `POST /api/words/daily` | no body — the learner, level and due words come from the session → `{ words[], rounds[{id,setup,task,followups[]?,examples[]}], todaysNew[] }` |
-| `POST /api/words/turn` | `{ word{word,pos,meaning}, said, sentence, misses }` → `{ verdict: landed\|almost\|missing, reply, quote?, hint? }` |
+| `GET /api/words/daily` | → `{ day: WordDay \| null }` — the stored session, or null. Never generates, so the dashboard can call it freely. |
+| `POST /api/words/daily` | no body → `{ day: WordDay }` — resumes today's session, or builds it once |
+| `POST /api/words/turn` | `{ move: "say"\|"peek"\|"leave"\|"bridge"\|"finish", wordId?, sentence? }` → `{ day: WordDay }`. A move the learner's own state rules out (a finished word, leaving too early) is a 409. |
 
 Server module `src/lib/server/words.ts` (mission.ts robustness pattern:
 first-`{…}` extraction, per-field coercion, hard code guards). For the script: a
@@ -191,8 +221,8 @@ blank, or isn't a question is dropped. A round is matched to its word by id,
 forgiving the decorations small models add (`appreciate-1`, `w_appreciate`) but
 never a substring (`resolveItemId` in `lib/shared/modelJson.ts`).
 
-For a turn: `misses` only sets how strong a hint may be. The level still comes
-from the profile, and everything the model writes back is checked before it
+For a turn: how many misses the line has had is read from the stored day and
+only sets how strong a hint may be. Everything the model writes back is checked before it
 reaches the learner — a quote that isn't in their sentence is dropped, a hint or
 "what works" line that is really a rewrite is dropped, and a "missing" hint that
 names the word is replaced.
@@ -219,9 +249,11 @@ names the word is replaced.
 | Day-set rules, the conversation's rules (`settleVerdict`, `hintLevel`, `hintLeaks`, `talk*`), matchers, the parked ladder | `src/lib/shared/words.ts` |
 | Generating the curriculum | `src/lib/server/curriculum.ts`, `src/lib/server/prompts/curriculum.ts` |
 | The script builder and the per-turn judge | `src/lib/server/words.ts`, `src/lib/server/prompts/words.ts` |
+| The session: open, resume, moves, closing the day | `src/lib/server/wordDay.ts` |
 | Routes | `src/app/api/words/daily/route.ts`, `src/app/api/words/turn/route.ts` |
 | UI (home · conversation · bridge · debrief) | `src/components/DailyWords.tsx`, `/words` |
-| Store commits | `issueWordDay`, `finishWordSession`, `recordProductions` in `src/store/StoreContext.tsx` |
+| Store | written server-side through `mutate` in `src/lib/server/db/state.ts`; the client calls `refresh()` in `src/store/StoreContext.tsx` to catch up |
+| Look | the `.dw` pilot at the end of `src/app/globals.css` (`docs/DESIGN_SYSTEM.md`) |
 
 ### Where the curriculum comes from
 

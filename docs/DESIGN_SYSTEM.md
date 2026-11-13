@@ -92,3 +92,32 @@ for style. See `src/components/Feedback.tsx` for the realized pattern.
 - Labels sentence case; section labels via `<Badge variant="eyebrow">` or
   `.kicker`; any number/timestamp/code in `font-mono`.
 - Keep motion minimal: instant state changes or short opacity/color fades.
+
+## The Daily Words pilot (`.dw`)
+
+Daily Words does not follow the rules above, on purpose. A learner called the
+Scriptorium look old and boring, so the mode is the trial of a softer one before
+anything is decided for the rest of the app.
+
+Everything is scoped under a `.dw` wrapper and defined at the end of
+`src/app/globals.css`, so nothing outside the mode moves:
+
+| Piece | Class | Notes |
+| --- | --- | --- |
+| Accent tokens | `--dw-accent` (indigo), `--dw-accent-2` (violet), `--dw-accent-3` (sky), `--dw-accent-soft`, `--dw-accent-ink`, `--dw-good`, `--dw-good-soft` | Light and dark values. Use as `bg-[hsl(var(--dw-accent-soft))]`. |
+| Surfaces | `.dw-card` (24px radius, soft shadow), `.dw-hero` (gradient), `.dw-glass` (blurred, for the docked composer), `.dw-tile` | Rounded and lifted — the opposite of "square, flat". |
+| Actions | `.dw-btn` (gradient pill), `.dw-btn-onhero`, `.dw-btn-quiet`, `.dw-pill` (the word rail) | One filled action per view still holds. |
+| Conversation | `.dw-bubble-them`, `.dw-bubble-you`, `.dw-note` | The note is ochre. |
+| Status | `.dw-chip` + `-accent` / `-good` / `-note`, `.dw-ring` | |
+| Motion | `.dw-rise`, `.dw-pop`, `.dw-shimmer` | All switched off under `prefers-reduced-motion`. |
+| Atmosphere | `.dw-mesh` | Two blurred washes behind the page. |
+
+Headings inside `.dw` are the sans, heavy and tight, not Newsreader.
+
+**What the pilot keeps**, because it was never a matter of style: corrections are
+ochre and never red, no emoji, sentence case, tokens rather than raw hex in
+components, and no spellcheck on anything a learner writes in.
+
+**Known seam:** the sidebar and every other mode are still Scriptorium, so
+Daily Words currently sits inside a frame that doesn't match it. Closing that
+seam means moving the whole app, which is the decision this pilot is for.
