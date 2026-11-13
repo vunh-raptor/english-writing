@@ -20,15 +20,29 @@ well-built. Read `README.md` for the full product argument.
 Break these and the change is a regression, however green the tests are.
 
 **Product**
-- **No correction mid-flow.** Writing surfaces keep `spellCheck={false}`, no
-  autocorrect, no grammar UI, no red squiggles. Feedback is opt-in and always
-  *after* producing, and always leads with what went well.
+- **No correction while typing.** Writing surfaces keep `spellCheck={false}`, no
+  autocorrect, no grammar UI, no red squiggles. Feedback only ever arrives
+  *after* a sentence is sent, and always leads with what went well. Everywhere
+  except Daily Words it is also opt-in.
+
+  > This replaced **"No correction mid-flow"**, which said feedback was always
+  > opt-in. Daily Words is now a conversation that will not move on until the
+  > sentence is right (`docs/DAILY_WORDS.md`): a learner asked to be held to it,
+  > because one sentence per word, accepted whatever it looked like, did not
+  > feel like producing English. That was a deliberate product decision, not
+  > drift. The cost is real — required correction is the thing most likely to
+  > make someone quit — so it is fenced: the note is ochre and in the margin,
+  > it points and never rewrites, help stops at a frame with a gap, a held
+  > sentence needs two judges to agree it is wrong, and after three misses
+  > there is a way out. Do not extend required correction to another mode
+  > without the same fences.
 - **Never a blank page.** Every entry point supplies the material to work from —
   a word card, a real-life moment, a question, a source. The learner is never
   asked to produce from nothing.
 - **Nothing completes the learner's turn.** Hints unlock ideas or language,
   never a finished sentence: setups never contain the item they elicit, worked
-  examples and outlines are inert, and Respond asks questions but never supplies
+  examples and outlines are inert, a Daily Words correction never contains the
+  corrected sentence, and Respond asks questions but never supplies
   a summary, an opinion or an angle. A session someone can finish without
   producing is a broken session.
 - **Account-only, server-owned state.** Every durable thing a learner

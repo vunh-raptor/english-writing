@@ -3,7 +3,9 @@ import type {
   NewsLevel,
   Phrase,
   SrsRecord,
+  TalkVerdict,
   WordDrill,
+  WordOutcome,
   WordPos,
   WordSeed,
 } from "@/types";
@@ -417,3 +419,155 @@ export function judgeBridge(a: string, b: string, sentence: string): boolean {
   return words >= 5 && usesWord(a, sentence) && usesWord(b, sentence);
 }
 
+
+// ---------------------------------------------------------------------------
+// The word conversation (docs/DAILY_WORDS.md) — say it until it's right
+// ---------------------------------------------------------------------------
+//
+// A word is no longer one sentence and a verdict; it is a short exchange the
+// learner cannot leave until each sentence lands. Everything that decides how
+// that exchange moves is here, pure, so the rules are testable without a model
+// in the loop: what a verdict settles to, how strong a hint may get, when a
+// "hint" is really the answer, and what the whole exchange earns.
+
+/** Landed sentences a brand-new word asks for; a review asks for fewer. */
+export const TALK_ASKS_NEW = 3;
+export const TALK_ASKS_REVIEW = 2;
+/** Misses on one ask before the way out is offered. Being held forever on one
+ *  sentence is exactly the anxiety the product exists to avoid. */
+export const TALK_MISS_LIMIT = 3;
+/** Shorter than this is a fragment, not a sentence. "I assume so." counts. */
+const TALK_MIN_WORDS = 3;
+
+/**
+ * What a turn settles to once the model's judgment meets our own detection.
+ *
+ * The model proposes, the code floors — in both directions that matter:
+ *  - a model that says "missing" about a sentence that visibly contains the
+ *    word cannot erase the production: it becomes "almost" when the model at
+ *    least said what was off, and "landed" when it said nothing useful;
+ *  - no model at all (outage, unparseable answer) falls back to detection, so
+ *    a provider failure never traps a learner on a sentence that was fine.
+ * A fragment never lands, whoever says so.
+ */
+export function settleVerdict(
+  model: TalkVerdict | null,
+  detected: boolean,
+  wordCount: number,
+  modelExplained = false,
+): TalkVerdict {
+  const sentence = wordCount >= TALK_MIN_WORDS;
+  if (!sentence) return detected ? "almost" : "missing";
+  if (model === null) return detected ? "landed" : "missing";
+  if (model === "missing" && detected) return modelExplained ? "almost" : "landed";
+  return model;
+}
+
+/** How much help a miss may carry. It grows with each miss on the same ask and
+ *  tops out at a frame with a gap — the corrected sentence is never on offer. */
+export type HintLevel = "point" | "pattern" | "frame";
+
+export function hintLevel(misses: number): HintLevel {
+  return misses <= 0 ? "point" : misses === 1 ? "pattern" : "frame";
+}
+
+function tokens(text: string): string[] {
+  return text.toLowerCase().match(/[a-z']+/g) ?? [];
+}
+
+/**
+ * Is this "hint" really their sentence, rewritten?
+ *
+ * A hint that restates most of what they wrote, with no gap left to fill, is
+ * something they could copy and send — which would make the retry a typing
+ * exercise. A frame with `___` in it is allowed however close it sits, because
+ * the gap is the part that was wrong and they still have to produce it.
+ */
+export function hintLeaks(hint: string, sentence: string): boolean {
+  if (hint.includes("___")) return false;
+  const theirs = tokens(sentence);
+  if (theirs.length < 4) return false;
+  const offered = new Set(tokens(hint));
+  const shared = theirs.filter((t) => offered.has(t)).length;
+  return shared / theirs.length >= 0.75;
+}
+
+/** Where one word's conversation stands. */
+export interface TalkState {
+  /** How many sentences this word asks for. */
+  asks: number;
+  /** Index of the ask currently open. */
+  ask: number;
+  /** Misses on the open ask — drives the hint level and the way out. */
+  misses: number;
+  /** Misses across the whole word — any at all means it was not clean. */
+  totalMisses: number;
+  /** They reopened the card after it hid. Help is free; the interval isn't. */
+  peeked: boolean;
+  /** The sentences that landed, in order. */
+  landed: string[];
+  /** They chose to leave it for tomorrow. */
+  left: boolean;
+}
+
+export type TalkEvent =
+  | { type: "turn"; verdict: TalkVerdict; sentence: string }
+  | { type: "peek" }
+  | { type: "leave" };
+
+export function talkStart(asks: number): TalkState {
+  return {
+    asks: Math.max(1, asks),
+    ask: 0,
+    misses: 0,
+    totalMisses: 0,
+    peeked: false,
+    landed: [],
+    left: false,
+  };
+}
+
+export function talkDone(state: TalkState): boolean {
+  return state.left || state.ask >= state.asks;
+}
+
+/** The way out appears only after real effort on the open ask. */
+export function talkCanLeave(state: TalkState): boolean {
+  return !talkDone(state) && state.misses >= TALK_MISS_LIMIT;
+}
+
+export function talkApply(state: TalkState, event: TalkEvent): TalkState {
+  if (talkDone(state)) return state;
+  switch (event.type) {
+    case "peek":
+      return { ...state, peeked: true };
+    case "leave":
+      return talkCanLeave(state) ? { ...state, left: true } : state;
+    case "turn":
+      if (event.verdict === "landed") {
+        return {
+          ...state,
+          ask: state.ask + 1,
+          misses: 0,
+          landed: [...state.landed, event.sentence],
+        };
+      }
+      return { ...state, misses: state.misses + 1, totalMisses: state.totalMisses + 1 };
+  }
+}
+
+/**
+ * What the whole exchange earned — the same three outcomes the schedule has
+ * always run on. Clean means every sentence landed first time with the card
+ * shut. Leaving early after landing something is still help, not a miss.
+ */
+export function talkOutcome(state: TalkState): WordOutcome {
+  if (state.left) return state.landed.length > 0 ? "helped" : "missed";
+  return state.totalMisses > 0 || state.peeked ? "helped" : "clean";
+}
+
+/** The verdict one sent sentence wears in the ledger. */
+export function turnLedgerVerdict(state: TalkState, verdict: TalkVerdict): WordOutcome {
+  if (verdict !== "landed") return "missed";
+  return state.misses > 0 || state.peeked ? "helped" : "clean";
+}

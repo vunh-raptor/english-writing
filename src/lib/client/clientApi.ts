@@ -16,6 +16,7 @@ import type {
   DrillRoundSetup,
   DrillJudgment,
   LexKind,
+  TalkTurn,
   WordRound,
   WordSeed,
   TranscribeClip,
@@ -75,6 +76,27 @@ export async function fetchWordSession(): Promise<WordSession> {
     rounds: Array.isArray(data.rounds) ? (data.rounds as WordRound[]) : [],
     todaysNew: Array.isArray(data.todaysNew) ? (data.todaysNew as WordSeed[]) : [],
   };
+}
+
+/**
+ * One turn of a word's conversation: send the sentence, get the verdict.
+ *
+ * `misses` is how many times this same ask has already been missed — it sets
+ * how strong a hint the server may give, and nothing else.
+ */
+export async function wordTurn(
+  word: { word: string; pos: string; meaning: string },
+  said: string,
+  sentence: string,
+  misses: number,
+): Promise<TalkTurn> {
+  const res = await fetch("/api/words/turn", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ word, said, sentence, misses }),
+  });
+  if (!res.ok) throw await httpError(res);
+  return res.json() as Promise<TalkTurn>;
 }
 
 // --- Respond: bring a source, think against it, produce your own ------------

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Phrase, SrsRecord, WordSeed } from "@/types";
 import {
+  TALK_MISS_LIMIT,
   buildDaySet,
   gapPartner,
   gapSentence,
+  hintLeaks,
+  hintLevel,
   judgeBridge,
   judgeFit,
   judgeRepair,
@@ -11,6 +14,13 @@ import {
   pickDailyWords,
   pickDrill,
   recallMatches,
+  settleVerdict,
+  talkApply,
+  talkCanLeave,
+  talkDone,
+  talkOutcome,
+  talkStart,
+  turnLedgerVerdict,
   usesWord,
   wordToPhrase,
 } from "../words";
@@ -389,5 +399,130 @@ describe("judgeBridge", () => {
 
   it("rejects two words bolted together with no sentence around them", () => {
     expect(judgeBridge("avoid", "suggest", "avoid suggest")).toBe(false);
+  });
+});
+
+describe("settleVerdict — the model proposes, the code floors", () => {
+  it("passes an ordinary judgment through", () => {
+    expect(settleVerdict("landed", true, 6)).toBe("landed");
+    expect(settleVerdict("almost", true, 6)).toBe("almost");
+    expect(settleVerdict("missing", false, 6)).toBe("missing");
+  });
+
+  it("lets the model accept a variant our matcher cannot see", () => {
+    expect(settleVerdict("landed", false, 5)).toBe("landed");
+  });
+
+  it("never lets a model erase a word that is visibly there", () => {
+    // It said what was off: keep them on the ask, but not as "missing".
+    expect(settleVerdict("missing", true, 6, true)).toBe("almost");
+    // It said nothing useful: a lazy judgment must not hold a real sentence.
+    expect(settleVerdict("missing", true, 6, false)).toBe("landed");
+  });
+
+  it("falls back to detection when there is no model verdict", () => {
+    expect(settleVerdict(null, true, 5)).toBe("landed");
+    expect(settleVerdict(null, false, 5)).toBe("missing");
+  });
+
+  it("never lands a fragment, whoever says so", () => {
+    expect(settleVerdict("landed", true, 2)).toBe("almost");
+    expect(settleVerdict("landed", false, 0)).toBe("missing");
+    expect(settleVerdict(null, true, 1)).toBe("almost");
+    // The boundary: three words is a sentence ("I assume so.").
+    expect(settleVerdict("landed", true, 3)).toBe("landed");
+  });
+});
+
+describe("hints — stronger each miss, never the answer", () => {
+  it("climbs point → pattern → frame and stays there", () => {
+    expect(hintLevel(0)).toBe("point");
+    expect(hintLevel(1)).toBe("pattern");
+    expect(hintLevel(2)).toBe("frame");
+    expect(hintLevel(9)).toBe("frame");
+    expect(hintLevel(-1)).toBe("point");
+  });
+
+  it("catches a hint that is their sentence rewritten", () => {
+    const theirs = "I assumed she know already about the meeting";
+    expect(hintLeaks("I assumed she knew already about the meeting", theirs)).toBe(true);
+    expect(hintLeaks("Try: I assumed she already knew about the meeting.", theirs)).toBe(true);
+  });
+
+  it("allows a pointer, a pattern, and a frame with a gap", () => {
+    const theirs = "I assumed she know already about the meeting";
+    expect(hintLeaks("Look at the verb after 'she' — which tense is the story in?", theirs)).toBe(false);
+    expect(hintLeaks("I assumed she ___ already about the meeting", theirs)).toBe(false);
+    expect(hintLeaks("", theirs)).toBe(false);
+  });
+
+  it("does not judge leakage on a sentence too short to rewrite", () => {
+    expect(hintLeaks("I assume so", "I assume so")).toBe(false);
+  });
+});
+
+describe("the word conversation — say it until it lands", () => {
+  const land = (s: ReturnType<typeof talkStart>, sentence = "I assume it moved.") =>
+    talkApply(s, { type: "turn", verdict: "landed", sentence });
+  const miss = (s: ReturnType<typeof talkStart>) =>
+    talkApply(s, { type: "turn", verdict: "almost", sentence: "I assume it move." });
+
+  it("is clean when every ask lands first time with the card shut", () => {
+    let s = talkStart(3);
+    s = land(land(land(s)));
+    expect(talkDone(s)).toBe(true);
+    expect(s.landed).toHaveLength(3);
+    expect(talkOutcome(s)).toBe("clean");
+  });
+
+  it("holds the same ask open on a miss, and counts it as help", () => {
+    let s = miss(talkStart(2));
+    expect(s.ask).toBe(0);
+    expect(s.misses).toBe(1);
+    s = land(s);
+    expect(s.ask).toBe(1);
+    expect(s.misses).toBe(0); // the next ask starts with fresh hints
+    s = land(s);
+    expect(talkOutcome(s)).toBe("helped");
+  });
+
+  it("treats a peek as help even when every sentence lands", () => {
+    let s = talkApply(talkStart(1), { type: "peek" });
+    s = land(s);
+    expect(talkOutcome(s)).toBe("helped");
+  });
+
+  it("offers the way out only after the miss limit on one ask", () => {
+    let s = talkStart(2);
+    for (let i = 0; i < TALK_MISS_LIMIT - 1; i++) s = miss(s);
+    expect(talkCanLeave(s)).toBe(false);
+    expect(talkApply(s, { type: "leave" }).left).toBe(false); // not yet earned
+    s = miss(s);
+    expect(talkCanLeave(s)).toBe(true);
+    s = talkApply(s, { type: "leave" });
+    expect(talkDone(s)).toBe(true);
+    expect(talkOutcome(s)).toBe("missed");
+  });
+
+  it("calls leaving after a landed sentence help, not a miss", () => {
+    let s = land(talkStart(3));
+    for (let i = 0; i < TALK_MISS_LIMIT; i++) s = miss(s);
+    s = talkApply(s, { type: "leave" });
+    expect(talkOutcome(s)).toBe("helped");
+  });
+
+  it("ignores everything once the word is done, and never asks for zero", () => {
+    const done = land(talkStart(1));
+    expect(miss(done)).toBe(done);
+    expect(talkStart(0).asks).toBe(1);
+  });
+
+  it("writes each attempt to the ledger with the verdict it earned", () => {
+    const fresh = talkStart(2);
+    expect(turnLedgerVerdict(fresh, "landed")).toBe("clean");
+    expect(turnLedgerVerdict(fresh, "almost")).toBe("missed");
+    expect(turnLedgerVerdict(fresh, "missing")).toBe("missed");
+    expect(turnLedgerVerdict(miss(fresh), "landed")).toBe("helped");
+    expect(turnLedgerVerdict(talkApply(fresh, { type: "peek" }), "landed")).toBe("helped");
   });
 });

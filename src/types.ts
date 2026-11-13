@@ -446,6 +446,29 @@ export interface WordRound {
   /** A near-miss and its natural version — the `repair` rung. `wrong` is what
    *  the learner fixes; `right` is revealed after, never before. */
   repair?: { wrong: string; right: string };
+  /** Up to 2 lines the same partner says next in the same scene, each calling
+   *  for the word again in a different way. Never contain the word. */
+  followups?: string[];
+}
+
+/**
+ * How one sent sentence went in a word's conversation.
+ *
+ *   landed  — the word is used and the sentence is right; the talk moves on
+ *   almost  — the word is there but something is off; the same ask stays open
+ *   missing — the word isn't in it yet
+ */
+export type TalkVerdict = "landed" | "almost" | "missing";
+
+/** What comes back after one Send. Nothing in it is ever a finished sentence. */
+export interface TalkTurn {
+  verdict: TalkVerdict;
+  /** landed: the partner's short reaction. Otherwise: what already works. */
+  reply: string;
+  /** The exact fragment of THEIR sentence that is off, when there is one. */
+  quote?: string;
+  /** A pointer, a pattern, or a frame with a gap — never the corrected sentence. */
+  hint?: string;
 }
 
 /** How one word's turn ended — drives the debrief and the schedule. */

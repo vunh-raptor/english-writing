@@ -4,33 +4,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Eye, Send } from "lucide-react";
 import { useStore } from "@/store/StoreContext";
-import type {
-  DrillJudgment,
-  NewsLevel,
-  WordDrill,
-  WordOutcome,
-  WordPos,
-  WordRound,
-  WordSeed,
-} from "@/types";
-import { fetchWordSession, judgePhrase } from "@/lib/client/clientApi";
+import type { NewsLevel, WordOutcome, WordPos, WordRound, WordSeed } from "@/types";
+import { fetchWordSession, wordTurn } from "@/lib/client/clientApi";
 import {
+  TALK_ASKS_NEW,
+  TALK_ASKS_REVIEW,
   bridgePair,
   buildDaySet,
   catalogById,
-  gapPartner,
-  gapSentence,
   judgeBridge,
-  judgeFit,
-  judgeRepair,
-  maskCollocation,
-  pickDrill,
-  recallMatches,
-  usesWord,
+  talkApply,
+  talkCanLeave,
+  talkDone,
+  talkOutcome,
+  talkStart,
+  turnLedgerVerdict,
   wordToPhrase,
+  type TalkState,
 } from "@/lib/shared/words";
 import { SRS_INTERVALS, srsSummary } from "@/lib/shared/srs";
-import { countWords, newWordsThisWeek, vocabSize } from "@/lib/shared/stats";
+import { newWordsThisWeek, vocabSize } from "@/lib/shared/stats";
 import { addDays, parseDayKey, todayKey } from "@/lib/shared/date";
 import { streakInfo } from "@/lib/shared/streak";
 import { playChime } from "@/lib/client/sound";
@@ -43,62 +36,36 @@ import { PageContainer } from "@/components/page-container";
  * language instead of waiting for them to meet it.
  *
  * A day is a small set: the review words the schedule says are ripe, then a
- * few brand-new high-frequency words. Every item walks the same arc, and the
- * arc is the method:
+ * few brand-new high-frequency words. Each word is a short conversation, and
+ * the conversation is the method:
  *
- *   MEET   (new words only) the card, once — form, meaning, a real example,
- *          the partners it travels with. The best first encounter we can give.
- *   DRILL  one rung of the ladder, chosen by the word's Leitner box — recall ·
- *          fit · partner · repair · echo (`pickDrill`). The ask hardens as the
- *          memory does, and each rung tests something the others can't.
- *   USE    a real-life moment that calls for it → they write their own
- *          sentence. Generating your own use in a new context is the single
- *          biggest lever on whether a word survives the week, so it is the
- *          round every word ends on and the only one that earns an interval.
+ *   MEET   the card opens the thread — form, meaning, a real example, the
+ *          partners it travels with. It closes on the first keystroke, so the
+ *          first sentence is still pulled from memory rather than copied.
+ *   SAY    someone says something that calls for the word; they answer in
+ *          their own sentence. A sentence that isn't right yet keeps the same
+ *          line open, with help that grows one notch per miss and stops at a
+ *          frame with a gap — never the corrected sentence.
+ *   AGAIN  the same person carries the scene on, and the word is wanted again
+ *          in a different form. A new word takes three landed sentences.
  *
- * Then a BRIDGE bonus closes the day: one sentence using two of today's words,
- * which — because a set is drawn from different semantic fields — is a real
- * creative stretch. It never touches the schedule.
+ * This replaced meet → drill → use, which asked for one typed word and one
+ * sentence per word and moved on whatever the sentence looked like. Learners
+ * told us that didn't feel like producing English, and they were right: the
+ * production was a single line. The drill ladder (`pickDrill` and friends in
+ * lib/shared/words) is parked, not deleted, until the conversation has been
+ * lived with.
  *
  * Clean all the way through earns a longer interval; anything with help stays
  * due. Then the word joins the same pool the Phrasebook practices — one
  * curriculum, three surfaces.
  */
 
-/** Seconds the card stays up on "meet" before the learner may hide it. Short
- *  enough not to nag, long enough that nobody skips the encounter blind. */
-const MEET_SECONDS = 4;
-
-type Beat = "meet" | "drill" | "use";
-
-/** How each rung introduces itself: the kicker, and the ask above the input. */
-const DRILL_META: Record<WordDrill, { kicker: string; prompt: string; hint: string }> = {
-  recall: {
-    kicker: "from memory",
-    prompt: "Which word means",
-    hint: "Any normal ending is fine — this is about the word, not the spelling.",
-  },
-  fit: {
-    kicker: "fill the gap",
-    prompt: "One word is missing — and it has to be the right form",
-    hint: "Mind the ending: tense, plural, comparative.",
-  },
-  partner: {
-    kicker: "its partner",
-    prompt: "Which word goes in front of it?",
-    hint: "The word itself is fine — it's the company it keeps we're after.",
-  },
-  repair: {
-    kicker: "make it natural",
-    prompt: "Someone wrote this. It's close — fix the one thing that's off",
-    hint: "Rewrite the whole sentence the way you'd actually say it.",
-  },
-  echo: {
-    kicker: "your own words",
-    prompt: "You wrote this yourself. Which word did you use?",
-    hint: "Your sentence, from a while back.",
-  },
-};
+/** One thing the partner says, and the instruction that goes with the first. */
+interface Ask {
+  said: string;
+  task?: string;
+}
 
 interface SessionItem {
   id: string;
@@ -107,34 +74,41 @@ interface SessionItem {
   meaning: string;
   example: string;
   collocations: string[];
-  /** New today (walks all three beats) or a scheduled review (retrieve → use). */
+  /** New today, or a scheduled review (fewer asks, and the card starts shut). */
   isNew: boolean;
   /** The curriculum entry, for a new word — what joins the library once used. */
   seed?: WordSeed;
-  /** The real-life moment for the "use" beat. */
-  setup: string;
-  task: string;
+  /** The script: the opening moment, then the lines that carry it on. */
+  asks: Ask[];
   /** Worked examples using the word elsewhere — inert input, never an answer. */
   examples: string[];
-  /** True when the moment came from the local packs, not the round-builder. */
   /** Leitner box before today — the debrief computes "returns in…" from it. */
   prevBox: number;
-  /** Which rung this word drills today, and the material it runs on. */
-  drill: WordDrill;
-  /** For fit / echo / partner: the gapped text and the answer it expects. */
-  gap: { gapped: string; answer: string } | null;
-  /** For repair: the near-miss to fix and the natural version to reveal after. */
-  repair?: { wrong: string; right: string };
 }
 
 interface ItemResult {
   outcome: WordOutcome;
-  sentence: string;
+  /** Every sentence that landed for this word, in order. */
+  sentences: string[];
   prevBox: number;
 }
 
+/**
+ * The thread is one running manuscript for the whole day: each word's card,
+ * what was said, what they answered, and the note that came back.
+ */
+type Entry =
+  | { t: "word"; i: number }
+  | { t: "said"; text: string; task?: string }
+  | { t: "you"; text: string }
+  | { t: "landed"; reply: string }
+  | { t: "note"; missing: boolean; reply: string; quote?: string; hint?: string }
+  | { t: "closed"; i: number; outcome: WordOutcome }
+  | { t: "error"; text: string };
+
 type View =
   | { kind: "home" }
+  | { kind: "loading" }
   | { kind: "session" }
   | { kind: "bridge" }
   | { kind: "done" };
@@ -209,19 +183,17 @@ export function DailyWords() {
   const [view, setView] = useState<View>({ kind: "home" });
   const [items, setItems] = useState<SessionItem[]>([]);
   const [idx, setIdx] = useState(0);
-  const [beat, setBeat] = useState<Beat>("meet");
-  const [meetLeft, setMeetLeft] = useState<number | null>(null);
-  const [guess, setGuess] = useState("");
-  /** null while unanswered; then how the drill went. "form" = right word,
-   *  wrong ending — worth its own feedback, and it counts as help. */
-  const [drillVerdict, setDrillVerdict] = useState<null | "exact" | "form" | "wrong">(null);
-  const [helped, setHelped] = useState(false);
-  const [answer, setAnswer] = useState("");
-  const [examplesOpen, setExamplesOpen] = useState(false);
-  const [judging, setJudging] = useState(false);
-  const [result, setResult] = useState<DrillJudgment | null>(null);
+  const [talk, setTalk] = useState<TalkState>(() => talkStart(1));
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [input, setInput] = useState("");
+  /** The partner is reading. Only Send waits on this — the composer never
+   *  locks, so the next thought can be typed while the last one is judged. */
+  const [busy, setBusy] = useState(false);
+  /** The current word's card. Open on a first meeting, shut once they type. */
+  const [cardOpen, setCardOpen] = useState(false);
+  /** Every word has been through its conversation; the day can be closed. */
+  const [dayOver, setDayOver] = useState(false);
   const [results, setResults] = useState<ItemResult[]>([]);
-  const [loading, setLoading] = useState(false);
   /** Set when the day couldn't be built — shown instead of a silent retry. */
   const [startError, setStartError] = useState("");
   const [bridge, setBridge] = useState("");
@@ -229,6 +201,8 @@ export function DailyWords() {
   const startedAt = useRef<number>(0);
   /** The sentence kept per item for a future `echo`. */
   const lines = useRef<Record<string, string>>({});
+  const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const today = todayKey();
 
@@ -285,6 +259,12 @@ export function DailyWords() {
       .filter((e) => e && e.trim())
       .filter((e, n, arr) => arr.findIndex((x) => x.trim() === e.trim()) === n)
       .slice(0, 3);
+    // A round whose follow-ups didn't survive the server's checks is simply a
+    // shorter conversation — never a padded one.
+    const asks: Ask[] = [
+      { said: round.setup, task: round.task },
+      ...(round.followups ?? []).map((said) => ({ said })),
+    ].slice(0, isNew ? TALK_ASKS_NEW : TALK_ASKS_REVIEW);
     return {
       id: seed.id,
       word: seed.word,
@@ -294,70 +274,39 @@ export function DailyWords() {
       collocations: seed.collocations,
       isNew,
       ...(isNew ? { seed } : {}),
-      setup: round.setup,
-      task: round.task,
+      asks,
       examples,
       prevBox: srs[seed.id]?.box ?? 0,
-      drill: "recall",
-      gap: null,
     };
   }
 
-  /**
-   * Give an item its rung. A brand-new word always drills `recall` — the
-   * form-meaning link has to exist before anything can be asked of it. Reviews
-   * climb by box, degrading whenever the material for the ideal rung is missing
-   * (offline, no partner chunks, nothing written yet).
-   *
-   * The offline `fit` sentence is the word's own stored example. That's only
-   * ever reached at box ≥ 1, i.e. at least a day after they met it — spaced
-   * retrieval of a sentence they saw once, not a memory trick.
-   */
-  function withDrill(item: SessionItem, round?: { cloze?: string; repair?: { wrong: string; right: string } }): SessionItem {
-    const myLine = store.myLines[item.id];
-    const cloze = round?.cloze ?? item.example;
-    const drill: WordDrill = item.isNew
-      ? "recall"
-      : pickDrill(item.prevBox, {
-          word: item.word,
-          myLine,
-          cloze,
-          repair: round?.repair,
-          collocations: item.collocations,
-        });
-
-    let gap: SessionItem["gap"] = null;
-    if (drill === "fit") gap = gapSentence(cloze, item.word);
-    else if (drill === "echo" && myLine) gap = gapSentence(myLine, item.word);
-    else if (drill === "partner") gap = gapPartner(item.collocations, item.word);
-    // A gap that couldn't be cut drops the item back to recall rather than
-    // rendering an empty round.
-    if (drill !== "recall" && drill !== "repair" && !gap) {
-      return { ...item, drill: "recall", gap: null };
-    }
-    return { ...item, drill, gap, ...(drill === "repair" ? { repair: round?.repair } : {}) };
+  /** Put a word on the table: its card, then the line that opens its scene. */
+  function openWord(item: SessionItem, i: number): Entry[] {
+    return [
+      { t: "word", i },
+      { t: "said", text: item.asks[0].said, task: item.asks[0].task },
+    ];
   }
 
   /**
    * Open a session.
    *
-   * The whole day now arrives from one call: which words are due, whether the
-   * curriculum needed topping up, and the moment each word is wanted in. The
-   * client used to hold the curriculum and ask only for the tailored rungs;
-   * there is no bundled curriculum to hold any more, so a failure here is a
-   * real failure and says so rather than running a day of generic moments.
+   * The whole day arrives from one call: which words are due, whether the
+   * curriculum needed topping up, and the script each word's conversation runs
+   * on. There is no bundled curriculum behind a failure here, so a failure is
+   * a real failure and says so rather than running a day of generic moments.
    */
   async function start() {
-    if (loading) return;
-    setLoading(true);
+    if (view.kind === "loading") return;
     setStartError("");
+    setView({ kind: "loading" });
 
     let session: Awaited<ReturnType<typeof fetchWordSession>>;
     try {
       session = await fetchWordSession();
     } catch {
       setStartError("Couldn't build today's words. Have another go in a moment.");
-      setLoading(false);
+      setView({ kind: "home" });
       return;
     }
 
@@ -371,13 +320,13 @@ export function DailyWords() {
     const built = ordered
       .map((seed) => {
         const round = byId.get(seed.id);
-        return round ? withDrill(itemFromSeed(seed, !met.has(seed.id), round), round) : null;
+        return round ? itemFromSeed(seed, !met.has(seed.id), round) : null;
       })
       .filter((i): i is SessionItem => !!i);
 
     if (built.length === 0) {
       setStartError("Couldn't build today's words. Have another go in a moment.");
-      setLoading(false);
+      setView({ kind: "home" });
       return;
     }
 
@@ -386,144 +335,162 @@ export function DailyWords() {
 
     setItems(built);
     setIdx(0);
-    setBeat(built[0].isNew ? "meet" : "drill");
-    setMeetLeft(null);
-    setGuess("");
-    setDrillVerdict(null);
-    setHelped(false);
-    setAnswer("");
-    setExamplesOpen(false);
-    setResult(null);
+    setTalk(talkStart(built[0].asks.length));
+    setEntries(openWord(built[0], 0));
+    setCardOpen(built[0].isNew);
+    setInput("");
+    setBusy(false);
+    setDayOver(false);
     setResults([]);
     setBridge("");
     setBridgeDone(null);
     lines.current = {};
-    setLoading(false);
     startedAt.current = Date.now();
     setView({ kind: "session" });
   }
 
-  // The "meet" beat holds the card for a few seconds — long enough to actually
-  // read it, which is the encounter the rest of the arc leans on.
+  // Keep the newest turn in view, and the writing field as tall as its text.
   useEffect(() => {
-    if (view.kind !== "session" || beat !== "meet") {
-      setMeetLeft(null);
+    if (view.kind === "session") endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [entries, busy, view.kind]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input, view.kind]);
+
+  // ---- the conversation -----------------------------------------------------
+
+  /**
+   * A word's conversation is over: schedule it honestly and bring on the next.
+   *
+   * Clean → an earned interval. Helped → no change, so it stays due. Missed →
+   * a first meeting is never punished; a review lapses.
+   */
+  function closeWord(item: SessionItem, state: TalkState): Entry[] {
+    const outcome = talkOutcome(state);
+
+    // A new word joins the library once its conversation has happened — that's
+    // when it stops being the app's word and starts being theirs.
+    if (item.seed) collectPhrase(wordToPhrase(item.seed, today));
+    if (outcome === "clean") reviewPhrases([item.id], true);
+    else if (outcome === "missed" && !item.isNew) reviewPhrases([item.id], false);
+
+    // Keep their first landed sentence for a future `echo`.
+    if (state.landed[0]) lines.current[item.id] = state.landed[0];
+    setResults((rs) => [...rs, { outcome, sentences: state.landed, prevBox: item.prevBox }]);
+
+    const closing: Entry[] = [{ t: "closed", i: idx, outcome }];
+    const nextItem = items[idx + 1];
+    if (!nextItem) {
+      setDayOver(true);
+      return closing;
+    }
+    setIdx(idx + 1);
+    setTalk(talkStart(nextItem.asks.length));
+    setCardOpen(nextItem.isNew);
+    return [...closing, ...openWord(nextItem, idx + 1)];
+  }
+
+  /** Send the sentence in the composer and take the partner's answer. */
+  async function send() {
+    const item = items[idx];
+    const sentence = input.trim();
+    if (!item || !sentence || busy || dayOver || talkDone(talk)) return;
+
+    const ask = item.asks[talk.ask];
+    // A follow-up is judged with the moment it grew out of, or "did it answer
+    // what was said" has nothing to stand on.
+    const said = talk.ask === 0 ? ask.said : `${item.asks[0].said}\n${ask.said}`;
+
+    // Their words go up at once; the wait belongs to the partner, not to them.
+    setEntries((es) => [...es.filter((e) => e.t !== "error"), { t: "you", text: sentence }]);
+    setInput("");
+    setCardOpen(false);
+    setBusy(true);
+
+    let turn: Awaited<ReturnType<typeof wordTurn>>;
+    try {
+      turn = await wordTurn(
+        { word: item.word, pos: item.pos, meaning: item.meaning },
+        said,
+        sentence,
+        talk.misses,
+      );
+    } catch {
+      // Nothing was judged, so nothing is recorded or counted: hand the
+      // sentence back rather than make them type it twice.
+      setEntries((es) => [
+        ...es.slice(0, -1),
+        { t: "error", text: "Couldn't read that one just now — send it again." },
+      ]);
+      setInput((cur) => cur || sentence);
+      setBusy(false);
       return;
     }
-    setMeetLeft(MEET_SECONDS);
-    const iv = setInterval(() => {
-      setMeetLeft((s) => (s === null ? s : s <= 1 ? null : s - 1));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, [view.kind, beat, idx]);
 
-  // ---- the beats ------------------------------------------------------------
-
-  /** Answer the drill rung. Each rung judges its own thing, but they all land
-   *  on the same three verdicts so the rest of the session stays uniform. */
-  function submitGuess() {
-    const item = items[idx];
-    if (!item || drillVerdict !== null || !guess.trim()) return;
-
-    let verdict: "exact" | "form" | "wrong";
-    switch (item.drill) {
-      case "recall":
-        verdict = recallMatches(item.word, guess) ? "exact" : "wrong";
-        break;
-      case "fit":
-      case "echo":
-        // `fit` is the rung that cares about the ending, so a right word in the
-        // wrong form is its own verdict rather than a flat miss.
-        verdict = item.gap ? judgeFit(item.word, item.gap.answer, guess) : "wrong";
-        break;
-      case "partner":
-        verdict =
-          item.gap && item.gap.answer.toLowerCase() === guess.trim().toLowerCase()
-            ? "exact"
-            : "wrong";
-        break;
-      case "repair":
-        verdict =
-          item.repair && judgeRepair(item.repair, item.word, guess) ? "exact" : "wrong";
-        break;
-    }
-
-    setDrillVerdict(verdict);
-    if (verdict !== "exact") setHelped(true);
-  }
-
-  function peek() {
-    if (drillVerdict !== null) return;
-    setDrillVerdict("wrong");
-    setHelped(true);
-  }
-
-  async function submitSentence() {
-    const item = items[idx];
-    const sentence = answer.trim();
-    if (!item || !sentence || judging || result) return;
-    setJudging(true);
-
-    let j: DrillJudgment;
-    try {
-      j = await judgePhrase(
-        { text: item.word, meaning: item.meaning },
-        `${item.setup}\n${item.task}`.trim(),
-        sentence,
-      );
-      // A model that misses a real inflection ("relies" for "rely") must never
-      // erase a real production — union its judgment with our own check.
-      if (!j.used && usesWord(item.word, sentence) && countWords(sentence) >= 4) {
-        j = { ...j, used: true, note: "You worked it into your own sentence — that's the whole game." };
-      }
-    } catch {
-      const used = countWords(sentence) >= 4 && usesWord(item.word, sentence);
-      j = {
-        used,
-        note: used
-          ? "You worked it into your own sentence — that's the whole game."
-          : "I couldn't spot it in there — look where it would fit, and it'll come back around.",
-      };
-    }
-
-    const clean = j.used && !helped;
-    const outcome: WordOutcome = clean ? "clean" : j.used ? "helped" : "missed";
-
-    // The sentence itself goes in the ledger, with the moment that drew it out
-    // and the verdict it earned. Written here rather than at the end of the
-    // session, so abandoning the day halfway still keeps what was produced —
-    // and dispatched before the phrase and schedule writes, because the store
-    // saves one action at a time: a learner who closes the tab a second after
-    // Send should lose a schedule tick, never the sentence they wrote.
+    // Every sent sentence is kept, landed or not, the moment it is judged —
+    // and before the schedule writes, so closing the tab can cost a schedule
+    // tick but never something they wrote.
     recordProductions([
       {
         surface: "words",
         itemSlug: item.id,
-        mode: item.drill,
-        prompt: `${item.setup}\n${item.task}`.trim(),
+        mode: "talk",
+        prompt: ask.said,
         text: sentence,
-        verdict: outcome,
-        ...(j.note ? { note: j.note } : {}),
+        verdict: turnLedgerVerdict(talk, turn.verdict),
+        ...(turn.hint || turn.reply ? { note: turn.hint || turn.reply } : {}),
       },
     ]);
 
-    // A new word joins the library the moment it's been used — that's when it
-    // stops being the app's word and starts being theirs.
-    if (item.seed) collectPhrase(wordToPhrase(item.seed, today));
+    const after = talkApply(talk, { type: "turn", verdict: turn.verdict, sentence });
+    setTalk(after);
 
-    // Honest scheduling. Clean → an earned interval. Helped → no change, so it
-    // stays due. Missed → a first meeting is never punished; a review lapses.
-    if (clean) reviewPhrases([item.id], true);
-    else if (outcome === "missed" && !item.isNew) reviewPhrases([item.id], false);
+    if (turn.verdict === "landed") {
+      const landed: Entry = { t: "landed", reply: turn.reply };
+      const then = talkDone(after)
+        ? closeWord(item, after)
+        : [{ t: "said", text: item.asks[after.ask].said } as Entry];
+      setEntries((es) => [...es, landed, ...then]);
+    } else {
+      setEntries((es) => [
+        ...es,
+        {
+          t: "note",
+          missing: turn.verdict === "missing",
+          reply: turn.reply,
+          ...(turn.quote ? { quote: turn.quote } : {}),
+          ...(turn.hint ? { hint: turn.hint } : {}),
+        },
+      ]);
+    }
+    setBusy(false);
+    inputRef.current?.focus();
+  }
 
-    // Keep their sentence for a future `echo` — only when the word is actually
-    // in it, or the gap would have no answer.
-    if (j.used) lines.current[item.id] = sentence;
+  /** Reopen the card. Free to do, but the word no longer counts as clean. */
+  function peek() {
+    if (cardOpen) return;
+    setCardOpen(true);
+    setTalk((t) => talkApply(t, { type: "peek" }));
+  }
 
+  /** The way out, offered only after real effort on one line. */
+  function leave() {
+    const item = items[idx];
+    if (!item || busy || !talkCanLeave(talk)) return;
+    const after = talkApply(talk, { type: "leave" });
+    setTalk(after);
+    setEntries((es) => [...es, ...closeWord(item, after)]);
+  }
 
-    setResults((rs) => [...rs, { outcome, sentence, prevBox: item.prevBox }]);
-    setResult(j);
-    setJudging(false);
+  /** The day's last word is done: on to the bridge, or straight to the debrief. */
+  function closeDay() {
+    if (bridgePair(items)) setView({ kind: "bridge" });
+    else finish();
   }
 
   /**
@@ -551,7 +518,7 @@ export function DailyWords() {
 
   /** Close the day: streak, totals, vocabulary, and the lines kept for echo. */
   function finish(extraSentences: string[] = []) {
-    const sentences = [...results.map((r) => r.sentence), ...extraSentences].filter(Boolean);
+    const sentences = [...results.flatMap((r) => r.sentences), ...extraSentences].filter(Boolean);
     finishWordSession({
       sentences,
       lines: lines.current,
@@ -561,40 +528,46 @@ export function DailyWords() {
     setView({ kind: "done" });
   }
 
-  function next() {
-    if (idx + 1 >= items.length) {
-      // The bridge is a bonus, so it only appears when there are two words to
-      // join; otherwise the day closes here.
-      if (bridgePair(items)) setView({ kind: "bridge" });
-      else finish();
-      return;
-    }
-    const nextItem = items[idx + 1];
-    setIdx((i) => i + 1);
-    setBeat(nextItem.isNew ? "meet" : "drill");
-    setGuess("");
-    setDrillVerdict(null);
-    setHelped(false);
-    setAnswer("");
-    setExamplesOpen(false);
-    setResult(null);
+  // ---- building the day ------------------------------------------------------
+  //
+  // The words and their conversations are written for this learner when they
+  // start, which takes a few seconds. A disabled button for that long reads as
+  // a frozen page; a thread taking shape reads as something being made.
+
+  if (view.kind === "loading") {
+    return (
+      <div className="mx-auto w-full max-w-3xl animate-fade-in px-5 py-8 sm:px-6 lg:px-10 lg:py-12">
+        <div className="kicker">Today&apos;s words</div>
+        <p className="mt-3 font-serif text-[20px] leading-snug text-foreground">
+          Writing today&apos;s conversations for you…
+        </p>
+        <p className="mt-1.5 text-[14px] text-muted-foreground">
+          Nothing here comes off a list, so this takes a few seconds.
+        </p>
+        <div className="mt-8 flex flex-col gap-7" aria-hidden>
+          {[72, 88, 54].map((w, i) => (
+            <div key={i}>
+              <div className="h-2.5 w-16 animate-pulse bg-muted" />
+              <div className="mt-3 h-4 animate-pulse bg-muted" style={{ width: `${w}%` }} />
+              <div className="mt-2 h-4 animate-pulse bg-muted" style={{ width: `${w - 28}%` }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
-  // ---- session --------------------------------------------------------------
+  // ---- session — one running conversation ------------------------------------
 
   if (view.kind === "session") {
     const item = items[idx];
     if (!item) return null;
-    const cue = item.collocations
-      .map((c) => maskCollocation(c, item.word))
-      .filter((c) => c.includes("___"))[0];
-    // The partner chunk with its gap filled back in — "nothing to worry about",
-    // not "nothing worry". The whole chunk is the thing worth showing.
-    const filledChunk = item.gap ? item.gap.gapped.replace("___", item.gap.answer) : "";
+    const canLeave = talkCanLeave(talk);
+    const landedHere = Math.min(talk.ask, item.asks.length);
 
     return (
-      <PageContainer width="narrow">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mx-auto flex min-h-[calc(100dvh-9rem)] w-full max-w-3xl flex-col px-5 sm:px-6 lg:min-h-full lg:px-10">
+        <div className="flex items-center justify-between gap-3 pt-6 lg:pt-8">
           <button
             type="button"
             onClick={() => setView({ kind: "home" })}
@@ -626,309 +599,252 @@ export function DailyWords() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-baseline justify-between gap-3">
-          <span className="kicker">
-            {item.isNew ? "New word" : "Coming back"} · {idx + 1} of {items.length}
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-            {beat === "meet" ? "meet it" : beat === "drill" ? DRILL_META[item.drill].kicker : "use it"}
-          </span>
-        </div>
-
-        {/* 1 — MEET. The one deliberate encounter: read it properly, once. */}
-        {beat === "meet" && (
-          <>
-            <div className="mt-3 border border-border bg-card p-5">
-              <WordCard item={item} />
-            </div>
-            <p className="mt-3 text-[13.5px] text-muted-foreground">
-              Read it once — out loud if you can. In a moment it disappears and
-              you write it from memory.
-            </p>
-            <Button
-              size="lg"
-              className="mt-3 w-full"
-              disabled={meetLeft !== null}
-              onClick={() => setBeat("drill")}
-            >
-              {meetLeft !== null ? `Got it (${meetLeft})` : "Got it — hide it"}
-            </Button>
-          </>
-        )}
-
-        {/* 2 — DRILL. One rung of the ladder, chosen by the word's box. */}
-        {beat === "drill" && (
-          <>
-            <div className="mt-3 border border-border bg-card p-5">
-              <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                {DRILL_META[item.drill].prompt}
-              </div>
-
-              {/* The material each rung puts in front of them. */}
-              {item.drill === "recall" && (
-                <>
-                  <p className="mt-1.5 font-serif text-[19px] leading-snug text-foreground">
-                    {item.meaning}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
-                    <span className="uppercase tracking-wide">{item.pos}</span>
-                    {cue && <span>· it goes in “{cue}”</span>}
-                  </div>
-                </>
-              )}
-
-              {(item.drill === "fit" || item.drill === "echo") && item.gap && (
-                <>
-                  <p className="mt-1.5 font-serif text-[19px] leading-relaxed text-foreground">
-                    {item.gap.gapped}
-                  </p>
-                  <div className="mt-2 font-mono text-[11px] text-muted-foreground">
-                    {item.meaning}
-                  </div>
-                </>
-              )}
-
-              {item.drill === "partner" && item.gap && (
-                <>
-                  <p className="mt-1.5 font-serif text-[22px] leading-snug text-foreground">
-                    {item.gap.gapped}
-                  </p>
-                  <div className="mt-2 font-mono text-[11px] text-muted-foreground">
-                    starts with “{item.gap.answer[0]}”
-                  </div>
-                </>
-              )}
-
-              {/* Repair leans on ochre — the tutor's pencil, never a red pen,
-                  and it's someone else's sentence being marked, not theirs. */}
-              {item.drill === "repair" && item.repair && (
-                <p className="mt-1.5 border-l-2 border-ochre-line bg-ochre-tint py-2 pl-3 pr-2 font-serif text-[17px] leading-relaxed text-gold">
-                  “{item.repair.wrong}”
-                </p>
-              )}
-
-              {drillVerdict === null ? (
-                <div className="mt-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {item.drill === "repair" ? (
-                      <textarea
-                        autoFocus
-                        rows={2}
-                        value={guess}
-                        onChange={(e) => setGuess(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            submitGuess();
-                          }
-                        }}
-                        placeholder="write it the natural way…"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        className="min-w-[200px] flex-1 resize-none border-b-2 border-input bg-transparent py-1.5 font-serif text-[16px] leading-relaxed text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
-                      />
-                    ) : (
-                      <input
-                        autoFocus
-                        value={guess}
-                        onChange={(e) => setGuess(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            submitGuess();
-                          }
-                        }}
-                        placeholder={
-                          item.drill === "partner" ? "the missing word…" : "type the word…"
-                        }
-                        autoComplete="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        className="min-w-[180px] flex-1 border-b-2 border-input bg-transparent py-1.5 font-serif text-[18px] text-foreground outline-none transition-colors focus:border-brand placeholder:text-[15px] placeholder:italic placeholder:text-muted-foreground/60"
-                      />
+        {/* The thread. Everything said today stays on the page above the line
+            being written, the way a conversation does. */}
+        <div className="flex-1 pb-8">
+          {entries.map((e, n) => {
+            if (e.t === "word") {
+              const w = items[e.i];
+              const current = e.i === idx && !dayOver;
+              const open = current && cardOpen;
+              return (
+                <div key={n} className={cn("animate-fade-in", n === 0 ? "mt-6" : "mt-12 border-t border-border pt-8")}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="kicker">
+                      {w.isNew ? "New word" : "Coming back"} · {e.i + 1} of {items.length}
+                    </span>
+                    {current && !open && (
+                      <button
+                        type="button"
+                        onClick={peek}
+                        className="flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand [&_svg]:size-3.5"
+                      >
+                        <Eye /> Peek at the card
+                      </button>
                     )}
-                    <Button size="sm" onClick={submitGuess} disabled={!guess.trim()}>
-                      Check
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={peek}
-                      title="Peeking is fine — the word just stays due for a clean try next time"
-                    >
-                      <Eye /> Show me
-                    </Button>
                   </div>
-                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
-                    {DRILL_META[item.drill].hint}
+                  {open || !current ? (
+                    <div className={cn("mt-3 border border-border bg-card", current ? "p-6" : "px-5 py-4")}>
+                      {current ? (
+                        <>
+                          <WordCard item={w} />
+                          {w.examples.length > 0 && (
+                            <ul className="mt-3 space-y-1 border-t border-border pt-3">
+                              {w.examples.map((x, k) => (
+                                <li
+                                  key={k}
+                                  className="select-none font-serif text-[15px] italic leading-relaxed text-muted-foreground"
+                                >
+                                  “{x}”
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <p className="mt-4 text-[13px] text-muted-foreground">
+                            Read it once. It closes when you start typing — the sentence comes from memory.
+                          </p>
+                        </>
+                      ) : (
+                        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                          <span className="font-serif text-[18px] font-semibold text-foreground">{w.word}</span>
+                          <span className="text-[13.5px] text-muted-foreground">{w.meaning}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // Shut: the meaning stays, the word doesn't. Finding it
+                    // again is the retrieval the whole method leans on.
+                    <div className="mt-3 border border-dashed border-input px-5 py-4">
+                      <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        The word that means
+                      </div>
+                      <div className="mt-1 text-[16px] text-foreground">
+                        {w.meaning}{" "}
+                        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                          · {w.pos}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (e.t === "said") {
+              return (
+                <div key={n} className="mt-7 animate-fade-in">
+                  <div className="kicker text-brand">They say</div>
+                  <p className="mt-1.5 whitespace-pre-line font-serif text-[18px] leading-[1.6] text-foreground">
+                    {e.text}
+                  </p>
+                  {e.task && <p className="mt-1.5 text-[13.5px] text-muted-foreground">{e.task}</p>}
+                </div>
+              );
+            }
+
+            if (e.t === "you") {
+              return (
+                <div key={n} className="mt-7 animate-fade-in border-l-2 border-oxford-line pl-4">
+                  <div className="kicker">You</div>
+                  <p className="mt-1.5 whitespace-pre-wrap text-[18px] leading-[1.6] text-foreground">
+                    {e.text}
                   </p>
                 </div>
-              ) : (
-                <div
-                  className={cn(
-                    "mt-4 border p-3",
-                    drillVerdict === "exact"
-                      ? "border-brand bg-brand-muted text-brand-ink"
-                      : "border-ochre-line bg-ochre-tint text-gold",
-                  )}
-                >
-                  <div className="text-sm font-medium">
-                    {drillVerdict === "exact"
-                      ? item.drill === "partner"
-                        ? `✓ “${filledChunk}” — that's the pairing.`
-                        : item.drill === "repair"
-                          ? "✓ You caught it."
-                          : "✓ That's the one."
-                      : drillVerdict === "form"
-                        ? `Right word, wrong ending — this sentence wants “${item.gap?.answer}”.`
-                        : item.drill === "partner"
-                          ? `It's “${filledChunk}”.`
-                          : item.drill === "repair"
-                            ? "Here's the natural version."
-                            : `It was “${item.gap?.answer || item.word}”.`}
+              );
+            }
+
+            if (e.t === "landed") {
+              return (
+                <div key={n} className="mt-4 animate-fade-in">
+                  <div className="font-mono text-[11px] uppercase tracking-wide text-brand-ink">
+                    ✓ That one&apos;s right
                   </div>
-                  {item.drill === "repair" && item.repair && (
-                    <div className="mt-1.5 font-serif text-[15px] italic">
-                      “{item.repair.right}”
-                    </div>
+                  {e.reply && (
+                    <p className="mt-1.5 font-serif text-[18px] leading-[1.6] text-foreground">{e.reply}</p>
                   )}
-                  <div className="mt-1 text-sm opacity-90">
-                    {drillVerdict === "exact"
-                      ? "Pulling it back yourself is what makes it stick. Now go use it."
-                      : "No cost — you'll see it again. Use it now and it starts settling in."}
-                  </div>
                 </div>
-              )}
-            </div>
-            {drillVerdict !== null && (
-              <Button size="lg" className="mt-3 w-full" onClick={() => setBeat("use")}>
-                Use it in your own sentence <ArrowRight />
-              </Button>
-            )}
-          </>
-        )}
+              );
+            }
 
-        {/* 3 — USE. A real moment, their own sentence. The round that counts. */}
-        {beat === "use" && (
-          <>
-            <div className="mt-3 border-l-2 border-gold bg-secondary/40 py-3 pl-4 pr-4">
-              <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                The moment
-              </div>
-              <p className="mt-1.5 whitespace-pre-line font-serif text-[16px] leading-relaxed text-foreground">
-                {item.setup}
-              </p>
-              <p className="mt-2 text-[12.5px] text-muted-foreground">{item.task}</p>
-            </div>
-
-            <div className="mt-3 border border-border bg-card p-3.5">
-              <WordCard item={item} muted />
-            </div>
-
-            {item.examples.length > 0 && (
-              <div className="mt-2">
-                {!examplesOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => setExamplesOpen(true)}
-                    className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground transition-colors hover:text-brand"
-                  >
-                    See it used ({item.examples.length}) ↓
-                  </button>
-                ) : (
-                  <div className="border border-border bg-secondary/40 p-3">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                      In action — now write your own
-                    </div>
-                    <ul className="mt-1.5 space-y-1">
-                      {item.examples.map((e, i) => (
-                        <li
-                          key={i}
-                          className="select-none font-serif text-[14px] italic leading-relaxed text-foreground/90"
-                        >
-                          “{e}”
-                        </li>
-                      ))}
-                    </ul>
+            if (e.t === "note") {
+              // The tutor's pencil: ochre, in the margin, and never the fix.
+              return (
+                <div
+                  key={n}
+                  className="mt-4 animate-fade-in border-l-2 border-ochre-line bg-ochre-tint px-4 py-3.5 text-gold"
+                >
+                  <div className="font-mono text-[11px] uppercase tracking-wide">
+                    {e.missing ? "Not in there yet" : "Almost — one thing"}
                   </div>
-                )}
-              </div>
-            )}
+                  {e.reply && <p className="mt-1.5 text-[15.5px] leading-relaxed">{e.reply}</p>}
+                  {e.quote && (
+                    <p className="mt-1.5 text-[15.5px] leading-relaxed">
+                      Look at <span className="annot-issue font-medium">“{e.quote}”</span>
+                    </p>
+                  )}
+                  {e.hint && <p className="mt-1.5 text-[15.5px] leading-relaxed">{e.hint}</p>}
+                  <p className="mt-2 font-mono text-[10.5px] uppercase tracking-wide opacity-80">
+                    Say it again ↓
+                  </p>
+                </div>
+              );
+            }
 
-            {result === null ? (
-              <div className="mt-4">
-                <div className="flex items-baseline justify-between">
-                  <span className="kicker text-gold">You — writing</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                    ⏎ send
+            if (e.t === "closed") {
+              const w = items[e.i];
+              const label = OUTCOME_LABEL[e.outcome];
+              return (
+                <div key={n} className="mt-7 flex animate-fade-in flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                  <span className="font-serif text-[17px] font-semibold text-foreground">{w.word}</span>
+                  <span className={cn("font-mono text-[10.5px] uppercase tracking-wide", label.cls)}>
+                    {label.text}
+                  </span>
+                  <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                    ·{" "}
+                    {e.outcome === "clean"
+                      ? intervalLabel(SRS_INTERVALS[Math.min(SRS_INTERVALS.length - 1, w.prevBox + 1)])
+                      : "comes back tomorrow"}
                   </span>
                 </div>
-                <div className="mt-1.5 bg-oxford-tint px-3 py-2">
-                  <textarea
-                    rows={2}
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void submitSentence();
-                      }
-                    }}
-                    placeholder="Answer in your own sentence…"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
-                  />
+              );
+            }
+
+            return (
+              <p key={n} className="note note-warning mt-4">
+                {e.text}
+              </p>
+            );
+          })}
+
+          {busy && (
+            <div className="mt-5 flex items-center gap-1" aria-label="Reading your sentence">
+              <span className="typing-dot" />
+              <span className="typing-dot" style={{ animationDelay: "0.2s" }} />
+              <span className="typing-dot" style={{ animationDelay: "0.4s" }} />
+            </div>
+          )}
+        </div>
+
+        {/* The writing desk: docked, roomy, and never locked. */}
+        <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-10 -mx-5 border-t border-border bg-background px-5 pb-4 pt-3 sm:-mx-6 sm:px-6 lg:bottom-0 lg:-mx-10 lg:px-10 lg:pb-6">
+          {dayOver ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 py-2">
+              <p className="text-[14.5px] text-muted-foreground">
+                That&apos;s every word for today.
+              </p>
+              <Button size="lg" onClick={closeDay}>
+                {bridgePair(items) ? "One last thing — the bridge" : "See your day"} <ArrowRight />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="border border-input bg-card px-4 py-3 transition-colors focus-within:border-brand">
+                <textarea
+                  ref={inputRef}
+                  autoFocus
+                  rows={3}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // The card shuts on the first keystroke, so what gets
+                    // written is recalled rather than copied.
+                    if (cardOpen && e.target.value.trim()) setCardOpen(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                  placeholder="Answer in your own sentence…"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="block max-h-[40vh] min-h-[5.25rem] w-full resize-none bg-transparent text-[18px] leading-[1.65] text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/60"
+                />
+              </div>
+              <div className="mt-2.5 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="flex items-center gap-1" aria-hidden>
+                    {item.asks.map((_, k) => (
+                      <span
+                        key={k}
+                        className={cn(
+                          "size-[7px] border",
+                          k < landedHere ? "border-brand bg-brand" : "border-input bg-transparent",
+                        )}
+                      />
+                    ))}
+                  </span>
+                  <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
+                    {landedHere} of {item.asks.length} landed
+                  </span>
+                  {canLeave && (
+                    <button
+                      type="button"
+                      onClick={leave}
+                      className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground underline-offset-4 transition-colors hover:text-brand hover:underline"
+                    >
+                      Leave it for tomorrow
+                    </button>
+                  )}
                 </div>
-                <div className="mt-2.5 flex items-center justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => void submitSentence()}
-                    disabled={!answer.trim() || judging}
-                  >
-                    <Send /> {judging ? "Reading…" : "Send"}
+                <div className="flex flex-none items-center gap-3">
+                  <span className="hidden font-mono text-[10px] uppercase tracking-wide text-muted-foreground sm:inline">
+                    ⏎ send · ⇧⏎ new line
+                  </span>
+                  <Button onClick={() => void send()} disabled={!input.trim() || busy}>
+                    <Send /> Send
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div
-                className={cn(
-                  "mt-4 border p-3.5",
-                  result.used
-                    ? helped
-                      ? "border-ochre-line bg-ochre-tint text-gold"
-                      : "border-brand bg-brand-muted text-brand-ink"
-                    : "border-border bg-secondary/50",
-                )}
-              >
-                <div className="text-sm font-medium">
-                  {result.used
-                    ? helped
-                      ? "✓ Used it — with a little help"
-                      : "✓ Yours now — memory to sentence, first try"
-                    : "Not this time"}
-                </div>
-                <div className="mt-1 text-sm opacity-90">{result.note}</div>
-                {result.upgrade && (
-                  <div className="mt-2.5 border-t border-current/20 pt-2.5 text-sm">
-                    <span className="opacity-70">You wrote:</span> “{result.upgrade.you}”
-                    <br />
-                    <span className="opacity-70">Try:</span> <b>“{result.upgrade.upgrade}”</b>
-                    {result.upgrade.why && (
-                      <span className="opacity-70"> — {result.upgrade.why}</span>
-                    )}
-                  </div>
-                )}
-                <Button size="sm" className="mt-3" onClick={next}>
-                  {idx + 1 >= items.length ? "See your day" : "Next word"} <ArrowRight />
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </PageContainer>
+            </>
+          )}
+        </div>
+        {/* Below the desk, not above it: scrolling here brings the newest line
+            to rest just over the composer instead of underneath it. */}
+        <div ref={endRef} />
+      </div>
     );
   }
 
@@ -947,7 +863,7 @@ export function DailyWords() {
     const ok = bridgeDone === true;
 
     return (
-      <PageContainer width="narrow">
+      <PageContainer width="default">
         <div className="flex items-center justify-between gap-3">
           <span className="kicker">The bridge · bonus round</span>
           <button
@@ -984,10 +900,10 @@ export function DailyWords() {
                 ⏎ send
               </span>
             </div>
-            <div className="mt-1.5 bg-oxford-tint px-3 py-2">
+            <div className="mt-1.5 border border-input bg-card px-4 py-3 transition-colors focus-within:border-brand">
               <textarea
                 autoFocus
-                rows={2}
+                rows={3}
                 value={bridge}
                 onChange={(e) => setBridge(e.target.value)}
                 onKeyDown={(e) => {
@@ -1000,7 +916,7 @@ export function DailyWords() {
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
-                className="w-full resize-none bg-transparent font-serif text-[15.5px] leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
+                className="block w-full resize-none bg-transparent text-[18px] leading-[1.65] text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/60"
               />
             </div>
             <div className="mt-2.5 flex items-center justify-end">
@@ -1066,7 +982,7 @@ export function DailyWords() {
         <div className="mt-5 bg-card p-6 sm:px-14 sm:py-12">
           <div className="kicker">Daily words · your day</div>
           <h2 className="mt-2.5 text-[26px]">
-            {clean} of {items.length} went from memory into your own sentence.
+            {clean} of {items.length} came out right, first time, from memory.
           </h2>
           <p className="mt-2 text-pretty text-[14.5px] text-muted-foreground">
             Every word here now lives in your Phrasebook on its own schedule —
@@ -1076,7 +992,7 @@ export function DailyWords() {
 
           <div className="mt-6 flex flex-col">
             {items.map((item, i) => {
-              const r = results[i] ?? { outcome: "missed" as WordOutcome, sentence: "", prevBox: 0 };
+              const r: ItemResult = results[i] ?? { outcome: "missed", sentences: [], prevBox: 0 };
               const tile = OUTCOME_TILE[r.outcome];
               const label = OUTCOME_LABEL[r.outcome];
               const returns =
@@ -1109,11 +1025,14 @@ export function DailyWords() {
                         {label.text}
                       </span>
                     </div>
-                    {r.sentence && (
-                      <p className="mt-1 font-serif text-[15px] italic leading-normal text-muted-foreground">
-                        “{r.sentence}”
+                    {r.sentences.map((line, k) => (
+                      <p
+                        key={k}
+                        className="mt-1 font-serif text-[15px] italic leading-normal text-muted-foreground"
+                      >
+                        “{line}”
                       </p>
-                    )}
+                    ))}
                     <div className="mt-1 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
                       {returns}
                     </div>
@@ -1138,7 +1057,7 @@ export function DailyWords() {
 
   // ---- home — today's set ------------------------------------------------------
 
-  const minutes = Math.max(1, Math.round(sessionSize * 0.8));
+  const minutes = Math.max(2, Math.round(sessionSize * 2));
 
   const todayCard = (
     <div className="bg-card p-6">
@@ -1190,16 +1109,12 @@ export function DailyWords() {
               ? "Your first words are written for you when you start — nothing here is off a list."
               : "New words stay hidden until you meet them — the first look is worth more when it isn't your fifth."}
           </p>
-          <Button size="lg" className="mt-3.5 w-full" onClick={() => void start()} disabled={loading}>
-            {loading
-              ? "Setting up…"
-              : sessionSize > 0
-                ? `Start today's words (${sessionSize})`
-                : "Start today's words"}
+          <Button size="lg" className="mt-3.5 w-full" onClick={() => void start()}>
+            {sessionSize > 0 ? `Start today's words (${sessionSize})` : "Start today's words"}
           </Button>
           {startError && <p className="note note-warning mt-3">{startError}</p>}
           <p className="mt-2.5 text-center font-mono text-[10.5px] text-muted-foreground">
-            ≈ {minutes} {minutes === 1 ? "minute" : "minutes"} · meet · drill · your sentence
+            ≈ {minutes} {minutes === 1 ? "minute" : "minutes"} · meet it · say it · say it again
           </p>
         </>
       )}
@@ -1214,9 +1129,9 @@ export function DailyWords() {
           {perDay} new words a day, said in your own sentences
         </h1>
         <p className="mt-1.5 max-w-[580px] text-pretty text-[15px] text-muted-foreground">
-          High-frequency words first, one small set a day. You meet each one,
-          write it back from memory, then use it in a real moment — the order
-          that makes words stay.
+          High-frequency words first, one small set a day. Each one is a short
+          conversation: someone says something, you answer with the word, and
+          you say it again until it&apos;s right.
         </p>
       </div>
 
@@ -1234,19 +1149,19 @@ export function DailyWords() {
               [
                 [
                   "Meet it",
-                  "The card, once: the word, what it means, a real sentence, and the words it travels with. One good encounter beats five distracted ones.",
+                  "The card, once: the word, what it means, a real sentence, and the words it travels with. It closes when you start typing, so the sentence comes from memory.",
                 ],
                 [
-                  "Drill it, harder each time",
-                  "Type it from its meaning. Then fill it into a real sentence in the right form, supply its missing partner word, repair a sentence that uses it almost right — and eventually echo a sentence you wrote yourself weeks ago. The rung follows how well you already know it.",
+                  "Say it in a real moment",
+                  "Someone says something that calls for the word, and you answer in your own sentence. Nothing checks you while you type.",
                 ],
                 [
-                  "Use it for real",
-                  "A moment from ordinary life that needs the word, answered in your own sentence. Making your own use is the strongest predictor that a word survives the week — so every word ends there.",
+                  "Say it until it's right",
+                  "A sentence that isn't right yet stays open. You get a pointer to what's off — never the fixed sentence — and you say it again. Then the conversation moves on and wants the word in a new form.",
                 ],
                 [
                   "Meet it again, later",
-                  "It joins your Phrasebook on a spaced schedule: clean uses earn a longer rest, shaky ones come back sooner.",
+                  "It joins your Phrasebook on a spaced schedule: words that came out right first time rest longer, the others come back sooner.",
                 ],
               ] as [string, string][]
             ).map(([title, body], i) => (

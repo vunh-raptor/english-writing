@@ -97,9 +97,13 @@ with the theme provider.
 
 `src/lib/server/ai.ts` is a small provider-agnostic gateway:
 
-- `resolveProvider()` picks the first configured provider in order Groq →
+- `resolveProviders()` lists the configured providers in order Groq →
   Gemini → Anthropic, overridable with `AI_PROVIDER`. Models default sensibly
-  and are overridable (`GROQ_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`).
+  and are overridable (`GROQ_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`). When the
+  provider in front hits its quota (429), is down (5xx), is unreachable, or has
+  retired the configured model (404), the same request is retried on the next
+  configured provider — Daily Words makes a model call per sentence, so one
+  free tier no longer covers a day on its own.
 - `chatComplete(system, messages, maxTokens)` — multi-turn completion. Groq uses
   the OpenAI-compatible endpoint, Gemini its `generateContent` API, Anthropic
   the SDK. `rawComplete(system, user)` is the single-shot helper.
@@ -185,6 +189,7 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `GET /api/state` | The signed-in learner's whole durable state. |
 | `POST /api/state` | Apply one state action; returns the fresh whole store. Includes `recordProductions` (the writing ledger) and `saveNewsSession`. |
 | `POST /api/words/daily` | The whole daily session: which words are due (topping the curriculum up if it is short) plus a round pack per word. Takes no body — the server owns the decision. |
+| `POST /api/words/turn` | One turn of a word's conversation: the sentence they sent, judged `landed` / `almost` / `missing`, with a reaction or a hint that never contains the corrected sentence. |
 | `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
 | `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
 | `POST /api/respond/sharpen` | One harder question about the answer they just gave. |
