@@ -22,7 +22,7 @@
 
 @layer base {
   :root {
-    --background: 240 33% 98%; /* #F8F8FC */
+    --background: 0 0% 100%; /* the page is paper-white */
     --foreground: 236 24% 14%; /* #1B1C2E */
 
     --card: 0 0% 100%;
@@ -65,7 +65,7 @@
     --ochre-tint: 40 80% 96%;
     --ochre-line: 40 60% 84%;
     --ochre-hl: 42 80% 88%;
-    --canvas: 240 25% 95%;
+    --canvas: 240 20% 97%;
     --line-strong: 240 16% 87%;
     --line-faint: 240 22% 95%;
 
@@ -406,82 +406,29 @@
   .bg-accent-gradient {
     background-image: linear-gradient(135deg, hsl(250 84% 60%), hsl(277 78% 56%));
   }
-  /* The app-wide atmosphere: the same two washes, fixed to the viewport so a
-     long page scrolls over them rather than away from them. */
-  .app-mesh {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .app-mesh::before,
-  .app-mesh::after {
-    content: "";
-    position: absolute;
-    width: 50rem;
-    height: 50rem;
-    border-radius: 9999px;
-    filter: blur(100px);
-    opacity: 0.14;
-  }
-  .app-mesh::before {
-    top: -26rem;
-    right: -16rem;
-    background: hsl(var(--dw-accent-2));
-  }
-  .app-mesh::after {
-    bottom: -30rem;
-    left: -10rem;
-    background: hsl(var(--dw-accent-3));
-    opacity: 0.1;
-  }
-  /* Two soft washes of colour behind the page — atmosphere, not decoration to
-     read. Fixed so they don't scroll away under a long conversation. */
-  .dw-mesh {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .dw-mesh::before,
-  .dw-mesh::after {
-    content: "";
-    position: absolute;
-    width: 46rem;
-    height: 46rem;
-    border-radius: 9999px;
-    filter: blur(90px);
-    opacity: 0.16;
-  }
-  .dw-mesh::before {
-    top: -22rem;
-    right: -14rem;
-    background: hsl(var(--dw-accent-2));
-  }
-  .dw-mesh::after {
-    top: 6rem;
-    left: -26rem;
-    background: hsl(var(--dw-accent-3));
-    opacity: 0.11;
-  }
 
   .dw-card {
     border-radius: 24px;
     border: 1px solid hsl(var(--border));
     background: hsl(var(--card));
-    box-shadow:
-      0 1px 2px hsl(var(--dw-shadow) / 0.04),
-      0 14px 34px -18px hsl(var(--dw-shadow) / 0.18);
+    box-shadow: 0 1px 2px hsl(var(--dw-shadow) / 0.03);
   }
+  /* The day's title block: a wide white sheet ruled off by hairlines, with
+     one thin accent thread along the top — ink on paper, not a banner. */
   .dw-hero {
-    border-radius: 28px;
-    color: white;
-    background:
-      radial-gradient(120% 140% at 100% 0%, hsl(var(--dw-accent-3) / 0.55), transparent 55%),
-      linear-gradient(135deg, hsl(250 84% 58%), hsl(277 78% 56%));
-    box-shadow: 0 24px 50px -24px hsl(250 84% 50% / 0.55);
+    position: relative;
+    overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow: 0 1px 2px hsl(var(--dw-shadow) / 0.03);
+  }
+  .dw-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, hsl(250 84% 60%), hsl(277 78% 58%), hsl(var(--dw-accent-3)));
   }
   .dw-glass {
     border-radius: 26px;
@@ -538,12 +485,6 @@
   .dw-pill:focus-visible {
     outline: 2px solid hsl(var(--dw-accent));
     outline-offset: 2px;
-  }
-  /* On the gradient hero the filled button inverts: white, with the accent ink. */
-  .dw-btn-onhero {
-    color: hsl(250 70% 42%);
-    background: white;
-    box-shadow: 0 10px 24px -12px hsl(240 60% 10% / 0.5);
   }
   .dw-btn-quiet {
     display: inline-flex;
@@ -636,16 +577,15 @@
     border: 1px solid hsl(var(--border));
     background: hsl(var(--card));
     padding: 0.9rem 1.15rem;
-    box-shadow: 0 8px 22px -16px hsl(var(--dw-shadow) / 0.25);
   }
   .dw-bubble-you {
     max-width: min(88%, 34rem);
     margin-left: auto;
     border-radius: 22px 22px 6px 22px;
     padding: 0.8rem 1.1rem;
-    color: white;
-    background: linear-gradient(135deg, hsl(250 84% 60%), hsl(277 78% 58%));
-    box-shadow: 0 12px 26px -16px hsl(250 84% 55% / 0.7);
+    color: hsl(var(--foreground));
+    background: hsl(var(--dw-accent-soft));
+    border: 1px solid hsl(var(--dw-accent) / 0.25);
   }
   /* The tutor's pencil keeps its ochre — that part of the old system is a
      promise about tone ("never red"), not a matter of style. */
@@ -663,13 +603,16 @@
     display: grid;
     place-items: center;
     border-radius: 9999px;
-    background: conic-gradient(white calc(var(--p) * 1%), hsl(0 0% 100% / 0.22) 0);
+    background: conic-gradient(
+      hsl(var(--dw-accent)) calc(var(--p) * 1%),
+      hsl(var(--muted)) 0
+    );
   }
   .dw-ring > * {
     display: grid;
     place-items: center;
     border-radius: 9999px;
-    background: hsl(255 78% 56%);
+    background: hsl(var(--card));
   }
 
   .dw-rise {

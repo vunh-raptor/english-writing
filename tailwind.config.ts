@@ -117,7 +117,7 @@ const config: Config = {
         full: "9999px",
       },
       boxShadow: {
-        soft: "0 1px 2px hsl(var(--shadow-color) / 0.04), 0 12px 30px -18px hsl(var(--shadow-color) / 0.18)",
+        soft: "0 1px 2px hsl(var(--shadow-color) / 0.03)",
         md: "0 8px 28px -10px hsl(var(--shadow-color) / 0.16)",
         lg: "0 22px 50px -18px hsl(var(--shadow-color) / 0.26)",
         frame: "0 12px 32px hsl(var(--shadow-color) / 0.10)",

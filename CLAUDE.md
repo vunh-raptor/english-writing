@@ -113,8 +113,11 @@ Break these and the change is a regression, however green the tests are.
   only; real values go in `.env.local` (git-ignored) or the Vercel dashboard.
 
 **Design** (details in `docs/DESIGN_SYSTEM.md`)
+- **The page is paper.** White, one centered column, hairline rules, generous
+  margins; the app's whole chrome is one slim top bar (no sidebar). Decoration
+  never competes with the learner's own words.
 - One violet-indigo accent for every interactive affordance; rounded surfaces
-  lifted on soft shadow; one sans (Plus Jakarta Sans); sentence case.
+  ruled by hairlines; one sans (Plus Jakarta Sans); sentence case.
 - **Ochre only for corrections and the tutor's notes; never red; no emoji.**
   These are promises about tone, not style — they survived the redesign and
   must survive the next one.
@@ -122,13 +125,14 @@ Break these and the change is a regression, however green the tests are.
   and the shared primitives (`dw-card`, `dw-btn`, `bg-accent-gradient`, …),
   never raw hex in a component.
 
-  > This replaced **Scriptorium** — Oxford blue, square corners, flat
-  > surfaces, a Newsreader serif over a mono metadata layer. A learner called
-  > it old and boring; the softer look was piloted in Daily Words and then
-  > applied to the whole app. That was a deliberate product decision. The cost
-  > is real: the scholarly calm the old look was built for is quieter now,
-  > and the brighter surfaces compete a little more with the learner's own
-  > words — keep decoration out of the writing surfaces.
+  > The look has moved twice, both times at a learner's ask: **Scriptorium**
+  > (Oxford blue, square, flat, serif) was called old and boring and replaced
+  > by a soft violet style piloted in Daily Words; its gradient panels and
+  > colour washes were then pared back to this **paper** look — white space,
+  > a single slim top bar instead of a 236px sidebar, colour kept for the one
+  > action and the tutor's notes. Deliberate decisions, not drift. What every
+  > version keeps: ochre corrections, never red, no emoji, nothing loud inside
+  > a writing surface.
 
 ## The delivery cycle
 

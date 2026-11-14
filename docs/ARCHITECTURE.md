@@ -74,9 +74,11 @@ rather than of behaviour.
 
 Screens are real routes grouped by their chrome using App Router route groups:
 
-- `app/(main)` — the shell every screen lives in: a persistent left rail on
-  desktop (collapsing to a 72px icon strip), a top bar + bottom tab bar on
-  mobile. Holds Daily words, Respond, News chat, Phrasebook and Settings.
+- `app/(main)` — the shell every screen lives in: one slim top bar (nav with
+  live counts, the streak and today's progress, recent conversations, theme,
+  account) on desktop, the same bar plus a bottom tab bar on phones. No
+  sidebar — the page below the bar is the learner's. Holds Daily words,
+  Respond, News chat, Phrasebook and Settings.
 - `/` redirects to `/words` — the day starts with today's words.
 
 A mode's own session state (which round, the draft, timing) is local component

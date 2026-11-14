@@ -72,8 +72,8 @@ function Ring({ done, total, size = 132 }: { done: number; total: number; size?:
     >
       <div style={{ width: size - 18, height: size - 18 }}>
         <div className="text-center leading-none">
-          <span className="text-[34px] font-bold tabular-nums">{done}</span>
-          <span className="text-[17px] font-medium opacity-70">/{total}</span>
+          <span className="text-[34px] font-bold tabular-nums text-foreground">{done}</span>
+          <span className="text-[17px] font-medium text-muted-foreground">/{total}</span>
         </div>
       </div>
     </div>
@@ -695,13 +695,11 @@ export function DailyWords() {
           </button>
 
           <div className="dw-hero dw-rise mt-4 p-7 sm:p-9">
-            <div className="text-[13px] font-semibold uppercase tracking-wider opacity-80">
-              Your day
-            </div>
-            <h2 className="mt-2 text-[32px] font-bold leading-tight tracking-tight sm:text-[38px]">
+            <div className="kicker text-[hsl(var(--dw-accent-ink))]">Your day</div>
+            <h2 className="mt-2 text-[32px] font-bold leading-tight tracking-tight text-foreground sm:text-[38px]">
               {sentences} {sentences === 1 ? "sentence" : "sentences"} of your own.
             </h2>
-            <p className="mt-2 max-w-xl text-[15.5px] leading-relaxed opacity-90">
+            <p className="mt-2 max-w-xl text-[15.5px] leading-relaxed text-muted-foreground">
               {clean} of {day.items.length} words came out right first time, from memory. The rest
               come back sooner — that spacing is what makes them stay.
             </p>
@@ -796,28 +794,28 @@ export function DailyWords() {
           {/* Hero: where today stands, and the one thing to do next. */}
           <div className="dw-hero dw-rise flex flex-col justify-between gap-6 p-7 sm:flex-row sm:items-center sm:p-9 lg:col-span-2">
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold uppercase tracking-wider opacity-80">
-                Daily words
-              </div>
-              <h1 className="mt-2 text-[32px] font-bold leading-[1.1] tracking-tight text-white sm:text-[40px]">
+              <div className="kicker text-[hsl(var(--dw-accent-ink))]">Daily words</div>
+              <h1 className="mt-2 text-[32px] font-bold leading-[1.1] tracking-tight text-foreground sm:text-[40px]">
                 {heroTitle}
               </h1>
-              <p className="mt-2.5 max-w-md text-[15.5px] leading-relaxed opacity-90">{heroBody}</p>
+              <p className="mt-2.5 max-w-md text-[15.5px] leading-relaxed text-muted-foreground">
+                {heroBody}
+              </p>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 {checking ? (
-                  <span className="text-[14px] opacity-80">Checking where you are…</span>
+                  <span className="text-[14px] text-muted-foreground">Checking where you are…</span>
                 ) : nothingDue ? (
-                  <Link href="/phrasebook" className="dw-btn dw-btn-onhero">
+                  <Link href="/phrasebook" className="dw-btn">
                     Practise your Phrasebook <ArrowRight className="size-4" />
                   </Link>
                 ) : finished ? (
-                  <button type="button" className="dw-btn dw-btn-onhero" onClick={() => setView("done")}>
+                  <button type="button" className="dw-btn" onClick={() => setView("done")}>
                     See your day <ArrowRight className="size-4" />
                   </button>
                 ) : (
                   <button
                     type="button"
-                    className="dw-btn dw-btn-onhero"
+                    className="dw-btn"
                     onClick={() => void start()}
                     disabled={building}
                   >
@@ -826,11 +824,11 @@ export function DailyWords() {
                   </button>
                 )}
                 {!checking && !finished && !nothingDue && !building && (
-                  <span className="text-[13.5px] opacity-80">about {minutes} minutes</span>
+                  <span className="text-[13.5px] text-muted-foreground">about {minutes} minutes</span>
                 )}
               </div>
               {homeError && (
-                <p className="mt-4 rounded-[14px] bg-white/15 px-4 py-2.5 text-[14px]">{homeError}</p>
+                <p className="note note-warning mt-4">{homeError}</p>
               )}
             </div>
             <Ring done={doneCount} total={total} />
