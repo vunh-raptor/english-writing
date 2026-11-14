@@ -74,9 +74,11 @@ rather than of behaviour.
 
 Screens are real routes grouped by their chrome using App Router route groups:
 
-- `app/(main)` — the shell every screen lives in: a persistent left rail on
-  desktop (collapsing to a 72px icon strip), a top bar + bottom tab bar on
-  mobile. Holds Daily words, Respond, News chat, Phrasebook and Settings.
+- `app/(main)` — the shell every screen lives in: one slim top bar (nav with
+  live counts, the streak and today's progress, recent conversations, theme,
+  account) on desktop, the same bar plus a bottom tab bar on phones. No
+  sidebar — the page below the bar is the learner's. Holds Daily words,
+  Respond, News chat, Phrasebook and Settings.
 - `/` redirects to `/words` — the day starts with today's words.
 
 A mode's own session state (which round, the draft, timing) is local component
@@ -97,9 +99,13 @@ with the theme provider.
 
 `src/lib/server/ai.ts` is a small provider-agnostic gateway:
 
-- `resolveProvider()` picks the first configured provider in order Groq →
+- `resolveProviders()` lists the configured providers in order Groq →
   Gemini → Anthropic, overridable with `AI_PROVIDER`. Models default sensibly
-  and are overridable (`GROQ_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`).
+  and are overridable (`GROQ_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`). When the
+  provider in front hits its quota (429), is down (5xx), is unreachable, or has
+  retired the configured model (404), the same request is retried on the next
+  configured provider — Daily Words makes a model call per sentence, so one
+  free tier no longer covers a day on its own.
 - `chatComplete(system, messages, maxTokens)` — multi-turn completion. Groq uses
   the OpenAI-compatible endpoint, Gemini its `generateContent` API, Anthropic
   the SDK. `rawComplete(system, user)` is the single-shot helper.
@@ -184,7 +190,9 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `GET /api/health` | Liveness. |
 | `GET /api/state` | The signed-in learner's whole durable state. |
 | `POST /api/state` | Apply one state action; returns the fresh whole store. Includes `recordProductions` (the writing ledger) and `saveNewsSession`. |
-| `POST /api/words/daily` | The whole daily session: which words are due (topping the curriculum up if it is short) plus a round pack per word. Takes no body — the server owns the decision. |
+| `GET /api/words/daily` | Today's stored Daily Words session, or null. Never generates. |
+| `POST /api/words/daily` | Open today's session: resume the stored one, or build it once (which words are due, topping the curriculum up if short, plus the script for each word's conversation). |
+| `POST /api/words/turn` | One move in today's session — `say` a sentence, `peek`, `leave`, `bridge`, `finish`. The server owns the session (`lib/server/wordDay.ts`); the body only names the move. Returns the whole day. |
 | `POST /api/respond/source` | Pasted text or a user-supplied link → the readable article. No AI. |
 | `POST /api/respond/questions` | A source → four questions climbing grasp → assume → push → extend. |
 | `POST /api/respond/sharpen` | One harder question about the answer they just gave. |

@@ -34,15 +34,15 @@ function Seg({
   onChange: (value: string | number) => void;
 }) {
   return (
-    <div className="inline-flex gap-0.5 rounded-none border border-border bg-muted p-0.5">
+    <div className="inline-flex gap-0.5 rounded-full border border-border bg-muted p-1">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "whitespace-nowrap rounded-none px-3.5 py-1.5 text-sm transition-colors",
+            "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors",
             value === o.value
-              ? "bg-card font-medium text-foreground"
+              ? "bg-card font-semibold text-foreground shadow-soft"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -161,7 +161,7 @@ export function Settings() {
                   aria-pressed={on}
                   title={LEVEL_BLURB[l]}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-none border px-3 py-2 font-mono text-sm transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition-colors",
                     on
                       ? "border-brand bg-brand/10 font-semibold text-brand"
                       : "border-input bg-card text-muted-foreground hover:border-brand/60 hover:text-foreground",

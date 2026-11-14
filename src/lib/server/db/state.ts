@@ -326,6 +326,19 @@ export type ProductionInput = Omit<Production, "id" | "day" | "createdAt">;
  * from the server's view.
  */
 export async function applyAction(db: Db, userId: string, action: StateAction): Promise<Store> {
+  await mutate(db, userId, action);
+  return loadState(db, userId);
+}
+
+/**
+ * Apply one action and nothing else.
+ *
+ * `applyAction` is this plus a full reload, which is what a client wants. A
+ * server module that applies several in a row (closing a word schedules it,
+ * collects it and records it) would pay for that reload each time and throw
+ * the result away.
+ */
+export async function mutate(db: Db, userId: string, action: StateAction): Promise<void> {
   switch (action.type) {
     case "updateSettings": {
       const { name, wordsPerDay, sound } = action.patch;
@@ -633,7 +646,6 @@ export async function applyAction(db: Db, userId: string, action: StateAction): 
     }
   }
 
-  return loadState(db, userId);
 }
 
 // ---------------------------------------------------------------------------

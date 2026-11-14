@@ -235,7 +235,7 @@ function Ticks({ box }: { box: number }) {
         <span
           key={i}
           className={cn(
-            "size-1.5 border",
+            "rounded-full size-1.5 border",
             i < box ? "border-brand bg-brand" : "border-input bg-transparent",
           )}
         />
@@ -246,7 +246,7 @@ function Ticks({ box }: { box: number }) {
 
 function KindTag({ kind }: { kind: LexKind }) {
   return (
-    <span className="flex-none border border-input bg-muted px-1.5 py-px font-mono text-[9.5px] uppercase tracking-wide text-muted-foreground">
+    <span className="rounded-full flex-none border border-input bg-muted px-1.5 py-px font-mono text-[9.5px] uppercase tracking-wide text-muted-foreground">
       {KIND_LABEL[kind]}
     </span>
   );
@@ -323,13 +323,13 @@ function PhraseRow({
                 <span
                   key={a.text}
                   title={a.note}
-                  className="bg-brand-muted px-2 py-px text-[12.5px] text-brand-ink"
+                  className="rounded-full bg-brand-muted px-2 py-px text-[12.5px] text-brand-ink"
                 >
                   {a.text}
                 </span>
               ))}
               {phrase.register && (
-                <span className="bg-muted px-2 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className="rounded-full bg-muted px-2 py-px font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                   {phrase.register}
                 </span>
               )}
@@ -706,7 +706,7 @@ export function Phrasebook() {
                     done ? `${r.phrase.text} — ${OUTCOME_LABEL[done.outcome].text}` : `Round ${i + 1}`
                   }
                   className={cn(
-                    "flex size-[22px] items-center justify-center border font-mono text-[11px]",
+                    "rounded-full flex size-[22px] items-center justify-center border font-mono text-[11px]",
                     tile
                       ? tile.cls
                       : i === idx
@@ -752,7 +752,7 @@ export function Phrasebook() {
         )}
 
         {/* The item card. */}
-        <div className={cn("border border-border bg-card p-3.5", study ? "mt-4" : "mt-3")}>
+        <div className={cn("rounded-2xl border border-border bg-card p-3.5 shadow-soft", study ? "mt-4" : "mt-3")}>
           {flashActive ? (
             <>
               {fullCard}
@@ -845,7 +845,7 @@ export function Phrasebook() {
                   {round.recall && !revealed && result === null ? " — shows the phrase" : ""} ↓
                 </button>
               ) : (
-                <div className="border border-border bg-secondary/40 p-3">
+                <div className="rounded-2xl border border-border bg-secondary/40 p-3">
                   <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
                     In action — now write your own
                   </div>
@@ -883,7 +883,7 @@ export function Phrasebook() {
                 ⏎ send
               </span>
             </div>
-            <div className="mt-1.5 bg-oxford-tint px-3 py-2">
+            <div className="rounded-2xl mt-1.5 bg-oxford-tint px-3 py-2">
               <textarea
                 rows={2}
                 value={answer}
@@ -915,7 +915,7 @@ export function Phrasebook() {
         ) : (
           <div
             className={cn(
-              "mt-4 border p-3.5",
+              "rounded-2xl mt-4 border p-3.5",
               result.used
                 ? outcome === "clean"
                   ? "border-brand bg-brand-muted text-brand-ink"
@@ -968,7 +968,7 @@ export function Phrasebook() {
         >
           ‹ Phrasebook
         </button>
-        <div className="mt-5 bg-card p-6 sm:px-14 sm:py-12">
+        <div className="rounded-2xl mt-5 bg-card p-6 sm:px-14 sm:py-12 shadow-soft">
           <div className="kicker">{MODE_META[sessionMode].label} · session debrief</div>
           <h2 className="mt-2.5 text-[26px]">
             {view.produced} of {view.total}{" "}
@@ -1002,7 +1002,7 @@ export function Phrasebook() {
                 >
                   <span
                     className={cn(
-                      "mt-0.5 flex size-[22px] flex-none items-center justify-center border font-mono text-[11px]",
+                      "rounded-full mt-0.5 flex size-[22px] flex-none items-center justify-center border font-mono text-[11px]",
                       tile.cls,
                     )}
                   >
@@ -1092,7 +1092,7 @@ export function Phrasebook() {
       : `Practice now (${selectedCount})`;
 
   const sessionCard = (
-    <div className="bg-card p-6">
+    <div className="rounded-2xl bg-card p-6 shadow-soft">
       <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-gold">
         Today&apos;s session
       </div>
@@ -1115,7 +1115,7 @@ export function Phrasebook() {
                   onClick={() => setMode(m)}
                   aria-pressed={active}
                   className={cn(
-                    "border px-2.5 py-2 text-left transition-colors",
+                    "rounded-2xl border px-2.5 py-2 text-left transition-colors",
                     active
                       ? "border-brand bg-brand-muted"
                       : "border-input bg-card hover:bg-secondary",
@@ -1151,7 +1151,7 @@ export function Phrasebook() {
                 const tag = box == null ? "new" : box >= RECALL_BOX ? "from memory" : "";
                 return (
                   <div key={p.id} className="flex items-baseline gap-2">
-                    <span className="size-[5px] flex-none border border-gold bg-ochre-line" />
+                    <span className="rounded-full size-[5px] flex-none border border-gold bg-ochre-line" />
                     <span className="min-w-0 truncate font-serif text-[14.5px] italic text-foreground">
                       {p.text}
                     </span>
@@ -1236,7 +1236,7 @@ export function Phrasebook() {
                   type="button"
                   onClick={() => setKindFilter(k)}
                   className={cn(
-                    "border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors",
+                    "rounded-full border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors",
                     kindFilter === k
                       ? "border-brand bg-brand-muted text-brand-ink"
                       : "border-input bg-card text-muted-foreground hover:bg-secondary",
@@ -1249,7 +1249,7 @@ export function Phrasebook() {
           )}
 
           {pool.length === 0 ? (
-            <div className="mt-10 bg-card px-8 py-12 text-center">
+            <div className="rounded-2xl mt-10 bg-card px-8 py-12 text-center shadow-soft">
               <div className="kicker">Nothing collected yet</div>
               <p className="mx-auto mt-3 max-w-md font-serif text-lg leading-snug text-muted-foreground">
                 Two ways in. Meet{" "}
@@ -1307,7 +1307,7 @@ export function Phrasebook() {
         <aside className="flex flex-col gap-5 lg:sticky lg:top-8">
           <div className="hidden lg:block">{sessionCard}</div>
 
-          <div className="bg-card p-6">
+          <div className="rounded-2xl bg-card p-6 shadow-soft">
             <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               This week
             </div>
@@ -1344,7 +1344,7 @@ export function Phrasebook() {
             </div>
           </div>
 
-          <div className="bg-card p-6">
+          <div className="rounded-2xl bg-card p-6 shadow-soft">
             <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               The journey
             </div>

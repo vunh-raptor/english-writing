@@ -1,11 +1,25 @@
 import "server-only";
-import type { WordRound } from "@/types";
+import type { TalkTurn, TalkVerdict, WordRound } from "@/types";
 import type { LearnerSnapshot } from "@/lib/shared/prompt";
 import { extractObject, resolveItemId, str, strList } from "@/lib/shared/modelJson";
 import { countWords } from "@/lib/shared/stats";
-import { wordMatcher } from "@/lib/shared/words";
+import {
+  hintLeaks,
+  hintLevel,
+  settleVerdict,
+  usesWord,
+  wordMatcher,
+} from "@/lib/shared/words";
 import { rawComplete } from "./ai";
-import { SYSTEM, user as roundsUser, type WordRoundInput } from "./prompts/words";
+import {
+  CONFIRM_SYSTEM,
+  SYSTEM,
+  TURN_SYSTEM,
+  confirmUser,
+  turnUser,
+  user as roundsUser,
+  type WordRoundInput,
+} from "./prompts/words";
 
 export type { WordRoundInput };
 
@@ -34,6 +48,10 @@ export type { WordRoundInput };
 const MAX_WORDS = 10;
 /** A worked example longer than this is a paragraph, not a model sentence. */
 const MAX_EXAMPLE_WORDS = 25;
+/** How many times the partner carries the scene on after the opening moment. */
+const MAX_FOLLOWUPS = 2;
+/** Two or more underscores: a gap someone was meant to fill. */
+const HAS_BLANK = /_{2,}/;
 
 /** Coerce one response into rounds, keeping only what survives the guards. */
 function coerceRounds(
@@ -53,7 +71,12 @@ function coerceRounds(
 
     const matcher = wordMatcher(word.word);
     const setup = str(o.setup);
-    if (!setup || matcher.test(setup)) continue; // empty, or it gave the word away
+    // Empty, or it gave the word away, or it came back as a sentence to
+    // complete — a blank turns answering someone into filling a form.
+    if (!setup || matcher.test(setup) || HAS_BLANK.test(setup)) continue;
+    // A scene with nobody speaking gives them nothing to answer. The opening
+    // has to carry a line said to them: something quoted, or a question.
+    if (!/["“”]/.test(setup) && !setup.includes("?")) continue;
 
     // The ask has to come from the model too, now that there is no bundled
     // instruction to fall back on. A round without one is not a round.
@@ -88,11 +111,21 @@ function coerceRounds(
         : undefined;
 
     seen.add(word.id);
+    // The follow-ups are asks too, so they answer to the same rule as the
+    // setup: one that names the word would hand over the sentence. A pack that
+    // loses them is still a round — the conversation is just shorter.
+    const followups = strList(o.followups, MAX_FOLLOWUPS).filter(
+      // A follow-up is something asked of them. One that isn't a question is
+      // usually the model answering on the learner's behalf.
+      (f) => !matcher.test(f) && !HAS_BLANK.test(f) && /\?["'”’)]*$/.test(f),
+    );
+
     out.push({
       id: word.id,
       setup,
       task,
       examples,
+      ...(followups.length ? { followups } : {}),
       ...(cloze ? { cloze } : {}),
       ...(repair ? { repair } : {}),
     });
@@ -117,13 +150,131 @@ export async function wordRounds(
 
   const prompt = roundsUser(snapshot, capped);
 
+  // A partial set is kept, but not at the first asking: the checks are strict
+  // enough that one generation often loses a word or two, and a second try is
+  // cheaper than a learner getting a short day. The fuller set wins.
+  let best: WordRound[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await rawComplete(SYSTEM, prompt, 1500);
+    const raw = await rawComplete(SYSTEM, prompt, 3200);
     const obj = extractObject(raw);
     const rounds = obj ? coerceRounds(obj, capped) : [];
-    if (rounds.length > 0) return rounds;
-    console.warn(`[words] attempt ${attempt} produced no usable rounds —`, raw.slice(0, 300));
+    if (rounds.length > best.length) best = rounds;
+    if (best.length === capped.length) break;
+    console.warn(
+      `[words] attempt ${attempt}: ${rounds.length} of ${capped.length} rounds usable —`,
+      raw.slice(0, 200),
+    );
   }
+  if (best.length > 0) return best;
 
   throw new Error("Couldn't build today's moments — try again in a moment.");
+}
+
+// ---------------------------------------------------------------------------
+// One turn of a word's conversation
+// ---------------------------------------------------------------------------
+
+const VERDICTS = new Set<TalkVerdict>(["landed", "almost", "missing"]);
+
+/**
+ * The lines a code-computed verdict wears when the model gave none.
+ *
+ * Not generated content and not a stand-in for it: these report a judgment the
+ * code itself made, so the learner is never left looking at a held sentence
+ * with no words attached. None of them names the word — retrieving it is the
+ * learner's job, and the card is one tap away.
+ */
+const NOTE_MISSING = "Today's word isn't in there yet — say it again with the word in it.";
+const NOTE_FRAGMENT = "That's the word. Now give it a whole sentence.";
+const NOTE_LOOK_AGAIN = "Something in that part isn't right yet — look at it again and say it once more.";
+
+/**
+ * Does a context-free check agree that this sentence breaks a rule?
+ *
+ * Fails toward the judge: if the second opinion can't be had, the first one
+ * stands — an outage must not quietly turn the mode into one that passes
+ * everything.
+ */
+async function isFaulty(sentence: string): Promise<boolean> {
+  try {
+    const obj = extractObject(await rawComplete(CONFIRM_SYSTEM, confirmUser(sentence), 120, 0));
+    return obj?.correct !== true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Judge one sent sentence.
+ *
+ * The model's judgment is settled against deterministic detection
+ * (`settleVerdict`), and everything it wrote back is checked before it reaches
+ * the learner: a quote that isn't in their sentence is dropped, a hint that is
+ * really the corrected sentence is dropped, and a hint that names the word
+ * they failed to retrieve is replaced. Fails soft to detection alone.
+ */
+export async function wordTurn(
+  snapshot: LearnerSnapshot,
+  word: { word: string; pos: string; meaning: string },
+  said: string,
+  sentence: string,
+  misses: number,
+): Promise<TalkTurn> {
+  const detected = usesWord(word.word, sentence);
+  const words = countWords(sentence);
+
+  let obj: Record<string, unknown> | null = null;
+  try {
+    obj = extractObject(
+      await rawComplete(
+        TURN_SYSTEM,
+        turnUser(snapshot, word, said, sentence, hintLevel(misses)),
+        220,
+        // A verdict is not a creative act: the same sentence must get the same
+        // answer twice, or being held on it stops feeling fair.
+        0,
+      ),
+    );
+  } catch (e) {
+    console.warn("[words] turn judged by detection alone —", e instanceof Error ? e.message.slice(0, 160) : e);
+  }
+
+  const claimed = str(obj?.verdict) as TalkVerdict;
+  const model = obj && VERDICTS.has(claimed) ? claimed : null;
+  let hint = str(obj?.hint);
+  const rawQuote = str(obj?.quote);
+  const quote =
+    rawQuote && sentence.toLowerCase().includes(rawQuote.toLowerCase()) ? rawQuote : "";
+
+  const verdict = settleVerdict(model, detected, words, Boolean(hint || quote));
+
+  // The model may tighten, but only with a witness: a held sentence must also
+  // fail a context-free grammar check. Costs a second call on misses only.
+  if (verdict === "almost" && model === "almost" && words >= 3 && !(await isFaulty(sentence))) {
+    return { verdict: "landed", reply: "" };
+  }
+
+  if (verdict === "landed") {
+    // A reaction only counts when the model itself judged it landed; a rescued
+    // verdict gets no invented line.
+    return { verdict, reply: model === "landed" ? str(obj?.reply) : "" };
+  }
+
+  if (verdict === "missing") {
+    if (!hint || wordMatcher(word.word).test(hint)) hint = NOTE_MISSING;
+    return { verdict, reply: "", hint };
+  }
+
+  // almost — "what already works" is a comment on their sentence. If it came
+  // back as a sentence of its own, it is a model answer in disguise: drop it.
+  const said_ = model === "almost" ? str(obj?.works) : "";
+  const works = said_ && !hintLeaks(said_, sentence) && said_.length <= 160 ? said_ : "";
+  if (hint && hintLeaks(hint, sentence)) hint = "";
+  if (!hint) hint = words < 3 ? NOTE_FRAGMENT : quote ? "" : NOTE_LOOK_AGAIN;
+  return {
+    verdict,
+    reply: works,
+    ...(quote ? { quote } : {}),
+    ...(hint ? { hint } : {}),
+  };
 }

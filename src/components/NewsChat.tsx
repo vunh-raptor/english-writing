@@ -141,7 +141,7 @@ function BriefingText({
           <button
             key={i}
             type="button"
-            className="bg-brand-muted px-1 font-sans text-[13.5px] font-medium text-brand-ink"
+            className="rounded-full bg-brand-muted px-1 font-sans text-[13.5px] font-medium text-brand-ink"
             onClick={() => hit && onPeek(hit)}
           >
             {part}
@@ -238,7 +238,7 @@ function AskPanel({
         <div className="flex flex-col gap-2.5">
           {entries.map((e, i) => (
             <div key={i} className="flex flex-col gap-1.5">
-              <div className="self-end max-w-[90%] bg-oxford-tint px-2.5 py-1 text-[12.5px] leading-snug text-brand-ink">
+              <div className="rounded-2xl self-end max-w-[90%] bg-oxford-tint px-2.5 py-1 text-[12.5px] leading-snug text-brand-ink">
                 {e.q}
               </div>
               {e.help && (
@@ -820,7 +820,7 @@ export function NewsChat({
 
   const chipStyle = (s: TargetStatus) =>
     cn(
-      "rounded-none border px-2 py-0.5 text-[11.5px] transition-colors",
+      "rounded-full border px-2 py-0.5 text-[11.5px] transition-colors",
       s === "produced" && "border-sage bg-sage-muted font-semibold text-sage-ink",
       s === "assisted" && "border-dashed border-sage bg-sage-muted/60 text-sage-ink",
       s === "missed" && "border-input bg-muted text-muted-foreground opacity-60",
@@ -906,7 +906,7 @@ export function NewsChat({
 
   /** One inline hint / bridge panel — shown in the flow beside the writing. */
   const helpPanel = currentBeat && (hintOpen || bridgeOpen || nextOpen) && (
-    <div className="mt-2.5 border border-border bg-secondary/50 p-3.5">
+    <div className="rounded-2xl mt-2.5 border border-border bg-secondary/50 p-3.5">
       {nextOpen && (
         <div className="flex flex-col gap-2.5">
           <div className="text-xs text-muted-foreground">
@@ -926,7 +926,7 @@ export function NewsChat({
                 {nextHelp.options.map((o, i) => (
                   <span
                     key={i}
-                    className="select-none border border-border bg-card px-2 py-0.5 text-[13px]"
+                    className="rounded-full select-none border border-border bg-card px-2 py-0.5 text-[13px]"
                   >
                     {o}
                   </span>
@@ -948,7 +948,7 @@ export function NewsChat({
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="border border-dashed border-border bg-card px-2 py-1 text-[13px]">
+                  <span className="rounded-full border border-dashed border-border bg-card px-2 py-1 text-[13px]">
                     {nextHelp.frame}
                   </span>
                   <Button
@@ -991,7 +991,7 @@ export function NewsChat({
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs text-muted-foreground">build with:</span>
               {currentBeat.hints.keywords.map((k, i) => (
-                <span key={i} className="select-none border border-border bg-card px-2 py-0.5 text-[13px]">
+                <span key={i} className="rounded-full select-none border border-border bg-card px-2 py-0.5 text-[13px]">
                   {k}
                 </span>
               ))}
@@ -999,7 +999,7 @@ export function NewsChat({
           )}
           {RUNG_ORDER.indexOf(hintRung) >= 3 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="border border-dashed border-border bg-card px-2 py-1 text-[13px]">
+              <span className="rounded-full border border-dashed border-border bg-card px-2 py-1 text-[13px]">
                 {currentBeat.hints.frame}
               </span>
               <Button type="button" variant="outline" size="sm" onClick={(e) => insertFrame(currentBeat.hints.frame, e)}>
@@ -1076,13 +1076,13 @@ export function NewsChat({
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">build with:</span>
                 {bridgeHelp.keywords.map((k, i) => (
-                  <span key={i} className="select-none border border-border bg-card px-2 py-0.5 text-[13px]">
+                  <span key={i} className="rounded-full select-none border border-border bg-card px-2 py-0.5 text-[13px]">
                     {k}
                   </span>
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="border border-dashed border-border bg-card px-2 py-1 text-[13px]">
+                <span className="rounded-full border border-dashed border-border bg-card px-2 py-1 text-[13px]">
                   {bridgeHelp.frame}
                 </span>
                 <Button type="button" variant="outline" size="sm" onClick={(e) => insertFrame(bridgeHelp.frame, e)}>
@@ -1110,7 +1110,7 @@ export function NewsChat({
             onClick={() => setMarginOpen(false)}
             aria-label="Hide margin"
             title="Hide margin"
-            className="absolute -right-3 top-4 z-10 grid size-6 place-items-center border border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+            className="rounded-full absolute -right-3 top-4 z-10 grid size-6 place-items-center border border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" />
           </button>
@@ -1145,7 +1145,7 @@ export function NewsChat({
             onClick={() => setMarginOpen(true)}
             aria-label="Show margin"
             title="Show margin"
-            className="absolute left-0 top-6 z-10 hidden size-6 place-items-center border border-l-0 border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:grid"
+            className="rounded-full absolute left-0 top-6 z-10 hidden size-6 place-items-center border border-l-0 border-sidebar-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground lg:grid"
           >
             <ChevronRight className="size-3.5" />
           </button>
@@ -1181,12 +1181,12 @@ export function NewsChat({
 
             {/* Mobile metadata — the margin is desktop-only. */}
             {metaHud && (
-              <div className="mt-4 border border-border bg-background p-4 lg:hidden">{metaHud}</div>
+              <div className="rounded-2xl mt-4 border border-border bg-background p-4 lg:hidden">{metaHud}</div>
             )}
 
             {mission && (
               <>
-                <h1 className="mt-4 font-serif text-[26px] font-medium leading-tight tracking-tight text-foreground">
+                <h1 className="mt-4 text-[26px] font-bold leading-tight tracking-tight text-foreground">
                   {mission.title}
                 </h1>
 
@@ -1205,7 +1205,7 @@ export function NewsChat({
                       onPeek={(t) => setPeek((p) => (p?.id === t.id ? null : t))}
                     />
                     {peek && (
-                      <div className="mt-2.5 bg-muted p-2.5 text-sm">
+                      <div className="rounded-2xl mt-2.5 bg-muted p-2.5 text-sm">
                         <b>{peek.text}</b> — {peek.meaning}
                         <div className="mt-0.5 text-muted-foreground">e.g. {peek.example}</div>
                       </div>
@@ -1222,7 +1222,7 @@ export function NewsChat({
                             type="button"
                             onClick={() => pickCheck(i)}
                             className={cn(
-                              "rounded-none border px-3 py-1.5 text-sm transition-colors",
+                              "rounded-full border px-3.5 py-1.5 text-sm transition-colors",
                               checkPick === i && i === mission.check!.answer
                                 ? "border-sage bg-sage-muted font-medium text-sage-ink"
                                 : checkPick === i
@@ -1301,7 +1301,7 @@ export function NewsChat({
                     ⏎ send
                   </span>
                 </div>
-                <div className="mt-1.5 bg-oxford-tint px-3 py-2 transition-shadow focus-within:shadow-[inset_0_-2px_0_hsl(var(--oxford)/0.5)]">
+                <div className="rounded-2xl mt-1.5 bg-oxford-tint px-3 py-2 transition-shadow focus-within:shadow-[inset_0_-2px_0_hsl(var(--oxford)/0.5)]">
                   <textarea
                     ref={inputRef}
                     rows={1}
@@ -1346,7 +1346,7 @@ export function NewsChat({
                         }
                       }}
                       className={cn(
-                        "flex items-center gap-1 rounded-none border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                        "flex items-center gap-1 rounded-full border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
                         stuckPulse && !hintOpen && !nextOpen && "animate-nudge",
                       )}
                     >
@@ -1355,7 +1355,7 @@ export function NewsChat({
                     <button
                       type="button"
                       onClick={() => setBridgeOpen((v) => !v)}
-                      className="flex items-center gap-1 rounded-none border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      className="flex items-center gap-1 rounded-full border border-input bg-card px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                     >
                       <Languages className="h-3.5 w-3.5" /> Say it your way
                     </button>
@@ -1377,7 +1377,7 @@ export function NewsChat({
 
             {/* Debrief — the close, inline at the end of the document. */}
             {debrief && mission && (
-              <div className="mt-6 border border-border bg-sage-muted p-4 text-sage-ink" data-capture-context>
+              <div className="rounded-2xl mt-6 border border-border bg-sage-muted p-4 text-sage-ink" data-capture-context>
                 <div className="text-[15px] font-medium">
                   {debrief.goalHit ? "Mission complete." : "Mission over."} {debrief.celebration}
                 </div>

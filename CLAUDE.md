@@ -20,20 +20,36 @@ well-built. Read `README.md` for the full product argument.
 Break these and the change is a regression, however green the tests are.
 
 **Product**
-- **No correction mid-flow.** Writing surfaces keep `spellCheck={false}`, no
-  autocorrect, no grammar UI, no red squiggles. Feedback is opt-in and always
-  *after* producing, and always leads with what went well.
+- **No correction while typing.** Writing surfaces keep `spellCheck={false}`, no
+  autocorrect, no grammar UI, no red squiggles. Feedback only ever arrives
+  *after* a sentence is sent, and always leads with what went well. Everywhere
+  except Daily Words it is also opt-in.
+
+  > This replaced **"No correction mid-flow"**, which said feedback was always
+  > opt-in. Daily Words is now a conversation that will not move on until the
+  > sentence is right (`docs/DAILY_WORDS.md`): a learner asked to be held to it,
+  > because one sentence per word, accepted whatever it looked like, did not
+  > feel like producing English. That was a deliberate product decision, not
+  > drift. The cost is real — required correction is the thing most likely to
+  > make someone quit — so it is fenced: the note is ochre and in the margin,
+  > it points and never rewrites, help stops at a frame with a gap, a held
+  > sentence needs two judges to agree it is wrong, and after three misses
+  > there is a way out. Do not extend required correction to another mode
+  > without the same fences.
 - **Never a blank page.** Every entry point supplies the material to work from —
   a word card, a real-life moment, a question, a source. The learner is never
   asked to produce from nothing.
 - **Nothing completes the learner's turn.** Hints unlock ideas or language,
   never a finished sentence: setups never contain the item they elicit, worked
-  examples and outlines are inert, and Respond asks questions but never supplies
+  examples and outlines are inert, a Daily Words correction never contains the
+  corrected sentence, and Respond asks questions but never supplies
   a summary, an opinion or an angle. A session someone can finish without
   producing is a broken session.
 - **Account-only, server-owned state.** Every durable thing a learner
   accumulates — streak, vocabulary, phrase library and its schedule, saved
   sessions — lives in Postgres under RLS and is reached through `/api/state`.
+  A session in progress counts: today's Daily Words conversation is kept
+  server-side move by move, so leaving the page loses nothing.
   **Nothing durable is written to the device**: no `localStorage`, no
   `sessionStorage`, not even a layout preference. A signed-out request gets a
   redirect (pages) or a 401 (API), never an empty store that looks like a new
@@ -97,9 +113,26 @@ Break these and the change is a regression, however green the tests are.
   only; real values go in `.env.local` (git-ignored) or the Vercel dashboard.
 
 **Design** (details in `docs/DESIGN_SYSTEM.md`)
-- Oxford blue for every interactive affordance; **ochre only for annotations**;
-  **never red**; **no emoji**; square corners; flat surfaces; sentence case.
-- Reach for tokens (`bg-card`, `text-brand`, `bg-ochre-tint`), never raw hex.
+- **The page is paper.** White, one centered column, hairline rules, generous
+  margins; the app's whole chrome is one slim top bar (no sidebar). Decoration
+  never competes with the learner's own words.
+- One violet-indigo accent for every interactive affordance; rounded surfaces
+  ruled by hairlines; one sans (Plus Jakarta Sans); sentence case.
+- **Ochre only for corrections and the tutor's notes; never red; no emoji.**
+  These are promises about tone, not style — they survived the redesign and
+  must survive the next one.
+- Reach for tokens (`bg-card`, `text-primary`, `bg-accent`, `bg-ochre-tint`)
+  and the shared primitives (`dw-card`, `dw-btn`, `bg-accent-gradient`, …),
+  never raw hex in a component.
+
+  > The look has moved twice, both times at a learner's ask: **Scriptorium**
+  > (Oxford blue, square, flat, serif) was called old and boring and replaced
+  > by a soft violet style piloted in Daily Words; its gradient panels and
+  > colour washes were then pared back to this **paper** look — white space,
+  > a single slim top bar instead of a 236px sidebar, colour kept for the one
+  > action and the tutor's notes. Deliberate decisions, not drift. What every
+  > version keeps: ochre corrections, never red, no emoji, nothing loud inside
+  > a writing surface.
 
 ## The delivery cycle
 
