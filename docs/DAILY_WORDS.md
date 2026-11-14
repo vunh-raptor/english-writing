@@ -120,10 +120,10 @@ code, not just asked for in a prompt:
 | Fence | Where |
 | --- | --- |
 | **Nothing checks you while you type.** No spellcheck, no squiggles; the verdict comes after Send. | the composer in `DailyWords.tsx` |
-| **The corrected sentence is never shown.** A "hint" that restates most of their sentence with no gap in it is dropped. | `hintLeaks` in `lib/shared/words.ts` |
+| **The corrected sentence is never shown.** A "hint" that restates most of their sentence with no gap in it is dropped, and so is one that hands back the off fragment with one word swapped ("make a complaint" for "do a complaint"). A help-level label the model echoes ("frame: …") is stripped. | `hintLeaks`, `suggestsFix` in `lib/shared/words.ts` |
 | **Help grows one notch per miss and then stops**: point at the words → name the pattern → their sentence back with `___` where the fault is. | `hintLevel` |
 | **What works comes first**, and the note is ochre in the margin, never red. | the `note` entry |
-| **A sentence is held only when two judges agree.** The conversation judge marks it; a second, context-free grammar check must also find a fault, or it lands. The first judge sees the scene and drifts into marking relevance; the second sees only the sentence. | `wordTurn` / `isFaulty` in `lib/server/words.ts` |
+| **A sentence is held only when two judges agree.** The conversation judge marks it; a second, context-free grammar check must also find a fault, or it lands. The first judge sees the scene and drifts into marking relevance; the second sees only the sentence. | `judgeHeld` / `isFaulty` in `lib/server/words.ts` — shared with the [Phrasebook arena](PHRASEBOOK.md), the only other mode that holds a sentence |
 | **A model cannot erase a word that is visibly there**, and a provider outage falls back to detection rather than trapping anyone. | `settleVerdict` |
 | **"Missing" never names the word.** Retrieving it is the learner's job; the card is one tap away. | `wordTurn` |
 | **There is a way out.** After three misses on one line, "Leave it for tomorrow" appears. The word stays due. | `talkCanLeave` |

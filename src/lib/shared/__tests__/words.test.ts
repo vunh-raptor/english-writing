@@ -6,6 +6,7 @@ import {
   gapPartner,
   gapSentence,
   hintLeaks,
+  suggestsFix,
   hintLevel,
   judgeBridge,
   judgeFit,
@@ -524,5 +525,42 @@ describe("the word conversation — say it until it lands", () => {
     expect(turnLedgerVerdict(fresh, "missing")).toBe("missed");
     expect(turnLedgerVerdict(miss(fresh), "landed")).toBe("helped");
     expect(turnLedgerVerdict(talkApply(fresh, { type: "peek" }), "landed")).toBe("helped");
+  });
+});
+
+describe("suggestsFix — a note must point at the mistake, never hand over the fix", () => {
+  it("catches the off fragment with one word swapped", () => {
+    expect(
+      suggestsFix("make a complaint", "do a complaint", "I want to do a complaint about the noise."),
+    ).toBe(true);
+    expect(suggestsFix("try: will arrange", "will arranging", "I will arranging the meeting.")).toBe(true);
+  });
+
+  it("catches a single off word given back in its right form", () => {
+    expect(suggestsFix("use arranged here", "arrange", "Last week I arrange the meeting.")).toBe(true);
+  });
+
+  it("lets a pointer that only talks about the mistake through", () => {
+    expect(
+      suggestsFix(
+        "the word arrange is right but the verb form is wrong",
+        "arrange",
+        "Last week I arrange the meeting.",
+      ),
+    ).toBe(false);
+    expect(
+      suggestsFix("check the verb you use with this noun", "do a complaint", "I want to do a complaint."),
+    ).toBe(false);
+  });
+
+  it("never treats a frame with a gap as a leak", () => {
+    expect(
+      suggestsFix("Last week I ___ the meeting.", "arrange", "Last week I arrange the meeting."),
+    ).toBe(false);
+  });
+
+  it("has nothing to check without a quote or a note", () => {
+    expect(suggestsFix("", "do a complaint", "I do a complaint.")).toBe(false);
+    expect(suggestsFix("make a complaint", "", "I do a complaint.")).toBe(false);
   });
 });

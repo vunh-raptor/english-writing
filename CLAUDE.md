@@ -23,7 +23,7 @@ Break these and the change is a regression, however green the tests are.
 - **No correction while typing.** Writing surfaces keep `spellCheck={false}`, no
   autocorrect, no grammar UI, no red squiggles. Feedback only ever arrives
   *after* a sentence is sent, and always leads with what went well. Everywhere
-  except Daily Words it is also opt-in.
+  except Daily Words and the Phrasebook arena it is also opt-in.
 
   > This replaced **"No correction mid-flow"**, which said feedback was always
   > opt-in. Daily Words is now a conversation that will not move on until the
@@ -36,14 +36,22 @@ Break these and the change is a regression, however green the tests are.
   > sentence needs two judges to agree it is wrong, and after three misses
   > there is a way out. Do not extend required correction to another mode
   > without the same fences.
+  >
+  > The **Phrasebook arena** (`docs/PHRASEBOOK.md`) is the second mode to hold
+  > a sentence, at a learner's ask: they wanted the Phrasebook to be a
+  > try-hard space for using their words like a native. It takes the fences
+  > by sharing the code, not by copying it — every held sentence in either
+  > mode goes through `judgeHeld` in `lib/server/words.ts` — and adds two of
+  > its own: a bout can be ended at any point without losing a sentence, and
+  > a slipped item gets one second try, never a loop.
 - **Never a blank page.** Every entry point supplies the material to work from —
   a word card, a real-life moment, a question, a source. The learner is never
   asked to produce from nothing.
 - **Nothing completes the learner's turn.** Hints unlock ideas or language,
   never a finished sentence: setups never contain the item they elicit, worked
-  examples and outlines are inert, a Daily Words correction never contains the
-  corrected sentence, and Respond asks questions but never supplies
-  a summary, an opinion or an angle. A session someone can finish without
+  examples and outlines are inert, a held-sentence correction (Daily Words, the
+  arena) never contains the corrected sentence, and Respond asks questions but
+  never supplies a summary, an opinion or an angle. A session someone can finish without
   producing is a broken session.
 - **Account-only, server-owned state.** Every durable thing a learner
   accumulates — streak, vocabulary, phrase library and its schedule, saved
@@ -200,7 +208,7 @@ real 502s that are not bugs; retry like a user would.
 | Database schema and RLS | `supabase/README.md` |
 | The daily-word method | `docs/DAILY_WORDS.md` |
 | Respond's one rule + the SSRF guards | `docs/RESPOND.md` |
-| Phrasebook practice modes | `docs/PHRASEBOOK.md` |
+| The Phrasebook arena: stations, Native, the bout | `docs/PHRASEBOOK.md` |
 | Transcribe's two gates + the scoring rule | `docs/TRANSCRIBE.md` |
 | News Chat contracts | `docs/NEWS_CHAT.md`, `docs/NEWS_CHAT_V2.md` |
 | Why this architecture over alternatives | `docs/PATTERNS.md` |
