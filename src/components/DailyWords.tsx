@@ -29,8 +29,8 @@ import { cn } from "@/lib/utils";
  * device — land exactly where the learner stopped; it used to be React state,
  * and quitting to the dashboard threw the conversation away.
  *
- * The look here is deliberately not Scriptorium's. It is the pilot of a softer,
- * rounder style, scoped under `.dw` in globals.css (docs/DESIGN_SYSTEM.md).
+ * This screen is where the app's current look started (docs/DESIGN_SYSTEM.md);
+ * it uses the `dw-*` primitives in globals.css most heavily.
  */
 
 type View = "home" | "session" | "bridge" | "done";
@@ -345,7 +345,6 @@ export function DailyWords() {
 
     return (
       <div className="dw min-h-full">
-        <div className="dw-mesh" aria-hidden />
         <div className="mx-auto flex min-h-[calc(100dvh-9rem)] w-full max-w-3xl flex-col px-4 sm:px-6 lg:min-h-full">
           {/* Top bar: the way back, and every word of the day one tap away. */}
           <div className="flex items-center gap-2 pt-5 lg:pt-7">
@@ -602,7 +601,6 @@ export function DailyWords() {
 
     return (
       <div className="dw min-h-full">
-        <div className="dw-mesh" aria-hidden />
         <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-12">
           <div className="flex items-center justify-between gap-3">
             <span className="dw-chip dw-chip-accent">
@@ -691,7 +689,6 @@ export function DailyWords() {
     const sentences = day.items.reduce((n, i) => n + i.talk.landed.length, 0);
     return (
       <div className="dw min-h-full">
-        <div className="dw-mesh" aria-hidden />
         <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:py-12">
           <button type="button" className="dw-btn-quiet" onClick={() => setView("home")}>
             <ArrowLeft className="size-4" /> Today
@@ -794,7 +791,6 @@ export function DailyWords() {
 
   return (
     <div className="dw min-h-full">
-      <div className="dw-mesh" aria-hidden />
       <div className="mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Hero: where today stands, and the one thing to do next. */}

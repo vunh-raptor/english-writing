@@ -1,123 +1,99 @@
-# Scriptorium Design System
+# Flowrite design system
 
-Flowrite's UI follows **Scriptorium**, an academic-writing design system imported
-from the team's Claude Design project ("Scriptorium Design System"). This doc is
-the local source of truth for how the system is wired into the app and how to
-build on-brand UI.
+The app's look: **soft and bright**. A violet-indigo accent, rounded surfaces
+lifted on soft shadow, one modern sans, and a faint wash of colour behind every
+page. It is meant to feel like a current consumer app — calm, friendly, a little
+playful — rather than a document.
 
-> Vibe in one line: a scholarly journal, not a classroom app — Oxford-blue
-> authority, ochre pencil annotations, cool paper neutrals, serif gravitas
-> (Newsreader) over a crisp sans writing surface (Source Sans 3).
+It replaced **Scriptorium** (Oxford blue, square corners, flat surfaces, a
+Newsreader serif over IBM Plex Mono metadata) after a learner called that look
+old and boring. The new style was piloted in Daily Words first, then applied to
+every mode.
 
 ## Where it lives
 
 | Concern | File |
 | --- | --- |
-| Color / radius / shadow tokens (light + dark) | `src/app/globals.css` |
-| Tailwind token bindings, fonts, square radius scale | `tailwind.config.ts` |
-| Fonts (Newsreader, Source Sans 3, IBM Plex Mono) | `src/app/layout.tsx` |
-| Signature motif helpers (`.kicker`, `.meta`, `.annot-*`) | `src/app/globals.css` |
+| Colour, radius and shadow tokens (light + dark) | `src/app/globals.css` (`:root`, `.dark`) |
+| Tailwind bindings, radius scale, shadows, fonts | `tailwind.config.ts` |
+| The typeface | `src/app/layout.tsx` |
+| Shared primitives (`dw-*`, `.kicker`, `.note`, `.annot-*`, `.app-mesh`) | `src/app/globals.css` |
+| Base components (button, card, input, badge, …) | `src/components/ui/` |
 
-The palette is expressed as shadcn HSL tokens, so a single `.dark` class on
-`<html>` (driven by `next-themes`) repaints the whole app between **paper**
-(light) and **lamplight** (dark).
+A single `.dark` class on `<html>` (driven by `next-themes`) repaints the app.
 
-## Non-negotiables
+## Rules
 
-- **Oxford blue `#2E4E7E`** carries every interactive affordance — buttons,
-  links, focus rings, active nav, selection. Token: `--primary` / `--brand` /
-  `oxford`.
-- **Ochre `#8A6A24`** is reserved **exclusively** for grammar annotations.
-  Never use it for interactive UI. Token: `--ochre` / `ochre` / `gold`.
-- **Never red.** Scriptorium reads correction as a tutor's pencil (ochre), not a
-  red pen. `--destructive` exists only as a restrained, muted last resort for
-  genuinely destructive data actions (e.g. "Erase everything").
-- **No emoji, ever.** Typographic marks do the work: middle dots (·) separate
-  metadata, en/em dashes, `✓`/`→` glyphs, real curly quotes. Uppercase mono
-  kickers (`.kicker`) label sections.
-- **No icons as a rule.** Lucide is kept as a flagged substitution (thin 1.5px
-  stroke, slate) for nav/affordances where text alone would hurt usability.
-- **Square everything.** `--radius: 0px`; the Tailwind radius scale is overridden
-  so every `rounded-*` is `0` except `rounded-full` (kept for genuine circles:
-  spinners, dots, the switch thumb).
-- **Flat surfaces.** Separation comes from background contrast (canvas → paper →
-  sheet) plus hairline borders. `shadow-soft` is neutralized to `none`; `shadow`
-  is reserved for genuinely floating overlays and the app frame.
-- **Sentence case** everywhere except mono kickers, which are UPPERCASE.
+- **One accent carries every interactive affordance**: buttons, links, focus
+  rings, the active nav item, selection. Token: `--primary` (the legacy names
+  `--brand`, `--oxford`, `--sage` alias it, so older class strings followed).
+- **Ochre is for corrections and the tutor's notes only** — the wavy underline,
+  the "almost" note in Daily Words, gentle warnings. Token: `--ochre` / `gold`.
+- **Never red.** Correction reads as a tutor's pencil, not a red pen.
+  `--destructive` exists only for genuinely destructive data actions ("Erase
+  everything").
+- **No emoji, ever.** Icons are Lucide at their default stroke, used sparingly
+  where text alone would hurt usability.
+- **Rounded, not square.** Cards `rounded-2xl`/`rounded-3xl`, inputs
+  `rounded-xl`, buttons, chips and toggles `rounded-full`. The radius scale is
+  fixed in `tailwind.config.ts` so the same class means the same curve
+  everywhere.
+- **Lifted, not flat.** White cards sit on `shadow-soft`; floating things
+  (menus, the docked composer) get `shadow-lg` or the glass treatment.
+- **One filled action per view** — the gradient pill (`Button` default
+  variant, or `.dw-btn`). Everything else is `secondary`, `outline` or `ghost`.
+- **Sentence case** everywhere. Small uppercase labels use `.kicker`.
+- **Tokens, not hex.** Components never carry raw colours; the one exception is
+  `.bg-accent-gradient`, which is fixed on purpose (below).
+- **Writing surfaces stay quiet.** No decoration inside the box someone types
+  in, and `spellCheck={false}` on every one of them (`CLAUDE.md`).
 
 ## Type
 
-Three self-hosted typefaces (via `next/font`), wired to CSS variables:
+One face: **Plus Jakarta Sans**, self-hosted through `next/font` with the
+Vietnamese subset. Headings are 700, tight (`-0.02em`); body text 16px; the
+writing surfaces 17–18px with 1.6 line height.
 
-- `--font-serif` → **Newsreader** — headings, the wordmark, document titles,
-  empty-state prose. Tailwind: `font-serif`. Headings default to weight 500.
-- `--font-sans` → **Source Sans 3** — the writing surface and every UI control.
-  Tailwind: `font-sans` (the body default). Editor prose is ~18px / 1.65.
-- `--font-mono` → **IBM Plex Mono** (400/500) — metadata only: word counts, save
-  state, rubric codes, kickers. Tailwind: `font-mono`.
+`font-serif` and `font-mono` are kept as Tailwind names but point at the same
+face, so an older class string renders inside the system instead of as a stray
+voice. Use `tabular-nums` where numbers line up.
 
-## Color tokens
+## Colour
 
-Semantic shadcn tokens (`--background`, `--foreground`, `--primary`, `--muted`,
-`--border`, …) resolve to the Scriptorium palette. Additional raw accents are
-exposed for the annotation/feedback motif:
+| Token | Light | Use |
+| --- | --- | --- |
+| `--primary` | violet-indigo `250 76% 58%` | every affordance |
+| `--accent` / `--dw-accent-soft` | pale lavender | hover wash, active nav, soft fills |
+| `--dw-accent`, `--dw-accent-2`, `--dw-accent-3` | indigo, violet, sky | gradients and the background wash |
+| `--dw-good` / `--dw-good-soft` | green | "that one's right", landed progress |
+| `--ochre` / `--ochre-tint` | warm ochre | corrections, the tutor's notes |
+| `--background` | `#F8F8FC` | the page |
+| `--card` | white | surfaces |
 
-- `oxford` — `DEFAULT / deep / tint / line / hl`
-- `ochre` — `DEFAULT / tint / line / hl`
+Dark mode lightens the accent and deepens the surfaces. Because the accent
+lightens, **gradients do not use the theme tokens**: `.bg-accent-gradient` is a
+fixed indigo-to-violet pair, so white text on it stays readable in both themes.
 
-Light bases: paper `#F7F8FA`, sheet `#FFFFFF`, canvas `#EDEFF2`, ink `#232936`,
-slate `#5A6272`. Dark ("lamplight") bases: paper `#14161C`, sheet `#1C1F27`,
-ink `#E6E8EE`; accents lighten (Oxford → `#8FAEDC`, Ochre → `#D8B36A`) and hover
-_lightens_ instead of darkening.
+## Shared primitives
 
-## The signature motif
+They began as the Daily Words pilot, hence the `dw-` prefix; any mode may use
+them.
 
-Feedback is a tutor's inline annotation, never a punitive mark:
-
-- `.annot-issue` — wavy **ochre** underline (grammar issue).
-- `.annot-suggestion` — wavy **oxford** underline (style suggestion).
-- `.kicker` — mono uppercase section label (e.g. `STREAK`, `GOAL`).
-- `.meta` — mono metadata (counts, save state).
-
-Feedback cards pair a tint background with a matching accent:
-`bg-ochre-tint` + `text-ochre` for grammar; `bg-oxford-tint` + `text-oxford`
-for style. See `src/components/Feedback.tsx` for the realized pattern.
+| Piece | Class |
+| --- | --- |
+| Surfaces | `.dw-card` (rounded, soft shadow), `.dw-hero` (gradient panel), `.dw-glass` (blurred — the docked composer), `.dw-tile` (a tappable card) |
+| Actions | `.dw-btn` (gradient pill), `.dw-btn-onhero` (white pill on a gradient), `.dw-btn-quiet`, `.dw-pill` (a selectable chip) |
+| Conversation | `.dw-bubble-them`, `.dw-bubble-you`, `.dw-note` (ochre) |
+| Status | `.dw-chip` + `-accent` / `-good` / `-note`, `.dw-ring` (progress ring) |
+| Motion | `.dw-rise`, `.dw-pop`, `.dw-shimmer` — all off under `prefers-reduced-motion` |
+| Atmosphere | `.app-mesh` (fixed, behind every page in the main layout) |
+| Fill | `.bg-accent-gradient` |
+| Older motifs, restyled | `.kicker`, `.meta`, `.note`, `.annot-issue` (wavy ochre), `.annot-suggestion` |
 
 ## Building new UI
 
-- One **primary** (filled Oxford) action per view; everything else is `ghost`.
-- Reach for tokens, not hex — `bg-card`, `text-muted-foreground`, `border-border`,
-  `text-brand`, `bg-oxford-tint`, etc. — so light/dark and future retunes stay
-  free.
-- Labels sentence case; section labels via `<Badge variant="eyebrow">` or
-  `.kicker`; any number/timestamp/code in `font-mono`.
-- Keep motion minimal: instant state changes or short opacity/color fades.
-
-## The Daily Words pilot (`.dw`)
-
-Daily Words does not follow the rules above, on purpose. A learner called the
-Scriptorium look old and boring, so the mode is the trial of a softer one before
-anything is decided for the rest of the app.
-
-Everything is scoped under a `.dw` wrapper and defined at the end of
-`src/app/globals.css`, so nothing outside the mode moves:
-
-| Piece | Class | Notes |
-| --- | --- | --- |
-| Accent tokens | `--dw-accent` (indigo), `--dw-accent-2` (violet), `--dw-accent-3` (sky), `--dw-accent-soft`, `--dw-accent-ink`, `--dw-good`, `--dw-good-soft` | Light and dark values. Use as `bg-[hsl(var(--dw-accent-soft))]`. |
-| Surfaces | `.dw-card` (24px radius, soft shadow), `.dw-hero` (gradient), `.dw-glass` (blurred, for the docked composer), `.dw-tile` | Rounded and lifted — the opposite of "square, flat". |
-| Actions | `.dw-btn` (gradient pill), `.dw-btn-onhero`, `.dw-btn-quiet`, `.dw-pill` (the word rail) | One filled action per view still holds. |
-| Conversation | `.dw-bubble-them`, `.dw-bubble-you`, `.dw-note` | The note is ochre. |
-| Status | `.dw-chip` + `-accent` / `-good` / `-note`, `.dw-ring` | |
-| Motion | `.dw-rise`, `.dw-pop`, `.dw-shimmer` | All switched off under `prefers-reduced-motion`. |
-| Atmosphere | `.dw-mesh` | Two blurred washes behind the page. |
-
-Headings inside `.dw` are the sans, heavy and tight, not Newsreader.
-
-**What the pilot keeps**, because it was never a matter of style: corrections are
-ochre and never red, no emoji, sentence case, tokens rather than raw hex in
-components, and no spellcheck on anything a learner writes in.
-
-**Known seam:** the sidebar and every other mode are still Scriptorium, so
-Daily Words currently sits inside a frame that doesn't match it. Closing that
-seam means moving the whole app, which is the decision this pilot is for.
+- Start from `src/components/ui/` (`Button`, `Card`, `Input`, `Badge`) or the
+  primitives above before writing classes by hand.
+- Prefer `bg-card rounded-2xl shadow-soft p-6` for a plain card.
+- Keep motion short and purposeful: a rise-in for new content, a pop for a
+  success mark, nothing that loops except loading.

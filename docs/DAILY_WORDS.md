@@ -253,7 +253,7 @@ names the word is replaced.
 | Routes | `src/app/api/words/daily/route.ts`, `src/app/api/words/turn/route.ts` |
 | UI (home · conversation · bridge · debrief) | `src/components/DailyWords.tsx`, `/words` |
 | Store | written server-side through `mutate` in `src/lib/server/db/state.ts`; the client calls `refresh()` in `src/store/StoreContext.tsx` to catch up |
-| Look | the `.dw` pilot at the end of `src/app/globals.css` (`docs/DESIGN_SYSTEM.md`) |
+| Look | the shared `dw-*` primitives in `src/app/globals.css` (`docs/DESIGN_SYSTEM.md`) |
 
 ### Where the curriculum comes from
 

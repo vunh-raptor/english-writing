@@ -181,16 +181,22 @@ function recentItems(sessions: NewsSession[], limit: number): RecentItem[] {
 
 // ---- brand ----------------------------------------------------------------
 
-/** The wordmark itself is the mark — Newsreader, Oxford, no drawn logo. */
+/** The wordmark: a small gradient mark and the name, heavy and tight. */
 export function Brand({ className }: { className?: string }) {
   return (
     <Link
       href="/"
       className={cn(
-        "font-serif font-semibold tracking-tight text-brand",
+        "inline-flex items-center gap-2 font-extrabold tracking-tight text-foreground",
         className ?? "text-[19px]",
       )}
     >
+      <span
+        aria-hidden
+        className="grid size-[1.35em] place-items-center rounded-[0.42em] bg-accent-gradient text-[0.7em] text-white shadow-glow"
+      >
+        F
+      </span>
       Flowrite
     </Link>
   );
@@ -216,7 +222,7 @@ function RailToggle({
       aria-expanded={!collapsed}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       className={cn(
-        "grid size-7 place-items-center border border-sidebar-border text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
+        "grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
         className,
       )}
     >
@@ -229,12 +235,9 @@ function RailToggle({
 function TodayPanel({ info, progress }: { info: StreakInfo; progress: TodayProgress }) {
   return (
     <div>
-      <p className="px-2.5 pb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-        Today
-      </p>
-      <div className="border border-sidebar-border bg-foreground/[0.04] p-3">
+      <div className="rounded-2xl bg-accent-gradient p-4 text-white shadow-glow">
         <div className="flex items-baseline justify-between">
-          <span className="font-serif text-2xl font-semibold leading-none text-gold">
+          <span className="text-[28px] font-extrabold leading-none tabular-nums">
             {info.streak}
           </span>
           <span className="inline-flex gap-1" title={`${info.freezes} streak freezes`}>
@@ -242,20 +245,20 @@ function TodayPanel({ info, progress }: { info: StreakInfo; progress: TodayProgr
               <span
                 key={i}
                 className={cn(
-                  "size-2 border",
-                  i < info.freezes ? "border-gold bg-gold/25" : "border-input bg-transparent",
+                  "size-2 rounded-full",
+                  i < info.freezes ? "bg-white" : "bg-white/30",
                 )}
               />
             ))}
           </span>
         </div>
-        <div className="mt-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+        <div className="mt-1 text-[12px] font-semibold uppercase tracking-wide text-white/80">
           Day streak
         </div>
-        <div className="mt-2.5 h-1 bg-border">
-          <div className="h-1 bg-gold" style={{ width: `${progress.pct}%` }} />
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/25">
+          <div className="h-full rounded-full bg-white" style={{ width: `${progress.pct}%` }} />
         </div>
-        <div className="mt-1.5 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+        <div className="mt-1.5 text-[12px] font-medium text-white/85">
           {progress.current}/{progress.target} words today
         </div>
       </div>
@@ -271,23 +274,21 @@ function TodayPanel({ info, progress }: { info: StreakInfo; progress: TodayProgr
 function RecentList({ recent }: { recent: RecentItem[] }) {
   return (
     <div>
-      <p className="px-2.5 pb-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-        Recent
-      </p>
+      <p className="kicker px-3 pb-1.5">Recent</p>
       <div className="flex flex-col gap-px">
         {recent.map((item) => (
           <Link
             key={item.key}
             href={item.href}
-            className="group flex items-baseline gap-2 px-2.5 py-1 leading-tight transition-colors hover:bg-sidebar-accent/60"
+            className="group flex items-baseline gap-2 rounded-xl px-3 py-1.5 leading-tight transition-colors hover:bg-sidebar-accent/70"
           >
-            <span className="flex-none bg-oxford-tint px-1 py-px font-mono text-[9px] font-medium uppercase tracking-wide text-brand">
+            <span className="flex-none rounded-full bg-oxford-tint px-1.5 py-px text-[9.5px] font-semibold uppercase tracking-wide text-brand">
               News
             </span>
-            <span className="flex-1 truncate font-serif text-[13px] italic text-sidebar-foreground group-hover:text-foreground">
+            <span className="flex-1 truncate text-[13px] text-sidebar-foreground group-hover:text-foreground">
               {item.title}
             </span>
-            <span className="flex-none font-mono text-[10px] tabular-nums text-muted-foreground">
+            <span className="flex-none text-[11px] tabular-nums text-muted-foreground">
               {parseDayKey(item.day).getDate()}
             </span>
           </Link>
@@ -323,7 +324,7 @@ export function AppSidebar() {
   const name = settings.name.trim();
 
   return (
-    <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[2px_0_8px_hsl(var(--shadow-color)/0.05)] lg:flex">
+    <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar/80 text-sidebar-foreground backdrop-blur-xl lg:flex">
       {collapsed ? (
         <CollapsedRail
           pathname={pathname}
@@ -369,14 +370,14 @@ function ExpandedRail({
     <>
       <div className="relative flex-none px-5 pt-5">
         <Brand className="text-[22px]" />
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-          Learn it today · Say it today
+        <p className="mt-1.5 text-[12px] font-medium text-muted-foreground">
+          Learn it today · say it today
         </p>
         <RailToggle collapsed={false} onClick={onToggle} className="absolute right-3 top-3" />
       </div>
 
       <div className="flex-none px-4 pt-4">
-        <Button asChild className="h-10 w-full text-[15px] font-semibold">
+        <Button asChild className="h-11 w-full text-[15px] font-semibold">
           <Link href="/words">Today&apos;s words</Link>
         </Button>
       </div>
@@ -384,10 +385,8 @@ function ExpandedRail({
       <nav className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            <p className="px-2.5 pb-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-              {group.label}
-            </p>
-            <div className="flex flex-col gap-px">
+            <p className="kicker px-3 pb-1.5">{group.label}</p>
+            <div className="flex flex-col gap-0.5">
               {group.items.map((item) => {
                 const active = isActive(pathname, item.href);
                 const count = item.badge ? badges[item.badge] : 0;
@@ -397,15 +396,15 @@ function ExpandedRail({
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center justify-between border-l-2 px-2.5 py-1.5 text-sm transition-colors",
+                      "flex items-center justify-between rounded-xl px-3 py-2 text-[14.5px] font-medium transition-colors",
                       active
-                        ? "border-primary bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
-                        : "border-transparent text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                        ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                        : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
                     )}
                   >
                     <span>{item.label}</span>
                     {count > 0 && (
-                      <span className="ml-2 whitespace-nowrap bg-gold px-1.5 py-px font-mono text-[11px] font-medium text-gold-foreground">
+                      <span className="ml-2 whitespace-nowrap rounded-full bg-primary/12 px-2 py-px text-[11.5px] font-semibold text-primary">
                         {count} {BADGE_NOUN[item.badge!](count)}
                       </span>
                     )}
@@ -420,15 +419,15 @@ function ExpandedRail({
         {recent.length > 0 && <RecentList recent={recent} />}
       </nav>
 
-      <div className="flex flex-none items-center gap-2.5 border-t border-sidebar-border bg-foreground/[0.02] px-4 py-3">
-        <div className="grid size-8 shrink-0 place-items-center bg-brand font-serif text-sm font-semibold text-brand-foreground">
+      <div className="flex flex-none items-center gap-2.5 border-t border-sidebar-border px-4 py-3">
+        <div className="grid size-9 shrink-0 place-items-center rounded-full bg-accent-gradient text-sm font-bold text-white">
           {initialOf(name) || <User className="size-4" />}
         </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-sm font-medium text-sidebar-foreground">
             {name || "Your workspace"}
           </div>
-          <div className="font-mono text-[11.5px] text-muted-foreground">
+          <div className="text-[12px] text-muted-foreground">
             {info.streak > 0 ? `${info.streak}-day streak` : "New writer"}
           </div>
         </div>
@@ -458,9 +457,9 @@ function CollapsedRail({
       <Link
         href="/"
         title="Flowrite"
-        className="flex-none font-serif text-xl font-semibold text-sidebar-foreground"
+        className="grid size-9 flex-none place-items-center rounded-xl bg-accent-gradient text-[15px] font-extrabold text-white shadow-glow"
       >
-        F<span className="text-gold">.</span>
+        F
       </Link>
 
       <RailToggle collapsed onClick={onToggle} className="mt-3 flex-none" />
@@ -477,16 +476,16 @@ function CollapsedRail({
               aria-current={active ? "page" : undefined}
               title={item.label}
               className={cn(
-                "relative flex w-[52px] flex-col items-center gap-1 border-l-2 py-1.5 transition-colors",
+                "relative flex w-[54px] flex-col items-center gap-1 rounded-2xl py-2 transition-colors",
                 active
-                  ? "border-primary bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "border-transparent text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
               )}
             >
               <Icon className={cn("size-[18px]", active && "text-primary")} />
               <span className="text-[9.5px] font-medium leading-none">{item.short}</span>
               {count > 0 && (
-                <span className="absolute right-1.5 top-1 grid min-w-[15px] place-items-center bg-gold px-1 font-mono text-[9px] leading-[15px] text-gold-foreground">
+                <span className="absolute right-1 top-0.5 grid min-w-[16px] place-items-center rounded-full bg-primary px-1 text-[9.5px] font-bold leading-[16px] text-primary-foreground">
                   {count}
                 </span>
               )}
@@ -497,19 +496,19 @@ function CollapsedRail({
 
       <div className="mt-3 flex flex-none flex-col items-center gap-2.5">
         {streak > 0 && (
-          <div className="w-12 border border-sidebar-border bg-foreground/[0.04] py-1.5 text-center leading-tight">
-            <div className="font-serif text-[15px] font-semibold text-gold">{streak}</div>
-            <div className="font-mono text-[8px] uppercase tracking-wide text-muted-foreground">
+          <div className="w-12 rounded-2xl bg-accent-gradient py-2 text-center leading-tight text-white">
+            <div className="text-[16px] font-extrabold tabular-nums">{streak}</div>
+            <div className="text-[8.5px] font-semibold uppercase tracking-wide text-white/80">
               Streak
             </div>
-            <div className="mx-1.5 mt-1 h-[3px] bg-border">
-              <div className="h-[3px] bg-gold" style={{ width: `${progress.pct}%` }} />
+            <div className="mx-2 mt-1 h-[3px] overflow-hidden rounded-full bg-white/25">
+              <div className="h-full rounded-full bg-white" style={{ width: `${progress.pct}%` }} />
             </div>
           </div>
         )}
         <div
           title={name || "Your workspace"}
-          className="grid size-8 place-items-center bg-brand font-serif text-sm font-semibold text-brand-foreground"
+          className="grid size-9 place-items-center rounded-full bg-accent-gradient text-sm font-bold text-white"
         >
           {initialOf(name) || <User className="size-4" />}
         </div>
@@ -523,7 +522,7 @@ function CollapsedRail({
 /** Slim brand + theme bar — mobile only. */
 export function MobileTopBar() {
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur lg:hidden">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl lg:hidden">
       <Brand />
       <ThemeToggle />
     </header>
@@ -537,7 +536,7 @@ export function MobileTabBar() {
   const badges = navBadges(store);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background/92 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border/70 bg-background/80 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
       {NAV_ITEMS.map((item) => {
         const active = isActive(pathname, item.href);
         const Icon = item.icon;
@@ -548,14 +547,19 @@ export function MobileTabBar() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors",
-              active ? "text-brand" : "text-muted-foreground",
+              "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-semibold transition-colors",
+              active ? "text-primary" : "text-muted-foreground",
             )}
           >
-            <span className="relative">
+            <span
+              className={cn(
+                "relative grid h-7 w-12 place-items-center rounded-full transition-colors",
+                active && "bg-accent",
+              )}
+            >
               <Icon className="size-5" />
               {count > 0 && (
-                <span className="absolute -right-2 -top-1 grid min-w-[14px] place-items-center bg-gold px-0.5 font-mono text-[8.5px] leading-[14px] text-gold-foreground">
+                <span className="absolute -right-0.5 -top-1 grid min-w-[16px] place-items-center rounded-full bg-primary px-1 text-[9px] font-bold leading-[16px] text-primary-foreground">
                   {count}
                 </span>
               )}

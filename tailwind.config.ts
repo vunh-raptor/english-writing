@@ -18,12 +18,11 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        // Source Sans 3 — writing surface + every UI control
+        // One face (layout.tsx). `serif` and `mono` are kept as names so older
+        // class strings resolve into the same system instead of breaking.
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        // Newsreader — headings, wordmark, document titles, empty-state prose
-        serif: ["var(--font-serif)", "Georgia", "serif"],
-        // IBM Plex Mono — metadata only (counts, save state, kickers, codes)
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        serif: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border) / <alpha-value>)",
@@ -104,29 +103,25 @@ const config: Config = {
           ring: "hsl(var(--sidebar-ring) / <alpha-value>)",
         },
       },
-      // Square everywhere — Scriptorium is flat and minimal. `full` stays for
-      // genuine circles (spinners, dots, avatars, switch thumb, progress track).
+      // Rounded, lifted surfaces. The scale is fixed rather than derived from
+      // --radius so `rounded-2xl` means the same thing in every component.
       borderRadius: {
         none: "0px",
-        sm: "0px",
-        DEFAULT: "0px",
-        md: "0px",
-        lg: "0px",
-        xl: "0px",
-        "2xl": "0px",
-        "3xl": "0px",
+        sm: "6px",
+        DEFAULT: "8px",
+        md: "10px",
+        lg: "14px",
+        xl: "18px",
+        "2xl": "22px",
+        "3xl": "28px",
         full: "9999px",
       },
       boxShadow: {
-        // Flat surfaces: separation comes from background contrast + hairlines,
-        // so `soft` (cards, buttons) is neutralized. `frame` is the one shadow
-        // Scriptorium sanctions — the full app frame; `md`/`lg` remain for
-        // genuinely floating overlays (menus, tooltips, toasts).
-        soft: "none",
-        md: "0 6px 24px hsl(var(--shadow-color) / 0.10)",
-        lg: "0 18px 50px hsl(var(--shadow-color) / 0.18)",
+        soft: "0 1px 2px hsl(var(--shadow-color) / 0.04), 0 12px 30px -18px hsl(var(--shadow-color) / 0.18)",
+        md: "0 8px 28px -10px hsl(var(--shadow-color) / 0.16)",
+        lg: "0 22px 50px -18px hsl(var(--shadow-color) / 0.26)",
         frame: "0 12px 32px hsl(var(--shadow-color) / 0.10)",
-        glow: "none",
+        glow: "0 10px 24px -10px hsl(var(--primary) / 0.6)",
       },
       keyframes: {
         "accordion-down": {

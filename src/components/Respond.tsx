@@ -501,7 +501,7 @@ export function Respond() {
         </p>
         <p className="mt-2 text-[13px] text-muted-foreground">{meta.why}</p>
 
-        <div className="mt-4 bg-oxford-tint px-3 py-2">
+        <div className="rounded-2xl mt-4 bg-oxford-tint px-3 py-2">
           <textarea
             autoFocus
             rows={4}
@@ -520,7 +520,7 @@ export function Respond() {
               And under that
             </div>
             <p className="mt-1 font-serif text-[17px] leading-snug text-foreground">{followUp}</p>
-            <div className="mt-2 bg-ochre-tint px-3 py-2">
+            <div className="rounded-2xl mt-2 bg-ochre-tint px-3 py-2">
               <textarea
                 rows={3}
                 value={followAnswer}
@@ -613,7 +613,7 @@ export function Respond() {
                 <div
                   key={idea.id}
                   className={cn(
-                    "border bg-card p-4",
+                    "rounded-2xl border bg-card p-4 shadow-soft",
                     idea.own === true
                       ? "border-brand"
                       : idea.own === false
@@ -734,7 +734,7 @@ export function Respond() {
 
         <div className="mt-4">
           <div className="kicker">Write it</div>
-          <h1 className="mt-1.5 text-pretty font-serif text-[24px] leading-snug tracking-tight">
+          <h1 className="mt-1.5 text-pretty text-[24px] leading-snug tracking-tight">
             {chosen?.hook || "Your piece"}
           </h1>
         </div>
@@ -766,7 +766,7 @@ export function Respond() {
           />
         </div>
 
-        <div className="mt-4 bg-oxford-tint px-4 py-3">
+        <div className="rounded-2xl mt-4 bg-oxford-tint px-4 py-3">
           <textarea
             autoFocus
             rows={12}
@@ -821,7 +821,7 @@ export function Respond() {
           ‹ Respond
         </button>
 
-        <div className="mt-5 bg-card p-6 sm:px-12 sm:py-10">
+        <div className="rounded-2xl mt-5 bg-card p-6 sm:px-12 sm:py-10 shadow-soft">
           <div className="kicker">Your piece</div>
           <h2 className="mt-2.5 text-pretty text-[24px] leading-snug">{chosen?.hook}</h2>
           <p className="mt-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -850,7 +850,7 @@ export function Respond() {
             )}
 
             {polish.upgrades.length > 0 && (
-              <div className="mt-4 border border-ochre-line bg-ochre-tint p-3.5 text-[14px] text-gold">
+              <div className="rounded-2xl mt-4 border border-ochre-line bg-ochre-tint p-3.5 text-[14px] text-gold">
                 <div className="font-mono text-[10px] uppercase tracking-[0.1em]">
                   Two ideas to play with
                 </div>
@@ -877,7 +877,7 @@ export function Respond() {
                       type="button"
                       onClick={() => keepPhrase(k.text, k.meaning)}
                       title={`Save “${k.text}” to your Phrasebook`}
-                      className="border border-input bg-card px-2.5 py-1 text-[13px] text-foreground transition-colors hover:border-brand hover:bg-brand-muted"
+                      className="rounded-full border border-input bg-card px-2.5 py-1 text-[13px] text-foreground transition-colors hover:border-brand hover:bg-brand-muted"
                     >
                       {k.text} <span className="text-muted-foreground">+</span>
                     </button>
@@ -942,7 +942,7 @@ export function Respond() {
           </div>
 
           {mode === "paste" ? (
-            <div className="mt-3 bg-oxford-tint px-4 py-3">
+            <div className="rounded-2xl mt-3 bg-oxford-tint px-4 py-3">
               <textarea
                 rows={12}
                 value={paste}
@@ -1032,7 +1032,7 @@ export function Respond() {
         </div>
 
         <aside className="flex flex-col gap-5 lg:sticky lg:top-8">
-          <div className="bg-card p-6">
+          <div className="rounded-2xl bg-card p-6 shadow-soft">
             <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-gold">
               Your idea bank
             </div>
@@ -1068,7 +1068,7 @@ export function Respond() {
             )}
           </div>
 
-          <div className="bg-card p-6">
+          <div className="rounded-2xl bg-card p-6 shadow-soft">
             <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               How this works
             </div>

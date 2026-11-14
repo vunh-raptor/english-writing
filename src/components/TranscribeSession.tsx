@@ -395,7 +395,7 @@ export function TranscribeSession({
           </div>
         </div>
 
-        <div className="relative aspect-video w-full flex-none bg-muted">
+        <div className="rounded-2xl relative aspect-video w-full flex-none bg-muted">
           <div ref={mountRef} className="absolute inset-0 h-full w-full" />
           {/* The voice placeholder gives way to the lock — two overlays on one
               frame would read as neither. */}
@@ -426,7 +426,7 @@ export function TranscribeSession({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-card px-3 py-2.5">
+        <div className="rounded-2xl flex flex-wrap items-center justify-between gap-3 bg-card px-3 py-2.5 shadow-soft">
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={replay} className="h-[30px] gap-1.5 px-3">
               <RotateCcw className="size-3.5" />
@@ -473,7 +473,7 @@ export function TranscribeSession({
 
         <Timeline chunks={chunks} cursor={cursor} results={session.results} />
 
-        <div className="bg-card p-3.5">
+        <div className="rounded-2xl bg-card p-3.5 shadow-soft">
           <div className="flex items-center justify-between gap-3">
             <span className="kicker">
               Passage {passage + 1} · chunks {from + 1}–{to + 1}
@@ -506,7 +506,7 @@ export function TranscribeSession({
       </section>
 
       {/* ── the work ─────────────────────────────────────────────── */}
-      <section className="flex min-w-0 flex-col bg-background px-6 py-5 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:px-8">
+      <section className="rounded-2xl flex min-w-0 flex-col bg-background px-6 py-5 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:px-8">
         <div className="flex items-baseline justify-between gap-3">
           <span className="kicker">{kicker}</span>
           <span className="font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
@@ -534,7 +534,7 @@ export function TranscribeSession({
 
         {step === "dictate" && (
           <div className="mt-5 flex min-h-0 flex-1 flex-col">
-            <h2 className="font-serif text-2xl font-medium leading-tight tracking-tight text-foreground">
+            <h2 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
               Write down every word you heard.
             </h2>
             <p className="mt-1.5 max-w-[520px] text-sm leading-normal text-muted-foreground">
@@ -566,7 +566,7 @@ export function TranscribeSession({
               </div>
             )}
 
-            <div className="mt-4 flex min-h-[220px] flex-1 flex-col bg-oxford-tint px-5 py-4">
+            <div className="rounded-2xl mt-4 flex min-h-[220px] flex-1 flex-col bg-oxford-tint px-5 py-4">
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -633,7 +633,7 @@ export function TranscribeSession({
               </span>
             </div>
 
-            <div className="mt-4 bg-card px-6 py-5">
+            <div className="rounded-2xl mt-4 bg-card px-6 py-5 shadow-soft">
               <div className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 What you wrote
               </div>
@@ -645,7 +645,7 @@ export function TranscribeSession({
             {patterns.length > 0 && (
               <div className="mt-3.5 flex flex-col gap-px">
                 {patterns.map((p) => (
-                  <div key={p.label} className="bg-ochre-tint px-4 py-3">
+                  <div key={p.label} className="rounded-2xl bg-ochre-tint px-4 py-3">
                     <div className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-gold">
                       {p.label}
                     </div>
@@ -662,7 +662,7 @@ export function TranscribeSession({
                   {keep.map((k) => (
                     <span
                       key={k}
-                      className="border border-input bg-card px-2.5 py-1 text-[13.5px] text-foreground"
+                      className="rounded-full border border-input bg-card px-2.5 py-1 text-[13.5px] text-foreground"
                     >
                       {k}
                     </span>
@@ -693,7 +693,7 @@ export function TranscribeSession({
 
         {step === "shadow" && (
           <div className="mt-5 flex min-h-0 flex-1 flex-col">
-            <h2 className="font-serif text-2xl font-medium leading-tight tracking-tight text-foreground">
+            <h2 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
               Now say it back, over her.
             </h2>
             <p className="mt-1.5 max-w-[520px] text-sm leading-normal text-muted-foreground">
@@ -701,7 +701,7 @@ export function TranscribeSession({
               makes the shape once, at her speed.
             </p>
 
-            <div className="mt-4 bg-card px-6 py-5">
+            <div className="rounded-2xl mt-4 bg-card px-6 py-5 shadow-soft">
               <div className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                 Chunk {cursor + 1} · stress on the underlined
               </div>
@@ -710,7 +710,7 @@ export function TranscribeSession({
               </p>
             </div>
 
-            <div className="mt-4 bg-card px-6 py-4">
+            <div className="rounded-2xl mt-4 bg-card px-6 py-4 shadow-soft">
               <div className="flex items-center justify-between gap-4">
                 <div className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                   Her · {(chunk.end - chunk.start).toFixed(1)}s
@@ -780,7 +780,7 @@ export function TranscribeSession({
 
         {step === "milestone" && (
           <div className="mt-5 flex min-h-0 flex-1 flex-col">
-            <h2 className="font-serif text-2xl font-medium leading-tight tracking-tight text-foreground">
+            <h2 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
               That&rsquo;s the passage. Show me what stayed.
             </h2>
             <p className="mt-1.5 max-w-[520px] text-sm leading-normal text-muted-foreground">
@@ -802,7 +802,7 @@ export function TranscribeSession({
               </div>
             ) : quiz ? (
               <>
-                <div className="mt-4 bg-card px-6 py-5">
+                <div className="rounded-2xl mt-4 bg-card px-6 py-5 shadow-soft">
                   <div className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                     What you understood
                   </div>
@@ -830,7 +830,7 @@ export function TranscribeSession({
                   </div>
                 </div>
 
-                <div className="mt-3.5 flex min-h-0 flex-1 flex-col bg-card px-6 py-5">
+                <div className="rounded-2xl mt-3.5 flex min-h-0 flex-1 flex-col bg-card px-6 py-5 shadow-soft">
                   <div className="flex flex-wrap items-baseline justify-between gap-3">
                     <div className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                       What you can use
@@ -843,7 +843,7 @@ export function TranscribeSession({
                     {quiz.phrases.map((p) => (
                       <span
                         key={p}
-                        className="bg-oxford-tint px-2.5 py-1 text-sm font-semibold text-brand-ink"
+                        className="rounded-full bg-oxford-tint px-2.5 py-1 text-sm font-semibold text-brand-ink"
                       >
                         {p}
                       </span>
@@ -855,7 +855,7 @@ export function TranscribeSession({
                     spellCheck={false}
                     placeholder="Your sentence — not about this clip, if you can help it."
                     aria-label="Your sentence"
-                    className="mt-3 min-h-[88px] w-full flex-1 resize-none bg-oxford-tint px-4 py-3.5 text-base leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
+                    className="rounded-2xl mt-3 min-h-[88px] w-full flex-1 resize-none bg-oxford-tint px-4 py-3.5 text-base leading-relaxed text-foreground outline-none placeholder:italic placeholder:text-muted-foreground/70"
                   />
                 </div>
 

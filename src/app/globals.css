@@ -3,170 +3,186 @@
 @tailwind utilities;
 
 /* ============================================================
-   Scriptorium design system — shadcn token layer
-   A scholarly journal, not a classroom app: Oxford-blue authority,
-   ochre pencil annotations, cool paper neutrals, serif gravitas
-   (Newsreader) over a crisp sans writing surface (Source Sans 3).
-   Light by day ("paper"), a cool near-black by night ("lamplight").
+   Flowrite design system — the token layer (docs/DESIGN_SYSTEM.md)
 
-   Every Scriptorium hex is expressed here as an HSL tri:
-     paper #F7F8FA · sheet #FFFFFF · ink #232936 · slate #5A6272
-     Oxford #2E4E7E (interactive UI only) · Ochre #8A6A24 (annotations only)
-   Two accents share oklch lightness + chroma, differing only in hue —
-   never swap their roles, and red is never used.
+   Soft and bright: a violet-indigo accent, rounded surfaces lifted on soft
+   shadow, one sans for everything. It started as the Daily Words pilot
+   (`.dw`) after a learner called the old scholarly look dated, and was
+   then applied to the whole app.
+
+   Two things are promises about tone, not style, and did not change:
+   corrections are OCHRE (a tutor's pencil, never a red pen), and red is
+   never used for feedback. `--destructive` exists only as a restrained last
+   resort for genuinely destructive data actions.
+
+   The legacy names (`oxford`, `brand`, `sage`) are kept as aliases of the
+   accent so every component moved at once; new code should reach for
+   `primary` / `brand` and the `--dw-*` set.
    ============================================================ */
 
 @layer base {
   :root {
-    /* base — light ("paper") */
-    --background: 220 24% 97%; /* paper  #F7F8FA */
-    --foreground: 221 21% 17%; /* ink    #232936 */
+    --background: 240 33% 98%; /* #F8F8FC */
+    --foreground: 236 24% 14%; /* #1B1C2E */
 
-    --card: 0 0% 100%; /* sheet #FFFFFF */
-    --card-foreground: 221 21% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 236 24% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 221 21% 17%;
+    --popover-foreground: 236 24% 14%;
 
-    /* primary = Oxford blue — carries every interactive affordance */
-    --primary: 216 47% 34%; /* oxford #2E4E7E */
+    /* the accent — indigo leaning violet; carries every interactive affordance */
+    --primary: 250 76% 58%; /* #6A4CF0-ish */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 216 19% 95%; /* hover-wash #F0F2F5 */
-    --secondary-foreground: 221 21% 17%;
+    --secondary: 245 40% 96%; /* soft lavender wash */
+    --secondary-foreground: 236 24% 14%;
 
-    --muted: 216 16% 94%; /* line-faint #EEF0F3 */
-    --muted-foreground: 220 12% 40%; /* slate #5A6272 */
+    --muted: 240 22% 95%;
+    --muted-foreground: 238 10% 44%;
 
-    --accent: 216 19% 95%; /* hover-wash */
-    --accent-foreground: 221 21% 17%;
+    --accent: 248 70% 96%;
+    --accent-foreground: 250 55% 38%;
 
-    /* Scriptorium never uses red for feedback; kept muted + restrained
-       purely as the last-resort semantic for destructive data actions. */
-    --destructive: 6 54% 44%;
+    --destructive: 6 54% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 218 16% 91%; /* line #E3E6EB */
-    --input: 218 15% 86%; /* line-strong #D6DAE1 */
-    --ring: 216 47% 34%; /* oxford focus ring */
+    --border: 240 18% 91%;
+    --input: 240 16% 87%;
+    --ring: 250 76% 58%;
 
-    --radius: 0px; /* square everywhere — flat, minimal */
-    --shadow-color: 221 21% 17%;
+    --radius: 1rem;
+    --shadow-color: 240 30% 20%;
 
-    /* Scriptorium accents (raw), exposed for the annotation + feedback motif */
-    --oxford: 216 47% 34%;
-    --oxford-deep: 214 52% 25%; /* #1F3A61 — hover/active */
-    --oxford-tint: 217 45% 96%; /* #F2F5FA — style-suggestion fill */
-    --oxford-line: 216 35% 89%; /* #D8E0EC */
-    --oxford-hl: 215 50% 91%; /* #DCE6F4 — highlight annotation */
-    --ochre: 41 59% 34%; /* #8A6A24 — grammar annotations only */
-    --ochre-tint: 41 60% 96%; /* #FBF7EE — grammar-issue fill */
-    --ochre-line: 42 43% 85%; /* #E9DFC8 */
-    --ochre-hl: 43 60% 87%; /* #F3E7C9 — highlight annotation */
-    --canvas: 216 16% 94%; /* #EDEFF2 — desk behind the app */
-    --line-strong: 218 15% 86%;
-    --line-faint: 216 16% 94%;
+    /* accent family, under the names the components already use */
+    --oxford: 250 76% 58%;
+    --oxford-deep: 250 62% 46%; /* hover / pressed */
+    --oxford-tint: 248 100% 97%; /* soft accent fill */
+    --oxford-line: 248 60% 88%;
+    --oxford-hl: 248 85% 92%;
+    /* the tutor's pencil — corrections only */
+    --ochre: 38 64% 34%;
+    --ochre-tint: 40 80% 96%;
+    --ochre-line: 40 60% 84%;
+    --ochre-hl: 42 80% 88%;
+    --canvas: 240 25% 95%;
+    --line-strong: 240 16% 87%;
+    --line-faint: 240 22% 95%;
 
-    /* brand = Oxford (links, marks, active state) */
-    --brand: 216 47% 34%;
+    --brand: 250 76% 58%;
     --brand-foreground: 0 0% 100%;
-    --brand-muted: 217 45% 96%;
-    --brand-ink: 214 52% 25%;
+    --brand-muted: 248 100% 97%;
+    --brand-ink: 250 62% 40%;
 
-    /* sage mirrors the brand so affirmative UI stays Oxford-cohesive */
-    --sage: 216 47% 34%;
+    --sage: 250 76% 58%;
     --sage-foreground: 0 0% 100%;
-    --sage-muted: 217 45% 96%;
-    --sage-ink: 214 52% 25%;
+    --sage-muted: 248 100% 97%;
+    --sage-ink: 250 62% 40%;
 
-    /* gold = Ochre (streaks, milestones, gentle warnings) */
-    --gold: 41 59% 34%;
+    /* gold = warm highlight: streaks and the tutor's notes */
+    --gold: 38 64% 34%;
     --gold-foreground: 0 0% 100%;
 
-    --warning-muted: 41 60% 96%; /* ochre-tint */
-    --warning-ink: 41 60% 26%;
+    --warning-muted: 40 80% 96%;
+    --warning-ink: 38 64% 28%;
 
-    /* sidebar — a sheet-white panel raised above the paper desk */
-    --sidebar-background: 0 0% 100%; /* sheet #FFFFFF */
-    --sidebar-foreground: 221 21% 17%; /* ink */
-    --sidebar-primary: 216 47% 34%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 236 24% 14%;
+    --sidebar-primary: 250 76% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 45% 96%; /* oxford-tint #F2F5FA — active nav wash */
-    --sidebar-accent-foreground: 214 52% 25%; /* oxford-deep #1F3A61 — active nav ink */
-    --sidebar-border: 218 15% 86%; /* line-strong #D6DAE1 */
-    --sidebar-ring: 216 47% 34%;
+    --sidebar-accent: 248 100% 97%;
+    --sidebar-accent-foreground: 250 62% 40%;
+    --sidebar-border: 240 18% 91%;
+    --sidebar-ring: 250 76% 58%;
+
+    /* the extended accent set (gradients, success, atmosphere) */
+    --dw-accent: 250 84% 60%; /* indigo */
+    --dw-accent-2: 277 78% 60%; /* violet */
+    --dw-accent-3: 199 92% 56%; /* sky */
+    --dw-accent-soft: 248 100% 97%;
+    --dw-accent-ink: 250 62% 40%;
+    --dw-good: 160 72% 34%;
+    --dw-good-soft: 152 64% 95%;
+    --dw-shadow: 240 30% 20%;
   }
 
   .dark {
-    /* base — dark ("lamplight") */
-    --background: 224 17% 9%; /* paper  #14161C */
-    --foreground: 224 18% 92%; /* ink    #E6E8EE */
+    --background: 240 20% 7%; /* #101018 */
+    --foreground: 240 20% 93%;
 
-    --card: 224 16% 13%; /* sheet #1C1F27 */
-    --card-foreground: 224 18% 92%;
+    --card: 240 16% 11%; /* #17171F */
+    --card-foreground: 240 20% 93%;
 
-    --popover: 224 16% 13%;
-    --popover-foreground: 224 18% 92%;
+    --popover: 240 16% 12%;
+    --popover-foreground: 240 20% 93%;
 
-    /* accents lighten in the dark; hover LIGHTENS instead of darkening */
-    --primary: 216 52% 71%; /* oxford #8FAEDC */
-    --primary-foreground: 224 17% 9%;
+    --primary: 250 92% 72%;
+    --primary-foreground: 240 30% 8%;
 
-    --secondary: 224 17% 17%; /* hover-wash #242833 */
-    --secondary-foreground: 224 18% 92%;
+    --secondary: 245 18% 16%;
+    --secondary-foreground: 240 20% 93%;
 
-    --muted: 224 17% 17%;
-    --muted-foreground: 220 12% 65%; /* slate #9AA1B0 */
+    --muted: 240 14% 16%;
+    --muted-foreground: 240 10% 66%;
 
-    --accent: 224 17% 17%;
-    --accent-foreground: 224 18% 92%;
+    --accent: 250 34% 19%;
+    --accent-foreground: 250 96% 86%;
 
-    --destructive: 6 48% 52%;
+    --destructive: 6 52% 56%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 224 15% 19%; /* line collapses to one grey #2A2E39 */
-    --input: 224 15% 19%;
-    --ring: 216 52% 71%;
+    --border: 240 13% 19%;
+    --input: 240 13% 23%;
+    --ring: 250 92% 72%;
 
-    --shadow-color: 224 40% 2%;
+    --shadow-color: 240 60% 2%;
 
-    --oxford: 216 52% 71%;
-    --oxford-deep: 215 55% 78%; /* #A9C2E6 — hover lightens */
-    --oxford-tint: 220 28% 15%; /* #1B2230 */
-    --oxford-line: 217 29% 24%; /* #2C3A50 */
-    --oxford-hl: 217 29% 24%;
-    --ochre: 40 58% 63%; /* #D8B36A */
-    --ochre-tint: 40 16% 12%; /* #24211A */
-    --ochre-line: 40 37% 21%; /* #4A3D22 */
-    --ochre-hl: 40 37% 21%;
-    --canvas: 223 19% 7%; /* #0F1116 */
-    --line-strong: 224 15% 19%;
-    --line-faint: 224 15% 19%;
+    --oxford: 250 92% 72%;
+    --oxford-deep: 250 96% 80%; /* hover lightens in the dark */
+    --oxford-tint: 250 34% 15%;
+    --oxford-line: 250 26% 28%;
+    --oxford-hl: 250 30% 26%;
+    --ochre: 40 70% 66%;
+    --ochre-tint: 38 26% 12%;
+    --ochre-line: 38 34% 24%;
+    --ochre-hl: 38 34% 24%;
+    --canvas: 240 22% 5%;
+    --line-strong: 240 13% 23%;
+    --line-faint: 240 13% 19%;
 
-    --brand: 216 52% 71%;
-    --brand-foreground: 224 17% 9%;
-    --brand-muted: 220 28% 15%;
-    --brand-ink: 215 55% 78%;
+    --brand: 250 92% 72%;
+    --brand-foreground: 240 30% 8%;
+    --brand-muted: 250 34% 15%;
+    --brand-ink: 250 96% 84%;
 
-    --sage: 216 52% 71%;
-    --sage-foreground: 224 17% 9%;
-    --sage-muted: 220 28% 15%;
-    --sage-ink: 215 55% 78%;
+    --sage: 250 92% 72%;
+    --sage-foreground: 240 30% 8%;
+    --sage-muted: 250 34% 15%;
+    --sage-ink: 250 96% 84%;
 
-    --gold: 40 58% 63%;
-    --gold-foreground: 224 17% 9%;
+    --gold: 40 70% 66%;
+    --gold-foreground: 240 30% 8%;
 
-    --warning-muted: 40 16% 12%;
-    --warning-ink: 40 55% 70%;
+    --warning-muted: 38 26% 12%;
+    --warning-ink: 40 70% 72%;
 
-    --sidebar-background: 221 21% 17%; /* raised slate panel #232936 */
-    --sidebar-foreground: 220 25% 92%; /* #E4E8F0 */
-    --sidebar-primary: 216 52% 71%;
-    --sidebar-primary-foreground: 224 17% 9%;
-    --sidebar-accent: 218 25% 24%; /* active nav wash #2E3A4F */
-    --sidebar-accent-foreground: 217 50% 91%; /* #DCE6F5 — active nav ink */
-    --sidebar-border: 222 18% 28%; /* divider #3A4356 */
-    --sidebar-ring: 216 52% 71%;
+    --sidebar-background: 240 16% 10%;
+    --sidebar-foreground: 240 20% 90%;
+    --sidebar-primary: 250 92% 72%;
+    --sidebar-primary-foreground: 240 30% 8%;
+    --sidebar-accent: 250 34% 18%;
+    --sidebar-accent-foreground: 250 96% 86%;
+    --sidebar-border: 240 13% 18%;
+    --sidebar-ring: 250 92% 72%;
+
+    --dw-accent: 250 92% 72%;
+    --dw-accent-2: 277 84% 72%;
+    --dw-accent-3: 199 90% 64%;
+    --dw-accent-soft: 250 34% 17%;
+    --dw-accent-ink: 250 96% 84%;
+    --dw-good: 158 62% 56%;
+    --dw-good-soft: 158 34% 14%;
+    --dw-shadow: 240 60% 2%;
   }
 
   * {
@@ -184,13 +200,13 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* Newsreader carries every heading — the scholarly-journal voice. */
+  /* One sans for everything; headings are heavy and tight. */
   h1,
   h2,
   h3 {
-    @apply font-serif;
-    font-weight: 500;
-    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
   }
 
   /* Calm placeholder while the client store hydrates. */
@@ -200,20 +216,20 @@
 }
 
 @layer components {
-  /* ---- Scriptorium motifs ------------------------------------------- */
+  /* ---- Shared motifs ------------------------------------------------ */
 
-  /* mono uppercase kicker — SUBJECT–VERB AGREEMENT, STYLE SUGGESTION */
+  /* small uppercase section label */
   .kicker {
-    @apply font-mono uppercase text-muted-foreground;
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
+    @apply font-sans font-semibold uppercase text-muted-foreground;
+    font-size: 12px;
+    letter-spacing: 0.07em;
   }
 
-  /* mono metadata — word counts, save state, rubric codes, citations */
+  /* metadata — word counts, save state, small numbers */
   .meta {
-    @apply font-mono text-muted-foreground;
+    @apply font-sans text-muted-foreground;
     font-size: 12.5px;
-    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
   }
 
   /* inline annotations — a tutor's pencil, never a punitive red.
@@ -231,7 +247,7 @@
 
   /* status notes shared by Home / Write / Feedback */
   .note {
-    @apply px-4 py-2.5 text-sm;
+    @apply rounded-2xl px-4 py-2.5 text-sm;
   }
   .note-positive {
     background: hsl(var(--brand-muted));
@@ -245,24 +261,22 @@
   /* the free-writing surface — Source Sans 3, comfortable measure */
   .app-editor {
     @apply w-full flex-1 resize-none border-0 bg-transparent font-sans text-foreground outline-none;
-    font-size: 1.125rem; /* 18px — the Scriptorium 17px surface, one notch up for the freewrite hero */
+    font-size: 1.125rem; /* 18px */
     line-height: 1.65;
     padding: 0.4rem 0 40vh; /* deep bottom pad keeps the caret comfortably high */
   }
-  /* empty-state prose reads in Newsreader, faint and unhurried */
   .app-editor::placeholder {
-    @apply font-serif italic text-muted-foreground;
-    opacity: 0.85;
+    @apply text-muted-foreground;
+    opacity: 0.75;
   }
 
-  /* prompt hero card — flat solid surface, no gradient (Scriptorium rule) */
   .prompt-surface {
     background: hsl(var(--card));
   }
 
   /* a piece of writing being read back — the "sheet" voice */
   .entry-read {
-    @apply whitespace-pre-wrap border border-border bg-card px-5 py-4 font-sans text-foreground;
+    @apply whitespace-pre-wrap rounded-2xl border border-border bg-card px-5 py-4 font-sans text-foreground;
     font-size: 1.0625rem; /* 17px */
     line-height: 1.65;
   }
@@ -377,47 +391,50 @@
 }
 
 /* ==========================================================================
-   Daily Words — the pilot of a softer, rounder look (docs/DESIGN_SYSTEM.md).
-
-   Everything here is scoped under `.dw`, so the rest of the app keeps
-   Scriptorium's square, flat surfaces untouched. The accent is its own token
-   set rather than a retune of Oxford, for the same reason: nothing outside
-   this mode should move when these do.
+   Shared primitives — rounded surfaces, gradient actions, conversation
+   bubbles, chips and motion (docs/DESIGN_SYSTEM.md). They began as the
+   Daily Words pilot, hence the `dw-` prefix; every mode uses them now.
    ========================================================================== */
-@layer base {
-  .dw {
-    --dw-accent: 250 84% 60%; /* indigo */
-    --dw-accent-2: 277 78% 60%; /* violet */
-    --dw-accent-3: 199 92% 56%; /* sky */
-    --dw-accent-soft: 248 100% 97%;
-    --dw-accent-ink: 250 62% 40%;
-    --dw-good: 160 72% 34%;
-    --dw-good-soft: 152 64% 95%;
-    --dw-shadow: 240 30% 20%;
-  }
-  .dark .dw {
-    --dw-accent: 250 92% 72%;
-    --dw-accent-2: 277 84% 72%;
-    --dw-accent-3: 199 90% 64%;
-    --dw-accent-soft: 250 34% 19%;
-    --dw-accent-ink: 250 96% 84%;
-    --dw-good: 158 62% 56%;
-    --dw-good-soft: 158 34% 15%;
-    --dw-shadow: 240 60% 2%;
-  }
-}
-
 @layer components {
   .dw {
     position: relative;
     isolation: isolate;
   }
-  /* Headings elsewhere are Newsreader; here they are the sans, heavy and
-     tight, which is most of what makes the mode read as a different room. */
-  .dw h1,
-  .dw h2,
-  .dw h3 {
-    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  /* The accent gradient for filled actions and highlight panels. Fixed
+     values, not the theme tokens: those lighten in the dark, and white text
+     on a pale violet stops being readable. */
+  .bg-accent-gradient {
+    background-image: linear-gradient(135deg, hsl(250 84% 60%), hsl(277 78% 56%));
+  }
+  /* The app-wide atmosphere: the same two washes, fixed to the viewport so a
+     long page scrolls over them rather than away from them. */
+  .app-mesh {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .app-mesh::before,
+  .app-mesh::after {
+    content: "";
+    position: absolute;
+    width: 50rem;
+    height: 50rem;
+    border-radius: 9999px;
+    filter: blur(100px);
+    opacity: 0.14;
+  }
+  .app-mesh::before {
+    top: -26rem;
+    right: -16rem;
+    background: hsl(var(--dw-accent-2));
+  }
+  .app-mesh::after {
+    bottom: -30rem;
+    left: -10rem;
+    background: hsl(var(--dw-accent-3));
+    opacity: 0.1;
   }
   /* Two soft washes of colour behind the page — atmosphere, not decoration to
      read. Fixed so they don't scroll away under a long conversation. */

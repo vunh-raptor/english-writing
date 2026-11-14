@@ -164,7 +164,7 @@ retrieval cue than any sentence we could generate.
   passage ever written, which is precisely what the gate exists to rule out, so
   it is gone and a failure offers a retry. (Progress itself is
   server-owned — the app is account-only.)
-- **Never red** — every correction is ochre, and every control is Oxford.
+- **Never red** — every correction is ochre, and every control is the accent.
 
 ## Files
 

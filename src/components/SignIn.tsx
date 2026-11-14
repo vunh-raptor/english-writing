@@ -76,7 +76,7 @@ export function SignIn() {
         Learn it today · Say it today
       </p>
 
-      <h1 className="mt-8 font-serif text-[28px] font-medium leading-tight tracking-tight text-foreground">
+      <h1 className="mt-8 text-[28px] font-bold leading-tight tracking-tight text-foreground">
         Sign in to pick up where you left off.
       </h1>
       <p className="mt-2 text-[15px] leading-normal text-muted-foreground">
@@ -90,7 +90,7 @@ export function SignIn() {
           project is connected. See <code className="font-mono">.env.example</code>.
         </p>
       ) : sent ? (
-        <div className="mt-8 bg-card px-6 py-5">
+        <div className="rounded-2xl mt-8 bg-card px-6 py-5 shadow-soft">
           <div className="kicker">Check your email</div>
           <p className="mt-2 text-[15px] leading-normal text-foreground">
             A link is on its way to <strong className="font-semibold">{email}</strong>.

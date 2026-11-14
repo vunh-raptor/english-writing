@@ -30,10 +30,12 @@ function MainShell({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
-        "min-h-screen bg-background lg:grid lg:h-screen lg:overflow-hidden lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out",
+        "relative isolate min-h-screen bg-background lg:grid lg:h-screen lg:overflow-hidden lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out",
         collapsed ? "lg:grid-cols-[72px_1fr]" : "lg:grid-cols-[236px_1fr]",
       )}
     >
+      {/* The atmosphere every page sits on: two soft washes of the accent. */}
+      <div className="app-mesh" aria-hidden />
       <AppSidebar />
       <div className="flex min-h-screen flex-col lg:h-full lg:min-h-0">
         <MobileTopBar />

@@ -194,7 +194,7 @@ export function Transcribe() {
     <PageContainer width="wide">
       <div>
         <div className="kicker">Learn · Transcribe</div>
-        <h1 className="mt-1.5 font-serif text-[30px] font-medium leading-tight tracking-tight text-foreground">
+        <h1 className="mt-1.5 text-[30px] font-bold leading-tight tracking-tight text-foreground">
           Write what you hear. Then say it back.
         </h1>
         <p className="mt-1.5 max-w-[600px] text-[15px] leading-normal text-muted-foreground">
@@ -283,7 +283,7 @@ export function Transcribe() {
 
         <aside className="flex flex-col gap-5">
           {resumable && (
-            <div className="bg-card p-6">
+            <div className="rounded-2xl bg-card p-6 shadow-soft">
               <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-gold">
                 Where you left off
               </div>
@@ -303,7 +303,7 @@ export function Transcribe() {
             </div>
           )}
 
-          <div className="bg-card p-6">
+          <div className="rounded-2xl bg-card p-6 shadow-soft">
             <div className="kicker">How this works</div>
             <ol className="mt-3 flex list-none flex-col gap-2.5 p-0">
               {[
@@ -350,8 +350,8 @@ function ClipRow({
 }) {
   const chunks = cutIntoChunks(clip.cues, CHUNK_SECONDS).length;
   return (
-    <div className="flex flex-wrap items-center gap-4 bg-card p-3.5">
-      <div className="grid h-[94px] w-[168px] flex-none place-items-center bg-muted px-3 text-center">
+    <div className="rounded-2xl flex flex-wrap items-center gap-4 bg-card p-3.5 shadow-soft">
+      <div className="rounded-2xl grid h-[94px] w-[168px] flex-none place-items-center bg-muted px-3 text-center">
         <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
           {clip.videoId ? "Video" : "Read aloud"}
         </span>
@@ -444,9 +444,9 @@ function Debrief({
         ‹ Transcribe
       </button>
 
-      <div className="mt-5 bg-card px-8 py-10 sm:px-14">
+      <div className="rounded-2xl mt-5 bg-card px-8 py-10 sm:px-14 shadow-soft">
         <div className="kicker">Passage {passage + 1} · debrief</div>
-        <h2 className="mt-2.5 font-serif text-[28px] font-medium leading-tight tracking-tight text-foreground">
+        <h2 className="mt-2.5 text-[28px] font-bold leading-tight tracking-tight text-foreground">
           {minutesOf(chunks, from, to)} of her English, in your own hand.
         </h2>
         <p className="mt-1.5 font-mono text-[10.5px] uppercase tracking-wide text-muted-foreground">
@@ -476,7 +476,7 @@ function Debrief({
                   <span className="w-[180px] flex-none truncate text-sm text-foreground sm:w-[230px]">
                     {s.word}
                   </span>
-                  <span className="h-1.5 flex-1 bg-muted">
+                  <span className="rounded-full h-1.5 flex-1 bg-muted">
                     <span
                       className="block h-1.5 bg-gold"
                       style={{ width: `${(s.count / slips[0].count) * 100}%` }}
@@ -498,7 +498,7 @@ function Debrief({
               {kept.map((w) => (
                 <span
                   key={w}
-                  className="border border-input bg-card px-2.5 py-1 text-[13.5px] text-foreground"
+                  className="rounded-full border border-input bg-card px-2.5 py-1 text-[13.5px] text-foreground"
                 >
                   {w}
                 </span>
@@ -531,7 +531,7 @@ function Debrief({
 
 function Stat({ value, label, gold }: { value: string; label: string; gold?: boolean }) {
   return (
-    <div className="bg-card py-4 pr-2">
+    <div className="rounded-2xl bg-card py-4 pr-2 shadow-soft">
       <div
         className={cn(
           "font-serif text-3xl font-semibold leading-none",

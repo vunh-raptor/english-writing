@@ -113,17 +113,22 @@ Break these and the change is a regression, however green the tests are.
   only; real values go in `.env.local` (git-ignored) or the Vercel dashboard.
 
 **Design** (details in `docs/DESIGN_SYSTEM.md`)
-- Oxford blue for every interactive affordance; **ochre only for annotations**;
-  **never red**; **no emoji**; square corners; flat surfaces; sentence case.
-- Reach for tokens (`bg-card`, `text-brand`, `bg-ochre-tint`), never raw hex.
-- **Daily Words is the pilot of a softer look** and is exempt from "square
-  corners; flat surfaces" and "Oxford for every affordance": rounded cards, a
-  violet accent, glass and soft shadow, all scoped under `.dw` in
-  `globals.css`. A learner called the old look dated; this is the trial of its
-  replacement, in one mode, before any decision about the rest. What it keeps
-  is the part that was never style: ochre for corrections, never red, no emoji,
-  tokens not hex. Do not let `.dw` classes leak into another mode until the
-  whole app is being moved.
+- One violet-indigo accent for every interactive affordance; rounded surfaces
+  lifted on soft shadow; one sans (Plus Jakarta Sans); sentence case.
+- **Ochre only for corrections and the tutor's notes; never red; no emoji.**
+  These are promises about tone, not style — they survived the redesign and
+  must survive the next one.
+- Reach for tokens (`bg-card`, `text-primary`, `bg-accent`, `bg-ochre-tint`)
+  and the shared primitives (`dw-card`, `dw-btn`, `bg-accent-gradient`, …),
+  never raw hex in a component.
+
+  > This replaced **Scriptorium** — Oxford blue, square corners, flat
+  > surfaces, a Newsreader serif over a mono metadata layer. A learner called
+  > it old and boring; the softer look was piloted in Daily Words and then
+  > applied to the whole app. That was a deliberate product decision. The cost
+  > is real: the scholarly calm the old look was built for is quieter now,
+  > and the brighter surfaces compete a little more with the learner's own
+  > words — keep decoration out of the writing surfaces.
 
 ## The delivery cycle
 

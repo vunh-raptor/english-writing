@@ -136,7 +136,7 @@ export function NewsDashboard({
 
       {sessions.length === 0 ? (
         // Empty state — the first visit.
-        <div className="mt-10 border border-border bg-card p-8 text-center">
+        <div className="rounded-2xl mt-10 border border-border bg-card p-8 text-center shadow-soft">
           <div className="kicker">No conversations yet</div>
           <p className="mx-auto mt-3 max-w-md font-serif text-lg leading-snug text-muted-foreground">
             Each day, News Chat plans a short mission from a real headline and
