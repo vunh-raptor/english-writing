@@ -149,49 +149,90 @@ export interface ArenaPack {
  */
 const TASK_NEUTRAL = "Answer them in your own sentence.";
 
-/** Stations where the item is off the screen, so nothing may name it. */
-const HIDDEN_LABELS = new Set(["recall", "clock", "spare"]);
+/**
+ * Stations whose task may not name the item: where it is off the screen, and
+ * `partner`, where a task naming the item tends to name its partner too ("make
+ * a complaint") — the one word that station hides.
+ */
+const HIDDEN_LABELS = new Set(["recall", "clock", "spare", "partner"]);
 
+/** Surrounding quote marks a model puts round a line it was told to leave bare. */
+function unquote(line: string): string {
+  return line.replace(/^["“'‘]+|["”'’]+$/g, "").trim();
+}
+
+/**
+ * One scene, or the reason it was dropped.
+ *
+ * The scene arrives in two fields — `scene` (the setting) and `line` (what the
+ * person says) — and the code joins them. Asked for one string with a quoted
+ * line inside it, models regularly left the line out and wrote a scene nobody
+ * speaks in; a field of its own can't be forgotten that quietly. A response in
+ * the old one-string shape (`said`) is still read, under the old check.
+ */
 function coerceScene(
   raw: Record<string, unknown>,
   matcher: RegExp,
   needsPlain: boolean,
   hidden: boolean,
-): ArenaScene | null {
-  const said = str(raw.said);
+): ArenaScene | string {
+  const setting = str(raw.scene);
+  const line = unquote(str(raw.line));
+  let said: string;
+  if (line) {
+    // The setting is told TO the learner. Narration in the first person ("My
+    // boss walks over") makes them the narrator of someone else's moment.
+    if (setting && FIRST_PERSON.test(setting)) return "first person";
+    said = setting ? `${setting} “${line}”` : `“${line}”`;
+  } else {
+    said = str(raw.said);
+    if (!said) return setting ? "nobody speaks" : "empty";
+    // A scene with nobody speaking gives them nothing to answer.
+    if (!/["“”]/.test(said) && !said.includes("?")) return "nobody speaks";
+    if (FIRST_PERSON.test(narration(said))) return "first person";
+  }
+  // Too long, gave the item away, or came back as a gap to fill — answering
+  // someone must never turn into completing a form.
+  if (said.length > MAX_SAID_CHARS) return "too long";
+  if (matcher.test(said)) return "names the item";
+  if (HAS_BLANK.test(said)) return "has a blank";
+
   let task = str(raw.task);
-  // Empty, too long, gave the item away, or came back as a gap to fill —
-  // answering someone must never turn into completing a form.
-  if (!said || said.length > MAX_SAID_CHARS || matcher.test(said) || HAS_BLANK.test(said)) return null;
-  // A scene with nobody speaking gives them nothing to answer.
-  if (!/["“”]/.test(said) && !said.includes("?")) return null;
-  // The scene is told TO the learner. Narration in the first person ("My boss
-  // walks over") makes them the narrator of someone else's moment.
-  if (FIRST_PERSON.test(narration(said))) return null;
-  if (!task || HAS_BLANK.test(task)) return null;
+  if (!task || HAS_BLANK.test(task)) return "no task";
   // Where the item is on screen, a task naming it gives nothing away.
   if (hidden && matcher.test(task)) task = TASK_NEUTRAL;
   if (!needsPlain) return { said, task };
   // The flat line is what they say better — if it already holds the item,
   // there is nothing left to say better.
-  const plain = str(raw.plain);
-  if (!plain || matcher.test(plain) || HAS_BLANK.test(plain)) return null;
+  const plain = unquote(str(raw.plain));
+  if (!plain || matcher.test(plain) || HAS_BLANK.test(plain)) return "no usable flat line";
   return { said, task, plain };
 }
+
+/** Why scenes were dropped, counted — what the warning reports. */
+type DropTally = Map<string, number>;
 
 function coercePacks(
   obj: Record<string, unknown>,
   items: ArenaSceneInput[],
+  drops: DropTally = new Map(),
 ): Map<string, ArenaPack> {
+  const drop = (why: string) => drops.set(why, (drops.get(why) ?? 0) + 1);
   const out = new Map<string, ArenaPack>();
-  if (!Array.isArray(obj.items)) return out;
+  if (!Array.isArray(obj.items)) {
+    drop("no items list");
+    return out;
+  }
   // The id matcher forgives the ways models mangle ids ("w-afford-1"); it
   // keys on `word`, which for a saved item is its text.
   const keyed = items.map((i) => ({ ...i, word: i.text }));
   for (const r of obj.items) {
     const o = (r ?? {}) as Record<string, unknown>;
     const item = resolveItemId(str(o.id), keyed);
-    if (!item || out.has(item.id)) continue;
+    if (!item || out.has(item.id)) {
+      drop("unknown item id");
+      continue;
+    }
     const matcher = itemMatcher(item.text, item.kind);
     const wanted = new Set(item.stations);
 
@@ -204,13 +245,16 @@ function coercePacks(
     for (const sc of Array.isArray(o.scenes) ? o.scenes : []) {
       const so = (sc ?? {}) as Record<string, unknown>;
       const label = str(so.station).toLowerCase().replace(/\s*\(\s*/, "(").replace(/\s*\)$/, ")");
-      if (label === "spare") {
-        pack.spare ??= coerceScene(so, matcher, false, true) ?? undefined;
+      const isSpare = label === "spare";
+      if (!isSpare && (!wanted.has(label) || pack.scenes[label])) {
+        drop("unknown station");
         continue;
       }
-      if (!wanted.has(label) || pack.scenes[label]) continue;
-      const scene = coerceScene(so, matcher, label === "native", HIDDEN_LABELS.has(label));
-      if (scene) pack.scenes[label] = scene;
+      if (isSpare && pack.spare) continue;
+      const scene = coerceScene(so, matcher, label === "native", isSpare || HIDDEN_LABELS.has(label));
+      if (typeof scene === "string") drop(scene);
+      else if (isSpare) pack.spare = scene;
+      else pack.scenes[label] = scene;
     }
     out.set(item.id, pack);
   }
@@ -236,12 +280,17 @@ async function scenesFor(
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await rawComplete(ARENA_SYSTEM, prompt, 2400);
     const obj = extractObject(raw);
-    const packs = obj ? coercePacks(obj, items) : new Map<string, ArenaPack>();
+    const drops: DropTally = new Map();
+    if (!obj) drops.set("not JSON", 1);
+    const packs = obj ? coercePacks(obj, items, drops) : new Map<string, ArenaPack>();
     if (sceneCount(packs) > sceneCount(best)) best = packs;
     if (sceneCount(best) === want) break;
+    // Say WHY, not just how many: "0 of 8" alone can't tell a model that
+    // ignored the format from one that keeps leaking the item.
+    const why = [...drops].map(([k, n]) => `${k} ×${n}`).join(", ");
     console.warn(
-      `[arena] attempt ${attempt}: ${sceneCount(packs)} of ${want} scenes usable —`,
-      raw.slice(0, 200),
+      `[arena] attempt ${attempt}: ${sceneCount(packs)} of ${want} scenes usable (dropped: ${why || "none"}) —`,
+      raw.slice(0, 160).replace(/\s+/g, " "),
     );
   }
   return best;
