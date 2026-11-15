@@ -79,3 +79,14 @@ test("nothing durable is written to the device", async ({ page }) => {
   expect(stored.local.filter((k) => k.startsWith("flowrite."))).toEqual([]);
   expect(stored.session.filter((k) => k.startsWith("flowrite."))).toEqual([]);
 });
+
+test("the arena is refused without a session, to read and to move", async ({ request }) => {
+  // The bout is server-owned state like any other: a signed-out caller gets a
+  // 401, never an empty bout that looks like a learner with nothing to fight.
+  const read = await request.get("/api/phrasebook/arena");
+  expect(read.status()).toBe(401);
+  const move = await request.post("/api/phrasebook/arena", {
+    data: { move: "say", index: 0, sentence: "I will arrange it." },
+  });
+  expect(move.status()).toBe(401);
+});

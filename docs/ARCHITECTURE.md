@@ -62,7 +62,7 @@ the browser:
 | --- | --- | --- |
 | `lib/shared` | isomorphic, pure | `date`, `stats`, `streak`, `srs`, `words` (day-set rules + the drill ladder + judging), `phrases` (drill methods + matchers), `respond` (the rung arc + the borrowing check), `transcribe` (dictation scoring, the word diff, chunking), `clips` (prose → timed cues), `prompt` (the prompt-composition kit + the learner snapshot's rendering), `modelJson` (reading a model's answer back). No I/O, no keys. |
 | `lib/client` | browser only | `sound`, `clientApi` (fetch our own API), `supabase` (browser client), `player`/`speech` (chunk playback), `recorder` (shadow capture). |
-| `lib/server` | server only (`"server-only"`) | `ai` gateway, `prompts/` (every system prompt, one module per surface), `request` (auth + the learner snapshot + the four route answers), `curriculum` (generating words), `listening` (generating passages), `words`, `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `transcribe`, `supabase` + `db/`. |
+| `lib/server` | server only (`"server-only"`) | `ai` gateway, `prompts/` (every system prompt, one module per surface), `request` (auth + the learner snapshot + the four route answers), `curriculum` (generating words), `listening` (generating passages), `words` (incl. `judgeHeld`, the one implementation of the held-sentence fences), `wordDay`, `arena` (the Phrasebook's server-owned bout), `respond`, `extract` (user-supplied URL fetching, with the SSRF guards), `news`, `mission`, `phrasebook`, `transcribe`, `supabase` + `db/`. |
 
 Because the stats/streak/SRS logic lives in `lib/shared`, it moved behind the
 API **unchanged** when state went server-side — `lib/server/db/state.ts` calls
@@ -205,8 +205,8 @@ All handlers are thin: validate → call a `lib/server` module → return JSON.
 | `POST /api/converse/ask` | "Ask · anything": translate / explain / rephrase aide. |
 | `POST /api/converse/debrief` | Closing debrief: per-target results, ≤2 upgrades, keep-phrases → SRS. |
 | `POST /api/phrasebook/enrich` | A captured highlight → reusable form + meaning + transfer example. |
-| `POST /api/phrasebook/drill` | One call per practice session: a real-life situation per due phrase. |
-| `POST /api/phrasebook/judge` | Honest per-answer judgment: applied in their own sentence, or not. |
+| `GET /api/phrasebook/arena` | → `{ bout, marks }` — the stored arena bout (or null) and every item's Native marks, read from the ledger. Never generates. |
+| `POST /api/phrasebook/arena` | One move in the server-owned bout: `open` (build once, from the learner's pick or the default draw), `say`, `peek`, `clock`, `leave`, `finish`. A move the learner's own state rules out is a 409. |
 | `GET /api/transcribe/clips` | The learner's listening library, topped up by one passage if short. |
 | `POST /api/transcribe/clips` | "Write me another" — always generates a fresh passage. |
 | `POST /api/transcribe/chunks` | A pasted YouTube link → its captions as timed cues. No AI. |
@@ -322,9 +322,9 @@ never by substituting material that fits nobody in particular:
 - **Daily Words** says it could not build today's words. The alternative was
   ten generic moments ("a friend asks how your week is going") that fit any
   word and elicit none.
-- **The Phrasebook's** Mixed mode says it could not build the rounds. Recall,
-  Sprint and Study still run: they use the learner's *own stored material*,
-  which is theirs rather than pre-written.
+- **The Phrasebook's** arena says it could not set up the bout. Its old
+  offline packs — six generic scenes that fitted any phrase — are gone; a
+  station whose scene fails the checks is simply not played.
 - **Respond** surfaces a failed ladder rather than falling back to four generic
   rungs, and a failed polish rather than a canned celebration that praises a
   word count it computed instead of the writing it never read.

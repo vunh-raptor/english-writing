@@ -51,7 +51,7 @@ Three surfaces, one pool of language and one spaced schedule underneath:
 | **Respond** | `/respond` | You bring the English: paste a post, an article, a newsletter, or hand over a link. The app gives you **questions and never answers** until you have an angle of your own — then you write it. Undrafted angles wait in an idea bank. See [`docs/RESPOND.md`](docs/RESPOND.md). |
 | **News Chat** | `/news` | A fully online conversation over one curated real-news subject whose only job is to **force production** — every AI turn ends in one concrete writing demand, with tappable stall-help. See [`docs/NEWS_CHAT.md`](docs/NEWS_CHAT.md). |
 | **Transcribe** | `/transcribe` | The one mode where the English arrives as **sound**: fifteen seconds of a passage at a time, written down from listening alone, then said back in your own mouth. The clip only advances when the dictation clears 90% and the chunk has been shadowed once; every tenth chunk closes with a comprehension check. Passages are written for you at your band, or you paste a real link. See [`docs/TRANSCRIBE.md`](docs/TRANSCRIBE.md). |
-| **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted, practiced four ways (Mixed · Recall · Sprint · Study — one per strand of a balanced program). See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
+| **Phrasebook** | `/phrasebook` | Your commonplace book: every word you've met and every phrase you've highlighted — and the **arena**, where they are fought into fluency. A bout makes each item work at several stations (recall it, pair it, bend it, change who it's said to, say a flat line the native way, beat the clock), every sentence held until it's right. Clean at every station and an item is Native. See [`docs/PHRASEBOOK.md`](docs/PHRASEBOOK.md). |
 | **Settings** | `/settings` | Words a day, your level, finish sound, theme (light/dark). |
 
 **They feed each other.** A word met in Daily words lands in the Phrasebook on
@@ -241,7 +241,7 @@ src/
       news/mission/route.ts    # GET today's planned News Chat mission
       converse/route.ts        # POST → News Chat turn (the production engine)
       converse/{bridge,continue,ask,debrief}/route.ts
-      phrasebook/{enrich,drill,judge}/route.ts
+      phrasebook/{enrich,arena}/route.ts
       respond/{source,questions,sharpen,ideas,polish}/route.ts
       transcribe/{chunks,explain,milestone,judge}/route.ts
   components/

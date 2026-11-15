@@ -13,9 +13,8 @@ import type {
   Debrief,
   NewsLevel,
   CaptureEnrichment,
-  DrillRoundSetup,
-  DrillJudgment,
-  LexKind,
+  ArenaBout,
+  ArenaMarks,
   WordDay,
   TranscribeClip,
   TranscribeCue,
@@ -244,35 +243,35 @@ export async function enrichPhrase(
   return res.json() as Promise<CaptureEnrichment>;
 }
 
-/** One practice session's rounds — one call for all due phrases. Methods
- *  rotate (situation / reply / rephrase / personal); each round carries
- *  worked examples to learn from. */
-export async function drillPhrases(
-  items: { id: string; text: string; meaning: string; example?: string; kind?: LexKind }[],
-): Promise<DrillRoundSetup[]> {
-  const res = await fetch("/api/phrasebook/drill", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
-  });
+// --- Phrasebook arena: the server owns the bout; the client names moves ------
+
+/** The stored bout (null when none was ever opened) and every item's Native marks. */
+export async function peekArena(): Promise<{ bout: ArenaBout | null; marks: ArenaMarks }> {
+  const res = await fetch("/api/phrasebook/arena");
   if (!res.ok) throw await httpError(res);
-  const data = await res.json();
-  return Array.isArray(data.rounds) ? (data.rounds as DrillRoundSetup[]) : [];
+  const data = (await res.json()) as { bout: ArenaBout | null; marks: ArenaMarks };
+  return { bout: data.bout ?? null, marks: data.marks ?? {} };
 }
 
-/** Honest judgment of one drill answer: applied, or not yet. */
-export async function judgePhrase(
-  phrase: { text: string; meaning: string },
-  situation: string,
-  sentence: string,
-): Promise<DrillJudgment> {
-  const res = await fetch("/api/phrasebook/judge", {
+export type ArenaMove =
+  | { move: "open"; ids: string[] }
+  | { move: "say"; index: number; sentence: string }
+  | { move: "peek"; index: number }
+  | { move: "clock"; index: number }
+  | { move: "leave"; index: number }
+  | { move: "finish" };
+
+/** Make one move and get the bout back as the server now has it. */
+export async function arenaMove(move: ArenaMove): Promise<ArenaBout> {
+  const res = await fetch("/api/phrasebook/arena", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phrase, situation, sentence }),
+    body: JSON.stringify(move),
+    // A sentence they just sent must survive the tab closing under it.
+    keepalive: true,
   });
   if (!res.ok) throw await httpError(res);
-  return res.json() as Promise<DrillJudgment>;
+  return ((await res.json()) as { bout: ArenaBout }).bout;
 }
 
 // --- Transcribe: write what you hear, then say it back -----------------------

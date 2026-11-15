@@ -1,6 +1,7 @@
-import type { DrillMethod, LexKind, Phrase, SrsRecord } from "@/types";
+import type { LexKind, Phrase, SrsRecord } from "@/types";
 import { todayKey } from "./date";
 import { isDue } from "./srs";
+import { wordMatcher } from "./words";
 
 /**
  * The shared vocabulary of lexical practice: how a round asks for production,
@@ -11,43 +12,10 @@ import { isDue } from "./srs";
  * from News Chat missions. One pool, one Leitner schedule, three surfaces.
  */
 
-// --- Drill methods: the shared method vocabulary ----------------------------
-
-/**
- * The fixed method rotation a practice session walks (index % length). Starts
- * with the easiest ask; both the server (round building) and the client
- * (offline fallback) follow it so sessions feel the same either way.
- */
-export const DRILL_METHOD_ARC: DrillMethod[] = [
-  "situation",
-  "reply",
-  "rephrase",
-  "personal",
-];
-
-/** Single words learn best in company (collocation research) — their arc
- *  leads with partner-word production instead of rephrasing an idiom. */
-const WORD_METHOD_ARC: DrillMethod[] = ["collocation", "situation", "reply", "personal"];
-
-/** The method rotation appropriate to an item's kind. */
-export function drillArcFor(kind?: LexKind): DrillMethod[] {
-  return kind === "word" ? WORD_METHOD_ARC : DRILL_METHOD_ARC;
-}
-
-/** The learner-facing instruction each method falls back to. */
-export const DRILL_TASKS: Record<DrillMethod, string> = {
-  situation: "Answer the moment in your own sentence — work your phrase in naturally.",
-  reply: "Write your reply — use your phrase naturally.",
-  rephrase: "Say the same idea more naturally, using your phrase.",
-  personal: "Tell it in one or two true sentences, using your phrase.",
-  collocation: "Use it together with a natural partner word, in your own sentence.",
-};
-
 /**
  * A phrase as a lenient matcher: ___ gaps become short wildcards; apostrophes
  * and spacing flex. "It's worth ___" matches "its worth trying it, honestly".
- * Used server-side to detect honest production (missions, drills) and
- * client-side as the offline judging fallback.
+ * Used server-side to detect honest production (missions, the arena).
  */
 export function phraseMatcher(text: string): RegExp {
   const parts = text
@@ -62,6 +30,18 @@ export function phraseMatcher(text: string): RegExp {
     );
   if (parts.length === 0) return /$^/;
   return new RegExp(parts.join("[\\s\\S]{0,40}?"), "i");
+}
+
+/**
+ * The matcher for any saved item. A single word matches its normal inflections
+ * ("arrange" in "arranging"), which `phraseMatcher` alone can't — it matches
+ * the letters as written, so a learner who bent the word correctly would be
+ * told it wasn't there. Everything longer flexes through its gaps instead.
+ */
+export function itemMatcher(text: string, kind?: LexKind): RegExp {
+  const t = text.trim();
+  const oneWord = /^[a-z'’-]+$/i.test(t);
+  return oneWord || (kind === "word" && !/[\s_]/.test(t)) ? wordMatcher(t) : phraseMatcher(t);
 }
 
 /**

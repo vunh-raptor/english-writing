@@ -493,6 +493,41 @@ export function hintLeaks(hint: string, sentence: string): boolean {
   return shared / theirs.length >= 0.75;
 }
 
+/**
+ * Does this note hand over the fix for the part they got wrong?
+ *
+ * `hintLeaks` catches a note that restates most of their sentence. This
+ * catches the shorter give-away it misses: the off fragment with one word
+ * swapped ("do a complaint" → "make a complaint"), or a single off word given
+ * back in its right form ("arrange" → "arranged"). Either is the corrected
+ * language, ready to copy. A frame with `___` is never a leak — the gap is the
+ * part they still have to produce.
+ *
+ * It errs toward dropping: a note lost to a false alarm costs one line of
+ * help; a note that gives the answer costs the whole point of the retry.
+ */
+export function suggestsFix(note: string, quote: string, sentence: string): boolean {
+  if (!note || !quote || note.includes("___")) return false;
+  const q = tokens(quote);
+  const t = tokens(note);
+  if (q.length === 0 || t.length === 0) return false;
+  const theirs = new Set(tokens(sentence));
+  const said = ` ${tokens(sentence).join(" ")} `;
+
+  if (q.length === 1) {
+    // One off word: a different form of it, not anywhere in their sentence.
+    const stem = q[0].slice(0, 4);
+    return stem.length >= 4 && t.some((w) => w !== q[0] && w.startsWith(stem) && !theirs.has(w));
+  }
+
+  for (let i = 0; i + q.length <= t.length; i++) {
+    const window = t.slice(i, i + q.length);
+    const differs = window.filter((w, k) => w !== q[k]).length;
+    if (differs === 1 && !said.includes(` ${window.join(" ")} `)) return true;
+  }
+  return false;
+}
+
 export type { TalkState };
 
 export type TalkEvent =

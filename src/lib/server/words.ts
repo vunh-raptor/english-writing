@@ -5,6 +5,7 @@ import { extractObject, resolveItemId, str, strList } from "@/lib/shared/modelJs
 import { countWords } from "@/lib/shared/stats";
 import {
   hintLeaks,
+  suggestsFix,
   hintLevel,
   settleVerdict,
   usesWord,
@@ -185,7 +186,7 @@ const VERDICTS = new Set<TalkVerdict>(["landed", "almost", "missing"]);
  * learner's job, and the card is one tap away.
  */
 const NOTE_MISSING = "Today's word isn't in there yet — say it again with the word in it.";
-const NOTE_FRAGMENT = "That's the word. Now give it a whole sentence.";
+const NOTE_FRAGMENT = "That's the start of it. Now give it a whole sentence.";
 const NOTE_LOOK_AGAIN = "Something in that part isn't right yet — look at it again and say it once more.";
 
 /**
@@ -204,31 +205,43 @@ async function isFaulty(sentence: string): Promise<boolean> {
   }
 }
 
+/** What the held-sentence judge needs, whichever mode is holding the sentence. */
+export interface HeldJudgeInput {
+  /** The surface's own judge prompt (Daily Words, the arena) — same contract. */
+  system: string;
+  user: string;
+  sentence: string;
+  /** Did deterministic detection find the item in the sentence? */
+  detected: boolean;
+  /** The item, when it is hidden from the learner: a "missing" hint may not
+   *  name it, because retrieving it is their job. Null when it is on screen. */
+  hidden: RegExp | null;
+  missingNote?: string;
+}
+
 /**
- * Judge one sent sentence.
+ * Judge one sentence that is held until it is right.
  *
- * The model's judgment is settled against deterministic detection
- * (`settleVerdict`), and everything it wrote back is checked before it reaches
- * the learner: a quote that isn't in their sentence is dropped, a hint that is
- * really the corrected sentence is dropped, and a hint that names the word
- * they failed to retrieve is replaced. Fails soft to detection alone.
+ * This is the only implementation of the required-correction fences, shared
+ * by every mode that holds a sentence (Daily Words, the Phrasebook arena) so
+ * that none of them can quietly hold more loosely than the others. The model's
+ * judgment is settled against deterministic detection (`settleVerdict`); a
+ * held sentence needs a second, context-free judge to agree it is wrong; and
+ * everything the model wrote back is checked before it reaches the learner —
+ * a quote that isn't in their sentence is dropped, a hint that is really the
+ * corrected sentence is dropped, and a hint that names a hidden item is
+ * replaced. Fails soft to detection alone.
  */
-export async function wordTurn(
-  snapshot: LearnerSnapshot,
-  word: { word: string; pos: string; meaning: string },
-  said: string,
-  sentence: string,
-  misses: number,
-): Promise<TalkTurn> {
-  const detected = usesWord(word.word, sentence);
+export async function judgeHeld(input: HeldJudgeInput): Promise<TalkTurn> {
+  const { sentence, detected, hidden } = input;
   const words = countWords(sentence);
 
   let obj: Record<string, unknown> | null = null;
   try {
     obj = extractObject(
       await rawComplete(
-        TURN_SYSTEM,
-        turnUser(snapshot, word, said, sentence, hintLevel(misses)),
+        input.system,
+        input.user,
         220,
         // A verdict is not a creative act: the same sentence must get the same
         // answer twice, or being held on it stops feeling fair.
@@ -236,12 +249,14 @@ export async function wordTurn(
       ),
     );
   } catch (e) {
-    console.warn("[words] turn judged by detection alone —", e instanceof Error ? e.message.slice(0, 160) : e);
+    console.warn("[held] turn judged by detection alone —", e instanceof Error ? e.message.slice(0, 160) : e);
   }
 
   const claimed = str(obj?.verdict) as TalkVerdict;
   const model = obj && VERDICTS.has(claimed) ? claimed : null;
-  let hint = str(obj?.hint);
+  // Models echo the help level they were given ("frame: ..."); the label is
+  // ours, not something to show the learner.
+  let hint = str(obj?.hint).replace(/^\s*(point|pattern|frame)\s*[:\-–—]\s*/i, "");
   const rawQuote = str(obj?.quote);
   const quote =
     rawQuote && sentence.toLowerCase().includes(rawQuote.toLowerCase()) ? rawQuote : "";
@@ -261,15 +276,18 @@ export async function wordTurn(
   }
 
   if (verdict === "missing") {
-    if (!hint || wordMatcher(word.word).test(hint)) hint = NOTE_MISSING;
+    if (!hint || (hidden && hidden.test(hint))) hint = input.missingNote ?? NOTE_MISSING;
     return { verdict, reply: "", hint };
   }
 
   // almost — "what already works" is a comment on their sentence. If it came
   // back as a sentence of its own, it is a model answer in disguise: drop it.
   const said_ = model === "almost" ? str(obj?.works) : "";
-  const works = said_ && !hintLeaks(said_, sentence) && said_.length <= 160 ? said_ : "";
-  if (hint && hintLeaks(hint, sentence)) hint = "";
+  const works =
+    said_ && !hintLeaks(said_, sentence) && !suggestsFix(said_, quote, sentence) && said_.length <= 160
+      ? said_
+      : "";
+  if (hint && (hintLeaks(hint, sentence) || suggestsFix(hint, quote, sentence))) hint = "";
   if (!hint) hint = words < 3 ? NOTE_FRAGMENT : quote ? "" : NOTE_LOOK_AGAIN;
   return {
     verdict,
@@ -277,4 +295,21 @@ export async function wordTurn(
     ...(quote ? { quote } : {}),
     ...(hint ? { hint } : {}),
   };
+}
+
+/** Judge one sentence in a word's conversation (Daily Words). */
+export async function wordTurn(
+  snapshot: LearnerSnapshot,
+  word: { word: string; pos: string; meaning: string },
+  said: string,
+  sentence: string,
+  misses: number,
+): Promise<TalkTurn> {
+  return judgeHeld({
+    system: TURN_SYSTEM,
+    user: turnUser(snapshot, word, said, sentence, hintLevel(misses)),
+    sentence,
+    detected: usesWord(word.word, sentence),
+    hidden: wordMatcher(word.word),
+  });
 }

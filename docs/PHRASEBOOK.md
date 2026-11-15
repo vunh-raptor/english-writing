@@ -1,136 +1,163 @@
-# Phrasebook — highlight it, then learn it by using it
+# Phrasebook — highlight it, then fight it into fluency
 
-The capture-to-application loop. The learner highlights any lexical unit while
+The capture-to-fluency loop. The learner highlights any lexical unit while
 reading — a **word, collocation, idiom, pattern, phrase, or whole sentence** —
 in the News Chat manuscript (briefing, partner turns, debrief) or the Ask
-margin, saves it in one tap, and practices it in a dedicated module
-(`/phrasebook`). Whatever the practice mode, every round ends the same way:
-**the learner writes their own sentence**. There is no flashcard flip anywhere.
+margin, saves it in one tap, and practises it in the **arena** (`/phrasebook`).
+Words met in [Daily words](DAILY_WORDS.md) land in the same book.
 
-## The research this is built on
+## Why an arena
 
-The module is organized around **Nation's four strands** — a balanced language
-course gives roughly equal time to meaning-focused input, meaning-focused
-output, language-focused learning, and fluency development — plus four
-findings that shape the mechanics:
+Remembering an item and *using it like a native* are different skills. The
+old Phrasebook (four modes: Mixed · Recall · Sprint · Study) asked for one
+sentence per item and accepted it whether or not the English was right, so it
+mostly proved the first. A learner asked for the opposite: a try-hard space
+that does whatever it takes to make their words usable, fluently. That was a
+deliberate product decision, and it **replaced the four modes** — the calm,
+unjudged Study path is gone with them, which is a real cost on a heavy day.
+
+What changed, in one line each:
+
+- **Every sentence is held until it is right** — the Daily Words fences, by
+  sharing their code (`judgeHeld`), not copying it. See "The fences" below.
+- **One item, many kinds of use.** An item works at several *stations*, each
+  testing something the others structurally can't.
+- **Native is earned, not declared.** An item is Native only once it has landed
+  clean at every station on its ladder — read from the ledger, never stored.
+
+## The research it rests on
 
 | Finding | Where it lives here |
 | --- | --- |
-| **Four strands** (Nation 2007): output, deliberate study, and fluency work are *separate strands*, each needed | The four practice **modes** (below) — one per strand; capture + News Chat supply the input strand |
-| **Involvement Load Hypothesis** (Laufer & Hulstijn; systematic review 2022): tasks requiring evaluation + writing yield the deepest retention | Every mode ends in writing your own sentence; judging evaluates *application*, not recognition |
-| **Retrieval practice / testing effect** (incl. within-session repeated retrieval, SSLA): recalling beats re-study | Recall mode; hidden-first items in Mixed from Leitner box 2; peeks honestly recorded |
-| **Collocation research / the lexical approach** (Lewis; input-frequency studies): words are learned in company | `kind`-aware practice — a single word drills with its **collocations** ("word partners" method); partners stored on the item |
-| **Generation effect + desirable difficulties** (Bjork) | Nothing insertable, examples inert, delayed-copy flash for new items |
+| **Involvement Load** (Laufer & Hulstijn): writing your own sentence beats gap-fill beats reading | Every station ends in the learner's own sentence |
+| **Retrieval practice**, incl. within-session repeated retrieval | `recall` and `clock` hide the item; a slipped item comes back once, two stations later, from memory |
+| **Collocation research / the lexical approach** (Lewis) | `partner` gaps the word the item travels with — the chunk a free-writing round lets learners avoid |
+| **Transfer-appropriate processing / varied practice** | `shift` (past, negative, question, someone else, future) and `register` (formal ↔ casual) make it work in shapes and settings it wasn't met in |
+| **Fluency development** (Nation's fourth strand) | `clock` — the same item, from memory, inside 45s; only ever after it has been said untimed |
+| **Interleaving / desirable difficulties** (Bjork) | Stations interleave items, so no item is worked twice in a row |
 
-- **Capture at the moment of meeting.** A unit highlighted in a real article
-  or conversation arrives with its passage — the strongest encoding moment.
-  Enrichment classifies its **kind** (word / phrase / idiom / pattern /
-  collocation / sentence) so practice can adapt.
-- **Honest scheduling, one pool.** Clean application → `reviewCard(true)`
-  (interval earned). Applied after a peek/flash → no change (stays due).
-  Missed → lapse (due now). Study never touches the schedule; Sprint never
-  punishes. Captures share the pool and SRS with News Chat's mission targets
-  **and the words met in [Daily words](DAILY_WORDS.md)** — one pool, one
-  scheduler, three surfaces.
+## The stations
 
-## The four modes — the learner chooses
+The ladder, easiest ask first (`NATIVE_LADDER` in `lib/shared/arena.ts`):
 
-| Mode | Strand | What a round is | Items | Schedule effect |
-| --- | --- | --- | --- | --- |
-| **Mixed** | meaning-focused output | AI scenario rounds, methods interleaved (moment / reply / upgrade-it / make-it-yours / word-partners) | due (≤6) | clean ↑ · peek = stays due · miss ↓ |
-| **Recall** | retrieval practice | item hidden — retrieve from meaning, then apply; brand-new items get a 7s study-flash, then are written **from memory** (delayed copy) | due (≤6) | flash/peek = stays due; clean recall ↑ |
-| **Sprint** | fluency development | 45s per round, local prompts, item visible | familiar only (box ≥ 1) | clean ↑ · misses cost **nothing** |
-| **Study** | language-focused learning | the full card (meaning, example, origin, similar ways, partners, where you met it) → write your own example | newest (≤6) | **none** — study isn't testing |
+| Station | What they see | What it proves |
+| --- | --- | --- |
+| **recall** | the meaning only; the item hidden | the form-meaning link exists |
+| **partner** | the item, and its partner chunk with the partner gapped (`___ a complaint`) | it travels with the right company |
+| **shift** | the item, and a shape the scene pulls for | it bends without breaking |
+| **register** | the item, and a listener the setting changes | it fits the room |
+| **native** | the item, and a flat clumsy line to say better | it is the natural choice, not just a correct one |
+| **clock** | the meaning only, 45s, scene covered until they start | it comes out fluently |
 
-Only Mixed calls the AI round-builder; Recall, Sprint, and Study run on the
-item's own stored material — instant, and needing no AI (judging still
-uses the API when available, with the deterministic matcher as fallback).
+`partner` is skipped for an item with no partner chunk to gap. A **combo**
+closes each bout: the two items furthest from Native, one sentence. It earns
+no mark — it is the stretch, not a station.
 
-## The flow
+**What a bout asks** (`planStations`, `planBout`): up to 4 items, 3 stations
+each — the next unearned ones in ladder order, the clock always last and never
+alone. Once everything untimed is earned, the hardest earned stations return as
+maintenance. The shape and the listener are code-assigned and rotate.
+
+**What is judged.** Only the language. The shape or listener a station asks
+for is the pull of the scene, never a pass mark: a sentence held for not being
+in the past tense would be a sentence held for its idea, which the fences
+forbid. What the partner station *does* hold is a wrong partner (`do a
+complaint`) — that is language.
+
+## The fences (shared with Daily Words)
+
+Required correction is the thing most likely to make a learner quit, so the
+arena takes every Daily Words fence, through the same code:
+
+| Fence | Where |
+| --- | --- |
+| Nothing checks you while you type; `spellCheck={false}` | `ArenaSession.tsx` composer |
+| The corrected sentence is never shown — not as a restatement, and not as the off fragment with one word swapped (`make a complaint`) | `hintLeaks`, `suggestsFix` in `lib/shared/words.ts` |
+| Help grows one notch per miss and stops at a frame with a gap | `hintLevel` |
+| A sentence is held only when two judges agree | `judgeHeld` / `isFaulty` in `lib/server/words.ts` |
+| A model can't erase an item that is visibly there; an outage falls back to detection | `settleVerdict`, `itemMatcher` |
+| A hidden item is never named by a "missing" hint | `judgeHeld` (`hidden`) |
+| After three misses, "Leave it for later" | `talkCanLeave` |
+
+…and adds two of its own:
+
+- **A bout can end at any point.** Every sentence is already in the ledger;
+  only items whose stations all finished move on the schedule.
+- **One second try, never a loop.** A station that ends not-clean brings its
+  item back once, two stations later, as `recall` on a spare scene written up
+  front (`withRematch`).
+
+## Honest scheduling
+
+| How the bout went for an item | Schedule |
+| --- | --- |
+| Clean at every station | `reviewCard(true)` — earned interval |
+| Slipped at more stations than it landed (scheduled item) | `reviewCard(false)` — lapse |
+| Anything else, or a first meeting, or unfinished | no change — stays due |
+
+A clock station landed right but late is *help*, not a mark (`stationOutcome`).
+
+## Native marks live in the ledger
+
+Every arena sentence goes to `productions` with `surface: "phrasebook"` and
+`mode: "arena-<station>"`. An item's marks are the stations with a `clean` row
+(`marksFromLedger`). Nothing else stores them, so a mark can't drift from the
+sentence that earned it. The old modes' rows (`mode: "recall"` etc.) never held
+a sentence and deliberately don't count.
+
+## Capture
 
 ```
 READ (News Chat, Ask margin)
   └─ highlight → [Save] chip → POST /api/phrasebook/enrich
-        → { text (reusable unit), meaning, example (different situation),
-            register, alternatives }
-        → store.collectPhrase (dedupe by content slug; unscheduled = due today)
+        → { text (reusable unit), kind, meaning, example (different situation),
+            register, alternatives, collocations }
+        → collectPhrase (dedupe by content slug; unscheduled = due today)
         (enrich fails → the raw highlight is saved as-is — capture never fails)
-
-/phrasebook (library — "your commonplace book")
-  main column: search + state filters (all/due/learning/mastered) over rows
-    grouped Due today / Learning / Mastered; each row = phrase · meaning ·
-    five Leitner-box ticks · state label, expanding to the example ("in
-    another situation"), the "similar ways" cluster + register, provenance
-    ("saved from News Chat — “…passage…”") and Remove
-  sticky rail: Today's session — the practice launcher: a four-MODE chooser
-    (Mixed / Recall / Sprint / Study, each showing how many items are ready) +
-    the selected mode's blurb + a due preview + Practice now ·
-    This week (day-by-day applications, Store.phraseApplied) ·
-    The journey (new → learning → mastered, srsSummary)
-
-Practice now (≤6 items, the chosen mode)
-  └─ mixed only: POST /api/phrasebook/drill  — ONE call: a full round pack per
-       phrase, remembered per (day, item set) so a reload returns the same
-       situations; the other modes run on the item's own stored material
-       (instant, no generation needed). Method rotates through a fixed arc
-       (code-assigned, not model-chosen):
-         situation  an everyday moment to respond to
-         reply      a 2-3 line mini-chat ending on a line spoken TO you
-         rephrase   a flat "Plain version: …" sentence to say better
-         personal   a pointer at YOUR life where the phrase fits
-       each round = { setup, task, 2 worked examples }
-       setups never contain the phrase; examples MUST (both code-checked
-       via phraseMatcher)
-  └─ per round: setup + task → (phrase shown | hidden-for-recall + Peek)
-       "See it used" panel: generated examples + the stored enrichment
-       example + "similar ways" — inert (select-none); in a recall round
-       opening it counts as the peek (examples show the phrase)
-       → learner writes their own sentence
-       → POST /api/phrasebook/judge → { used, note, ≤1 upgrade }
-         model judgment ∪ deterministic phraseMatcher (a lazy model can
-         never erase a real production)
-       → SRS applied by the clean/peeked/missed rules above
-       (a round rail across the top tracks ✓ clean / ✓ peeked / — missed)
-  └─ debrief: "N of M said in your own words" — every round's outcome, the
-       learner's own sentence, and when each phrase returns
 ```
 
-Method variety is planned, not random: sessions walk
-`situation → reply → rephrase → personal → …` (easiest ask first), with
-single words leading on `collocation` instead, because words are learned in
-company.
+## The bout, end to end
 
-## Guarantees (same stance as News Chat)
+```
+/phrasebook  library + the arena card (lineup with Native bars, or "Back into the bout")
+  └─ Enter → POST /api/phrasebook/arena {move:"open", ids}
+       server: pick (learner's pick | due → furthest from Native), plan stations,
+       ONE scene per station + a spare per item, 2 items per generation call in
+       parallel, each checked in code (no item, no blank, someone speaking,
+       told to "you"; a hidden station's task that names the item is swapped
+       for a neutral instruction). A station that loses its scene isn't played.
+  └─ per station: say → judgeHeld → landed | almost (ochre note) | missing
+       peek (free; not clean) · clock (server time) · leave (after 3 misses)
+       each sentence → productions at once
+  └─ finish (or "End here") → schedules move → debrief: what landed first,
+       each item's Native bar with today's marks ringed
+```
 
-- **Nothing completes the learner's turn.** Situations contain no ready-made
-  answer; the phrase card is reference, not insertable text; the only way
-  through a round is typing a sentence.
-- **Nothing is pre-written.** Every situation is built for the phrase it
-  elicits. Mixed mode used to fall back to generic situations that could host
-  any phrase at all — which is the opposite of what a practice round is for — so
-  a failed build now says so and offers a retry. Recall, Sprint and Study are
-  unaffected: they run on the learner's *own stored material*, which is theirs
-  rather than pre-written.
-- **Judging still fails soft, because judging is not content.** Enrich fails →
-  save the raw highlight. Judge fails → the deterministic `phraseMatcher`
-  verdict and the one line that reports it. Code can always rescue a real
-  production; it just never invents one.
-- **Every answer is kept.** Each judged sentence goes to `productions` with its
-  situation, its method and its verdict.
-- **Untrusted text is data.** Highlights, passages, and the learner's sentences
-  are content in the prompts, never instructions.
+## Guarantees
+
+- **Nothing completes your turn.** No scene contains its item (code-checked);
+  examples are inert; a correction never contains the corrected sentence.
+- **Nothing is pre-written.** Every scene is generated for its item and
+  station. The six offline packs the old Mixed mode fell back to are deleted;
+  a bout that can't be built says so and offers a retry.
+- **The bout is the server's.** One `ArenaBout` per learner in `ai_content`
+  (`arena_bout`, key `current`); moves name their station, so a stale tab or
+  double tap gets a 409 and the real state, never a sentence on the wrong
+  station.
+- **Untrusted text is data.** Highlights, passages and sentences are delimited
+  content in every prompt.
 
 ## API
 
 | Route | In → out |
 | --- | --- |
-| `POST /api/phrasebook/enrich` | `{ level, text, context }` → `CaptureEnrichment` |
-| `POST /api/phrasebook/drill` | `{ level, items[{id,text,meaning,example?}] }` → `{ rounds[{id,method,setup,task,examples[]}] }` |
-| `POST /api/phrasebook/judge` | `{ level, phrase{text,meaning}, situation, sentence }` → `DrillJudgment { used, note, upgrade? }` |
+| `POST /api/phrasebook/enrich` | `{ text, context }` → `CaptureEnrichment` |
+| `GET /api/phrasebook/arena` | → `{ bout: ArenaBout \| null, marks: ArenaMarks }` — never generates |
+| `POST /api/phrasebook/arena` | `{ move: "open", ids? }` · `{ move: "say", index, sentence }` · `{ move: "peek"\|"clock"\|"leave", index }` · `{ move: "finish" }` → `{ bout }`; 409 when the learner's state rules the move out |
 
-All on the fast model tier; server module `src/lib/server/phrasebook.ts`
-(mission.ts robustness pattern: first-`{…}` extraction, per-field coercion,
-hard code guards).
+Server modules: `lib/server/phrasebook.ts` (enrich, `arenaScenes`,
+`arenaTurn`), `lib/server/arena.ts` (the bout), prompts in
+`lib/server/prompts/phrasebook.ts`. Pure rules: `lib/shared/arena.ts`.
 
 ## Data
 
@@ -138,9 +165,11 @@ hard code guards).
   by the content slug `phraseId(text)`) with `Phrase.captured =
   { module, context, day }` provenance; scheduling stays in `Store.phraseSrs`.
   `collectPhrase` / `removePhrase` in `StoreContext`. Clean applications are
-  also tallied per local day in `Store.phraseApplied` (drill cleans, Coach
+  also tallied per local day in `Store.phraseApplied` (arena items clean at every station, Coach
   productions, mission `produced` targets — pruned to recent weeks), which
-  powers the library's "This week" card.
+  powers the library's "This week" card. The arena adds no table and no
+  migration: the bout is one `ai_content` row, and Native marks are read from
+  `productions`.
 - **DB (ready-to-wire)**: migration `0003_phrasebook.sql` adds source value
   `'captured'` + `captured_context`; migration `0004_lexical_kinds.sql`
   extends `phrase_kind` to the full `LexKind` set and adds `collocations`;
@@ -154,5 +183,7 @@ hard code guards).
   `data-capture-context` ancestor; input/textarea selections ignored).
 - `src/components/NewsChat.tsx` — wrapped in it; briefing, chat turns, Ask
   answers, and the debrief are marked as context blocks.
-- `src/components/Phrasebook.tsx` + `/phrasebook` — library, drill, done
-  screens; nav entry under **Practice**.
+- `src/components/Phrasebook.tsx` + `/phrasebook` — the library and the arena
+  card (lineup, pick, resume).
+- `src/components/arena/` — `ArenaSession` (rail, station card, thread, clock,
+  composer), `ArenaDebrief`, `NativeMeter`, `meta.ts` (station copy).

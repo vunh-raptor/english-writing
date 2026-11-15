@@ -316,52 +316,92 @@ export interface CaptureEnrichment {
   collocations?: string[];
 }
 
-/**
- * How one drill round asks for production — the variety axis. Every method
- * ends the same way: the learner writes their own sentence.
- */
-export type DrillMethod =
-  | "situation" // an everyday moment to respond to
-  | "reply" // a mini-dialogue ending on a line spoken TO the learner
-  | "rephrase" // a flat plain sentence to say more naturally with the phrase
-  | "personal" // point at the learner's own life where the phrase fits
-  | "collocation"; // use a word together with a natural partner (words travel in company)
+// --- The Arena: the Phrasebook's practice (docs/PHRASEBOOK.md) ---------------
+//
+// One bout = a handful of saved items, each made to work at several stations,
+// each station a sentence held until it is right — the Daily Words fences,
+// applied to the learner's own collection. The server owns the bout, move by
+// move, exactly like a `WordDay`.
 
 /**
- * How the learner chooses to practice — one mode per strand of a balanced
- * program (Nation's four strands; docs/PHRASEBOOK.md):
- *   mixed  — meaning-focused output: AI scenario rounds, methods interleaved
- *   recall — retrieval practice: item hidden, retrieve from meaning, then apply
- *   sprint — fluency development: timed rounds on familiar items only
- *   study  — language-focused learning: the full card, closed by writing
- *            your own example (never moves the schedule — study ≠ testing)
+ * The kinds of use an item has to survive before it counts as Native. Each one
+ * tests a part of "using it like a native" the others structurally can't:
+ *   recall   — pull it from its meaning alone (the item is hidden)
+ *   partner  — use it with the word it travels with (its collocate gapped)
+ *   shift    — bend it into another shape (past, negative, question…)
+ *   register — say it to someone the setting changes (boss vs friend)
+ *   native   — a flat plain line, said the way a native would, with it
+ *   clock    — say it, from memory, against the clock
  */
-export type PracticeMode = "mixed" | "recall" | "sprint" | "study";
+export type ArenaStation = "recall" | "partner" | "shift" | "register" | "native" | "clock";
 
-/** One practice round's setup, built per phrase by the drill call. */
-export interface DrillRoundSetup {
-  /** The phrase id this round elicits. */
+/** The grammatical shape a `shift` station asks for. */
+export type ArenaShift = "past" | "negative" | "question" | "someone else" | "future";
+
+/** Who a `register` station has the learner talk to. */
+export type ArenaRegister = "formal" | "casual";
+
+/** One saved item in a bout, with the material it is practised from. */
+export interface ArenaItem {
   id: string;
-  method: DrillMethod;
-  /** The scene material: the moment, the "Name: line" mini-chat, or the plain
-   *  sentence to upgrade. Never contains the phrase (code-checked). */
-  setup: string;
-  /** One short instruction telling the learner what to write. */
-  task: string;
-  /** Up to 2 worked examples USING the phrase in clearly different contexts —
-   *  input to learn from, rendered inert, never an answer to the setup. */
+  text: string;
+  meaning: string;
+  kind: LexKind;
+  /** Natural partner chunks — what the `partner` station gaps. */
+  collocations: string[];
+  /** Worked examples using it elsewhere — inert input, never an answer. */
   examples: string[];
+  /** Stations this item had already landed cleanly before the bout began. */
+  marksBefore: ArenaStation[];
+  /** Never scheduled before — a first meeting is never punished. */
+  isNew: boolean;
+  /** Leitner box before the bout — "comes back in…" is computed from it. */
+  prevBox: number;
 }
 
-/** Honest judgment of one drill answer. */
-export interface DrillJudgment {
-  /** Did they apply the phrase (or a close variant) in their OWN sentence? */
-  used: boolean;
-  /** One short warm line; quotes their words when it worked. */
-  note: string;
-  /** At most one pattern-level fix (the debrief's Upgrade shape). */
-  upgrade?: Upgrade;
+/** One sentence to hold, at one station, for one item (or two, for the combo). */
+export interface ArenaTurn {
+  /** The item it elicits; the combo carries both in `comboIds`. */
+  itemId: string;
+  station: ArenaStation | "combo";
+  comboIds?: [string, string];
+  shift?: ArenaShift;
+  register?: ArenaRegister;
+  /** The line said to them. Never contains the item (code-checked). */
+  said: string;
+  task: string;
+  /** `native` station: the flat line to say better. Never contains the item. */
+  plain?: string;
+  /** `partner` station: the partner chunk with its partner word gapped. */
+  partner?: string;
+  /** A second try for an item that slipped earlier in the bout. */
+  rematch?: boolean;
+  talk: TalkState;
+  thread: TalkEntry[];
+  /** `clock` station: when they started it (server time), or null. */
+  clockStartedAt?: number | null;
+  /** `clock` station: their first landing came inside the time. */
+  clockBeaten?: boolean;
+  outcome: WordOutcome | null;
 }
+
+/** One arena bout, as the server keeps it. */
+export interface ArenaBout {
+  id: string;
+  startedAt: number;
+  items: ArenaItem[];
+  turns: ArenaTurn[];
+  /** Per item, the scene its one second try uses if it slips. Written up front
+   *  with the rest, so a rematch is never improvised and never canned. */
+  spares: Record<string, { said: string; task: string }>;
+  /** Set when the bout was closed: schedules moved, Native marks counted. */
+  finishedAt: string | null;
+  /** Closed before every station was played. Unplayed items keep their schedule. */
+  endedEarly?: boolean;
+}
+
+/** item id → the stations it has landed cleanly in the arena, ever. */
+export type ArenaMarks = Record<string, ArenaStation[]>;
 
 /**
  * "Ask · anything": the free aide in the News Chat margin. The learner asks to
