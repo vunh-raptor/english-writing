@@ -123,9 +123,13 @@ READ (News Chat, Ask margin)
   └─ Enter → POST /api/phrasebook/arena {move:"open", ids}
        server: pick (learner's pick | due → furthest from Native), plan stations,
        ONE scene per station + a spare per item, 2 items per generation call in
-       parallel, each checked in code (no item, no blank, someone speaking,
-       told to "you"; a hidden station's task that names the item is swapped
-       for a neutral instruction). A station that loses its scene isn't played.
+       parallel. Each scene comes back as `scene` (the setting) + `line` (what
+       the person says) and the code joins them — asked for one string with a
+       quoted line inside, models often wrote scenes nobody speaks in. Checked
+       in code: no item, no blank, the setting told to "you"; a task that names
+       the item on a hidden or partner station is swapped for a neutral
+       instruction. A station that loses its scene isn't played, and the log
+       says why scenes were dropped ("names the item ×2").
   └─ per station: say → judgeHeld → landed | almost (ochre note) | missing
        peek (free; not clean) · clock (server time) · leave (after 3 misses)
        each sentence → productions at once

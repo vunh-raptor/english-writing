@@ -76,7 +76,7 @@ export function enrichUser(
 // 2. The arena: the scenes one bout runs on
 // ---------------------------------------------------------------------------
 
-export const ARENA_VERSION = "phrasebook.arena.v3";
+export const ARENA_VERSION = "phrasebook.arena.v4";
 
 /**
  * One call writes every scene a bout needs: per item, one scene for each
@@ -91,7 +91,8 @@ export const ARENA_SYSTEM = joinParts([
   section(
     "EVERY SCENE",
     bullets([
-      'said: first ONE short sentence that sets the scene, addressed to the learner as "you" ("Your manager stops by your desk."), never told as "I" or "my". Then the line a person SAYS to the learner, in double quotes. It ends on a question or remark the learner answers AS THEMSELVES, and answering it must make THIS item the natural thing to reach for.',
+      'scene: ONE short sentence that sets the moment, told to the learner as "you" ("Your manager stops by your desk."), never as "I" or "my". No quotes in it.',
+      "line: the exact words a person in that moment SAYS to the learner — their words only, without quote marks. It ends on a question or remark the learner answers AS THEMSELVES, and answering it must make THIS item the natural thing to reach for. Every scene MUST have a line: a moment where nobody speaks gives the learner nothing to answer.",
       'task: ONE short instruction for the reply ("Tell him what happened.", "Ask her about it."). They always answer in their own full sentence. The task never names the item: "Tell her you can sort it out." — not "Tell her you will arrange it."',
     ]),
   ),
@@ -118,8 +119,7 @@ export const ARENA_SYSTEM = joinParts([
     "HARD RULES",
     bullets([
       NO_LEAK,
-      "That rule covers said, task and plain alike: none of them may contain the item or any form of it — not even the task.",
-      "Every said MUST contain that person's actual words in double quotes.",
+      "That rule covers scene, line, task and plain alike: none of them may contain the item or any form of it — not even the task.",
       "The learner is NEVER the speaker, and nothing you write has a blank or a gap in it.",
       "examples: exactly 2 short natural sentences per item that USE the item.",
       EXAMPLES_ARE_INPUT,
@@ -132,7 +132,7 @@ export const ARENA_SYSTEM = joinParts([
   UNTRUSTED,
 
   jsonContract(
-    `{"items":[{"id":"...","examples":["...","..."],"scenes":[{"station":"recall","said":"...","task":"..."},{"station":"native","said":"...","task":"...","plain":"..."},{"station":"spare","said":"...","task":"..."}]}]}`,
+    `{"items":[{"id":"...","examples":["...","..."],"scenes":[{"station":"recall","scene":"...","line":"...","task":"..."},{"station":"native","scene":"...","line":"...","task":"...","plain":"..."},{"station":"spare","scene":"...","line":"...","task":"..."}]}]}`,
   ),
 ]);
 
